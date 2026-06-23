@@ -1,0 +1,24 @@
+name: Publish PHP SDK
+
+on:
+  push:
+    tags:
+      - "php/v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Packagist auto-syncs from GitHub — tagging is enough.
+      # This workflow validates the package can be installed.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+
+      - run: composer validate --strict
+        working-directory: php

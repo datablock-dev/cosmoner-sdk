@@ -1,0 +1,19 @@
+# JavaScript
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.egg-info/
+dist/
+build/
+*.pyc
+
+# PHP
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
