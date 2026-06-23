@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.changes.outputs.python }}
+      javascript: ${{ steps.changes.outputs.javascript }}
+      php: ${{ steps.changes.outputs.php }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            python:
+              - 'python/**'
+            javascript:
+              - 'javascript/**'
+            php:
+              - 'php/**'
+
+  publish-python:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python == 'true'
+    uses: ./.github/workflows/publish-python.yml
+    secrets: inherit
+
+  publish-javascript:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.javascript == 'true'
+    uses: ./.github/workflows/publish-javascript.yml
+    secrets: inherit
+
+  publish-php:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.php == 'true'
+    uses: ./.github/workflows/publish-php.yml
+    secrets: inherit

@@ -1,29 +1,80 @@
-name: Publish JavaScript SDK
+name: Publish JavaScript SDK (Reusable)
 
 on:
-  push:
-    tags:
-      - "javascript/v*"
-
-permissions:
-  contents: read
+  workflow_call:
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     defaults:
       run:
         working-directory: javascript
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ secrets.ORG_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
-      - run: npm install
-      - run: npm run build
-      - run: npm publish --access public
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      - name: Determine next release version
+        id: release_version
+        uses: ietf-tools/semver-action@v1.11.0
+        with:
+          token: ${{ secrets.ORG_TOKEN }}
+          prefix: javascript/v
+          patchAll: true
+          noVersionBumpBehavior: patch
+          fallbackTag: javascript/v1.0.0
+
+      - name: Bump version in package.json
+        if: steps.release_version.outputs.next != ''
+        run: |
+          VERSION="${{ steps.release_version.outputs.next }}"
+          VERSION="${VERSION#javascript/v}"
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Commit version bump
+        if: steps.release_version.outputs.next != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(release): javascript ${{ steps.release_version.outputs.next }} [skip ci]"
+          git push origin HEAD:main
+
+      - name: Create GitHub Release
+        if: steps.release_version.outputs.next != ''
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ steps.release_version.outputs.next }}',
+              target_commitish: 'main',
+              name: 'JavaScript ${{ steps.release_version.outputs.next }}',
+              generate_release_notes: true
+            });
+            console.log(`Created release ${release.id} at ${release.html_url}`);
+
+      - name: Publish to npm
+        if: steps.release_version.outputs.next != ''
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
