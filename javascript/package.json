@@ -1,10 +1,14 @@
 {
-  "name": "@datablock/sdk",
+  "name": "@datablock-dev/sdk",
   "version": "1.0.0",
   "description": "Datablock SDK for Node.js",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
