@@ -1,24 +1,52 @@
-name: Publish PHP SDK
+name: Publish PHP SDK (Reusable)
 
 on:
-  push:
-    tags:
-      - "php/v*"
-
-permissions:
-  contents: read
+  workflow_call:
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    permissions:
+      contents: write
+      id-token: write
 
-      # Packagist auto-syncs from GitHub — tagging is enough.
-      # This workflow validates the package can be installed.
-      - uses: shivammathur/setup-php@v2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ secrets.ORG_TOKEN }}
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
 
-      - run: composer validate --strict
+      - name: Validate composer.json
+        run: composer validate --strict
         working-directory: php
+
+      - name: Determine next release version
+        id: release_version
+        uses: ietf-tools/semver-action@v1.11.0
+        with:
+          token: ${{ secrets.ORG_TOKEN }}
+          prefix: php/v
+          patchAll: true
+          noVersionBumpBehavior: patch
+          fallbackTag: php/v1.0.0
+
+      - name: Create GitHub Release
+        if: steps.release_version.outputs.next != ''
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ steps.release_version.outputs.next }}',
+              target_commitish: 'main',
+              name: 'PHP ${{ steps.release_version.outputs.next }}',
+              generate_release_notes: true
+            });
+            console.log(`Created release ${release.id} at ${release.html_url}`);
