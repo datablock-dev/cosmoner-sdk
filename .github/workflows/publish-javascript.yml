@@ -32,6 +32,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Run tests
+        run: npm test
+
       - name: Determine next release version
         id: release_version
         uses: ietf-tools/semver-action@v1.11.0

@@ -11,6 +11,17 @@
       "Datablock\\Sdk\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "Datablock\\Sdk\\Tests\\": "tests/"
+    }
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.0 || ^11.0"
+  },
+  "scripts": {
+    "test": "phpunit --testdox"
+  },
   "keywords": [
     "datablock",
     "sdk"

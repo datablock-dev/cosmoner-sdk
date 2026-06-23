@@ -26,6 +26,14 @@ jobs:
         run: composer validate --strict
         working-directory: php
 
+      - name: Install dependencies
+        run: composer install --no-interaction
+        working-directory: php
+
+      - name: Run tests
+        run: vendor/bin/phpunit
+        working-directory: php
+
       - name: Determine next release version
         id: release_version
         uses: ietf-tools/semver-action@v1.11.0
