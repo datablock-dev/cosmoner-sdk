@@ -13,5 +13,17 @@ dependencies = [
 ]
 keywords = ["datablock", "sdk"]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/datablock"]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0",
+  "pytest-httpx>=0.28",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [project.urls]
 Homepage = "https://datablock.dev"
