@@ -12,7 +12,7 @@ jobs:
       javascript: ${{ steps.changes.outputs.javascript }}
       php: ${{ steps.changes.outputs.php }}
     steps:
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: changes
         with:
           filters: |
