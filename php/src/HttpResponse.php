@@ -14,7 +14,8 @@ final class HttpResponse
         public readonly int $status,
         public readonly string $body,
         public readonly array $headers = [],
-    ) {}
+    ) {
+    }
 
     /** Whether the status is in the 2xx range. */
     public function isSuccess(): bool

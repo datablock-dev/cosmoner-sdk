@@ -40,7 +40,11 @@ class TransportTest extends TestCase
         );
     }
 
-    /** Issue a representative POST through the transport. */
+    /**
+     * Issue a representative POST through the transport.
+     *
+     * @return array<string, mixed>
+     */
     private function send(Cosmoner $client): array
     {
         return $client->email->send('cred-1', 'user@test.com', 'Test', null, 'body');
@@ -204,6 +208,7 @@ class TransportTest extends TestCase
         }
     }
 
+    /** @param class-string<\Throwable> $expected */
     #[DataProvider('statusProvider')]
     public function testMapsStatusToErrorClass(int $status, string $expected): void
     {
@@ -214,6 +219,7 @@ class TransportTest extends TestCase
         $this->send($this->client());
     }
 
+    /** @return list<array{int, class-string<\Throwable>}> */
     public static function statusProvider(): array
     {
         return [

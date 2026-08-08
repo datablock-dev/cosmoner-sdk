@@ -15,6 +15,7 @@ interface HttpClient
     /**
      * Sends one request and returns the raw response.
      *
+     * @param non-empty-string      $method
      * @param array<string, string> $headers
      *
      * @throws CosmonerConnectionError When the request never produced a response.

@@ -22,10 +22,45 @@ test = [
   "pytest-httpx>=0.28",
   "pytest-asyncio>=0.23",
 ]
+lint = [
+  "ruff>=0.9",
+  "mypy>=1.15",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 90
+target-version = "py39"
+src = ["src", "tests"]
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "F",    # pyflakes
+  "I",    # isort
+  "B",    # flake8-bugbear
+  "UP",   # pyupgrade
+  "SIM",  # flake8-simplify
+  "RUF",  # ruff-specific
+  "D",    # pydocstyle — every function/class needs a docstring
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests document themselves through their names; docstrings on every case are noise.
+"tests/*" = ["D"]
+
+[tool.mypy]
+files = ["src"]
+strict = true
+warn_unused_ignores = true
 
 [project.urls]
 Homepage = "https://cosmoner.com"

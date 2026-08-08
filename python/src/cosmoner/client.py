@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ._config import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_RETRIES,
@@ -15,8 +13,7 @@ from .email import AsyncEmailService, EmailService
 
 
 class Cosmoner:
-    """
-    Synchronous Cosmoner API client.
+    """Synchronous Cosmoner API client.
 
     ``project_id`` is optional: set it here to make it the default for every
     call, or omit it and pass ``project_id=`` per method to work across
@@ -26,11 +23,12 @@ class Cosmoner:
     def __init__(
         self,
         api_key: str,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> None:
+        """Validates the settings and opens the connection pool the client will reuse."""
         config = build_config(api_key, project_id, base_url, timeout, max_retries)
 
         self.api_key = config.api_key
@@ -48,7 +46,7 @@ class Cosmoner:
         """Releases the underlying connection pool."""
         self._transport.close()
 
-    def __enter__(self) -> "Cosmoner":
+    def __enter__(self) -> Cosmoner:
         """Enters a context that closes the connection pool on exit."""
         return self
 
@@ -63,11 +61,12 @@ class AsyncCosmoner:
     def __init__(
         self,
         api_key: str,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> None:
+        """Validates the settings and opens the connection pool the client will reuse."""
         config = build_config(api_key, project_id, base_url, timeout, max_retries)
 
         self.api_key = config.api_key
@@ -85,7 +84,7 @@ class AsyncCosmoner:
         """Releases the underlying connection pool."""
         await self._transport.aclose()
 
-    async def __aenter__(self) -> "AsyncCosmoner":
+    async def __aenter__(self) -> AsyncCosmoner:
         """Enters a context that closes the connection pool on exit."""
         return self
 

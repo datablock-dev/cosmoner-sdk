@@ -73,6 +73,25 @@ See the README in each language directory for full API reference:
 - [Python](./python/README.md)
 - [PHP](./php/README.md)
 
+## Development
+
+Every pull request runs lint, type checks and tests for each language directory
+it touches. To run the same checks locally:
+
+```bash
+# JavaScript
+cd javascript && npm ci && npm run lint && npm run typecheck && npm test
+
+# Python
+cd python && pip install -e ".[test,lint]" && ruff check . && ruff format --check . && mypy && pytest
+
+# PHP
+cd php && composer install && composer run lint && composer run analyse && composer run test
+```
+
+`npm run lint` uses [oxlint](https://oxc.rs/docs/guide/usage/linter); `composer run lint:fix`
+and `ruff check --fix` apply the auto-fixable subset.
+
 ## License
 
 [MIT](./LICENSE)

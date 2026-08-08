@@ -16,7 +16,9 @@ final class Retry
     private const BACKOFF_BASE_SECONDS = 0.5;
     private const BACKOFF_CAP_SECONDS = 8.0;
 
-    public function __construct(private readonly int $maxRetries) {}
+    public function __construct(private readonly int $maxRetries)
+    {
+    }
 
     /**
      * Decides whether a failure should be retried.

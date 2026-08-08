@@ -10,10 +10,14 @@ build/
 *.pyc
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.venv/
 
 # PHP
 vendor/
 .phpunit.result.cache
+.phpcs-cache
+.phpstan.cache/
 
 # IDE
 .idea/

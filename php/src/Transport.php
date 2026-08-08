@@ -27,6 +27,8 @@ final class Transport
      * @param array<string, mixed>|null $body
      * @param array<string, scalar>     $query
      *
+     * @param non-empty-string $method
+     *
      * @return array<string, mixed>
      *
      * @throws CosmonerError On API and transport failures.

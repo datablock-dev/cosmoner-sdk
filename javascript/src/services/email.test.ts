@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Cosmoner, CosmonerError, RateLimitError } from "../index";
+import { Cosmoner, RateLimitError } from "../index";
+import type { CosmonerError } from "../index";
 
 const URL = "https://api.test.dev/v1/projects/proj-1/email/send";
 
