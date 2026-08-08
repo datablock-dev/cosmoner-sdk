@@ -12,6 +12,7 @@ build/
 
 # PHP
 vendor/
+.phpunit.result.cache
 
 # IDE
 .idea/

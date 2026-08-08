@@ -3,18 +3,18 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "datablock-sdk"
+name = "cosmoner-sdk"
 version = "1.0.0"
-description = "Datablock SDK for Python"
+description = "Cosmoner SDK for Python"
 requires-python = ">=3.9"
 license = "MIT"
 dependencies = [
   "httpx>=0.24",
 ]
-keywords = ["datablock", "sdk"]
+keywords = ["cosmoner", "sdk"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/datablock"]
+packages = ["src/cosmoner"]
 
 [project.optional-dependencies]
 test = [
@@ -26,4 +26,4 @@ test = [
 testpaths = ["tests"]
 
 [project.urls]
-Homepage = "https://datablock.dev"
+Homepage = "https://cosmoner.com"

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Datablock\Sdk;
+namespace Cosmoner\Sdk;
 
-class Datablock
+class Cosmoner
 {
     public readonly string $apiKey;
     public readonly string $projectId;
@@ -12,7 +12,7 @@ class Datablock
 
     public readonly EmailService $email;
 
-    public function __construct(string $apiKey, string $projectId, string $baseUrl = 'https://api.datablock.dev')
+    public function __construct(string $apiKey, string $projectId, string $baseUrl = 'https://api.cosmoner.com')
     {
         if ($apiKey === '') {
             throw new \InvalidArgumentException('apiKey is required');
