@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 
 class CosmonerError(Exception):
-    """
-    Base class for every error the SDK raises.
+    """Base class for every error the SDK raises.
 
     Catching this catches all API and transport failures, so existing
     ``except CosmonerError`` blocks keep working as the hierarchy grows.
@@ -20,8 +20,9 @@ class CosmonerError(Exception):
         message: str,
         *,
         details: Any = None,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
     ) -> None:
+        """Records the status, machine-readable code and message of a failed request."""
         super().__init__(message)
         self.status = status
         self.code = code
@@ -34,6 +35,7 @@ class CosmonerConnectionError(CosmonerError):
     """The request never produced a response (DNS, TCP, TLS or socket failure)."""
 
     def __init__(self, message: str, *, code: str = "CONNECTION_ERROR") -> None:
+        """Reports a transport failure, which has no HTTP status of its own."""
         super().__init__(status=0, code=code, message=message)
 
 
@@ -41,6 +43,7 @@ class CosmonerTimeoutError(CosmonerConnectionError):
     """The request exceeded the configured timeout."""
 
     def __init__(self, message: str) -> None:
+        """Narrows a connection failure to a timeout."""
         super().__init__(message, code="TIMEOUT")
 
 
@@ -74,9 +77,10 @@ class RateLimitError(CosmonerError):
         message: str,
         *,
         details: Any = None,
-        request_id: Optional[str] = None,
-        retry_after: Optional[float] = None,
+        request_id: str | None = None,
+        retry_after: float | None = None,
     ) -> None:
+        """Adds the parsed ``Retry-After`` delay, in seconds, when the API sends one."""
         super().__init__(status, code, message, details=details, request_id=request_id)
         self.retry_after = retry_after
 
@@ -99,11 +103,10 @@ _STATUS_MAP = {
 def error_from_response(
     status: int,
     body: Any,
-    headers: Optional[Mapping[str, str]] = None,
-    retry_after: Optional[float] = None,
+    headers: Mapping[str, str] | None = None,
+    retry_after: float | None = None,
 ) -> CosmonerError:
-    """
-    Maps an error response onto the most specific exception class available.
+    """Maps an error response onto the most specific exception class available.
 
     The API envelope is ``{"success": false, "error": {"code", "message", "details"?}}``
     but proxies and load balancers can return HTML or an empty body, so every

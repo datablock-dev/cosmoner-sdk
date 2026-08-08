@@ -26,10 +26,14 @@ class EmailServiceTest extends TestCase
         );
     }
 
-    /** Decode the JSON body of the recorded request. */
+    /**
+     * Decode the JSON body of the recorded request.
+     *
+     * @return array<string, mixed>
+     */
     private function sentBody(): array
     {
-        return json_decode($this->http->requests[0]['body'], true);
+        return json_decode((string) $this->http->requests[0]['body'], true);
     }
 
     public function testThrowsWhenNeitherHtmlNorTextProvided(): void
@@ -94,13 +98,13 @@ class EmailServiceTest extends TestCase
     {
         $this->http->queueJson(200, ['success' => true, 'data' => ['messageId' => 'msg-jkl']]);
 
-        $result = $this->client->email->send(
+        $this->client->email->send(
             'cred-1',
             ['a@test.com', 'b@test.com'],
             'Hello',
             '<h1>Hi</h1>',
         );
 
-        $this->assertTrue($result['success']);
+        $this->assertSame(['a@test.com', 'b@test.com'], $this->sentBody()['to']);
     }
 }

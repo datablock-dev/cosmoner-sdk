@@ -11,6 +11,7 @@ final class CurlHttpClient implements HttpClient
      * Sends one request via curl, translating transport failures into
      * `CosmonerConnectionError` (or `CosmonerTimeoutError` for timeouts).
      *
+     * @param non-empty-string      $method
      * @param array<string, string> $headers
      */
     public function send(
@@ -33,7 +34,7 @@ final class CurlHttpClient implements HttpClient
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => $formatted,
             CURLOPT_TIMEOUT_MS => (int) round($timeout * 1000),
-            CURLOPT_HEADERFUNCTION => function ($_ch, string $line) use (&$responseHeaders): int {
+            CURLOPT_HEADERFUNCTION => function (\CurlHandle $_ch, string $line) use (&$responseHeaders): int {
                 $parts = explode(':', $line, 2);
                 if (count($parts) === 2) {
                     $responseHeaders[strtolower(trim($parts[0]))] = trim($parts[1]);

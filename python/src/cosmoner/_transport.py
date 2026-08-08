@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from typing import Any, Dict, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 import httpx
 
@@ -38,10 +39,9 @@ class _BaseTransport:
         self,
         method: str,
         has_body: bool,
-        idempotency_key: Optional[str],
-    ) -> Dict[str, str]:
-        """
-        Builds the header set for one request.
+        idempotency_key: str | None,
+    ) -> dict[str, str]:
+        """Builds the header set for one request.
 
         The idempotency key is generated once per logical request and reused
         across retries, so a replayed write can be collapsed server-side. The
@@ -95,9 +95,9 @@ class Transport(_BaseTransport):
         method: str,
         path: str,
         *,
-        json: Optional[Mapping[str, Any]] = None,
-        params: Optional[Mapping[str, Any]] = None,
-        idempotency_key: Optional[str] = None,
+        json: Mapping[str, Any] | None = None,
+        params: Mapping[str, Any] | None = None,
+        idempotency_key: str | None = None,
         retry_non_idempotent: bool = False,
     ) -> Any:
         """Issues a request, retrying transient failures, and returns the parsed body."""
@@ -106,8 +106,9 @@ class Transport(_BaseTransport):
         attempt = 0
 
         while True:
-            status: Optional[int] = None
-            retry_after: Optional[float] = None
+            status: int | None = None
+            retry_after: float | None = None
+            error: CosmonerConnectionError | None = None
 
             try:
                 response = self._client.request(
@@ -133,6 +134,8 @@ class Transport(_BaseTransport):
             ):
                 if error is not None:
                     raise error
+                # ``response`` is always set when no transport error was captured.
+                assert response is not None
                 return self._decode(response)  # raises the mapped API error
 
             time.sleep(self._policy.backoff_seconds(attempt, retry_after))
@@ -155,9 +158,9 @@ class AsyncTransport(_BaseTransport):
         method: str,
         path: str,
         *,
-        json: Optional[Mapping[str, Any]] = None,
-        params: Optional[Mapping[str, Any]] = None,
-        idempotency_key: Optional[str] = None,
+        json: Mapping[str, Any] | None = None,
+        params: Mapping[str, Any] | None = None,
+        idempotency_key: str | None = None,
         retry_non_idempotent: bool = False,
     ) -> Any:
         """Issues a request, retrying transient failures, and returns the parsed body."""
@@ -166,8 +169,9 @@ class AsyncTransport(_BaseTransport):
         attempt = 0
 
         while True:
-            status: Optional[int] = None
-            retry_after: Optional[float] = None
+            status: int | None = None
+            retry_after: float | None = None
+            error: CosmonerConnectionError | None = None
 
             try:
                 response = await self._client.request(
@@ -193,6 +197,8 @@ class AsyncTransport(_BaseTransport):
             ):
                 if error is not None:
                     raise error
+                # ``response`` is always set when no transport error was captured.
+                assert response is not None
                 return self._decode(response)  # raises the mapped API error
 
             await asyncio.sleep(self._policy.backoff_seconds(attempt, retry_after))

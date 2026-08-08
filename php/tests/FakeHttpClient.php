@@ -25,10 +25,15 @@ final class FakeHttpClient implements HttpClient
         return $this;
     }
 
-    /** Queues a JSON response with the given status. */
+    /**
+     * Queues a JSON response with the given status.
+     *
+     * @param array<string, mixed>  $body
+     * @param array<string, string> $headers
+     */
     public function queueJson(int $status, array $body = [], array $headers = []): self
     {
-        return $this->queue(new HttpResponse($status, json_encode($body), $headers));
+        return $this->queue(new HttpResponse($status, (string) json_encode($body), $headers));
     }
 
     /** Returns the next queued response, repeating the last one once exhausted. */

@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a PR makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.changes.outputs.python }}
+      javascript: ${{ steps.changes.outputs.javascript }}
+      php: ${{ steps.changes.outputs.php }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v4
+        id: changes
+        with:
+          # Changing the workflow itself re-runs every language.
+          filters: |
+            python:
+              - 'python/**'
+              - '.github/workflows/ci.yml'
+            javascript:
+              - 'javascript/**'
+              - '.github/workflows/ci.yml'
+            php:
+              - 'php/**'
+              - '.github/workflows/ci.yml'
+
+  python:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,lint]"
+
+      - name: Lint
+        if: matrix.python-version == '3.13'
+        run: ruff check .
+
+      - name: Check formatting
+        if: matrix.python-version == '3.13'
+        run: ruff format --check .
+
+      - name: Type check
+        if: matrix.python-version == '3.13'
+        run: mypy
+
+      - name: Test
+        run: python -m pytest
+
+  javascript:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.javascript == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: javascript
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22"]
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: javascript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        if: matrix.node-version == '22'
+        run: npm run lint
+
+      - name: Type check
+        if: matrix.node-version == '22'
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  php:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.php == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: php
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.1", "8.4"]
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Install dependencies
+        if: matrix.php-version != '8.1'
+        run: composer install --no-interaction --no-progress
+
+      # The lock file pins PHPUnit 11, which needs PHP 8.2+. On the floor
+      # version the dev tools are resolved fresh so PHPUnit 10 is chosen —
+      # which is the point: the library itself still has to work on 8.1.
+      - name: Install dependencies (resolved for PHP 8.1)
+        if: matrix.php-version == '8.1'
+        run: composer update --no-interaction --no-progress
+
+      - name: Lint
+        if: matrix.php-version == '8.4'
+        run: composer run lint
+
+      - name: Static analysis
+        if: matrix.php-version == '8.4'
+        run: composer run analyse
+
+      - name: Test
+        run: composer run test
+
+  # Single required check for branch protection: green when nothing failed,
+  # including when a language was skipped because it did not change.
+  ci:
+    if: always()
+    needs: [python, javascript, php]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no job failed
+        run: |
+          if echo '${{ join(needs.*.result, ',') }}' | grep -qE 'failure|cancelled'; then
+            echo "One or more language jobs failed."
+            exit 1
+          fi
+          echo "All language jobs passed or were skipped."

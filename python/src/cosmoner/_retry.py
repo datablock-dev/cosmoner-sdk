@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping, Optional
 
 # Methods the HTTP spec defines as idempotent: replaying one cannot create a
 # second side effect, so they are safe to retry after a timeout or a 5xx.
@@ -25,11 +25,10 @@ class RetryPolicy:
         *,
         attempt: int,
         method: str,
-        status: Optional[int],
+        status: int | None,
         retry_non_idempotent: bool = False,
     ) -> bool:
-        """
-        Returns whether another attempt is warranted.
+        """Returns whether another attempt is warranted.
 
         A ``status`` of ``None`` means the request failed at the transport layer
         and never reached the API.
@@ -53,9 +52,8 @@ class RetryPolicy:
 
         return method.upper() in IDEMPOTENT_METHODS or retry_non_idempotent
 
-    def backoff_seconds(self, attempt: int, retry_after: Optional[float] = None) -> float:
-        """
-        Returns the delay before the next attempt.
+    def backoff_seconds(self, attempt: int, retry_after: float | None = None) -> float:
+        """Returns the delay before the next attempt.
 
         A server-supplied ``Retry-After`` wins outright. Otherwise the delay is
         exponential with full jitter, which spreads a thundering herd of clients
@@ -68,9 +66,8 @@ class RetryPolicy:
         return random.uniform(0, ceiling)
 
 
-def parse_retry_after(headers: Mapping[str, str]) -> Optional[float]:
-    """
-    Reads a ``Retry-After`` header expressed in seconds.
+def parse_retry_after(headers: Mapping[str, str]) -> float | None:
+    """Reads a ``Retry-After`` header expressed in seconds.
 
     The API does not currently send this header; it is honoured so the SDK
     starts respecting it the moment the platform adds it. The HTTP-date form is

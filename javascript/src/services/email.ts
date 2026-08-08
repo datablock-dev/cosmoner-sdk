@@ -33,6 +33,7 @@ export class EmailService {
    *
    * At least one of `html` or `text` is required.
    */
+  // eslint-disable-next-line require-await -- `async` makes the validation below reject rather than throw synchronously.
   async send(params: SendEmailParams): Promise<SendEmailResponse> {
     if (!params.to) throw new Error("to is required");
     if (!params.subject) throw new Error("subject is required");

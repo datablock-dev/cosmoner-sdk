@@ -12,7 +12,8 @@ class EmailService
     public function __construct(
         private readonly Transport $transport,
         private readonly Config $config,
-    ) {}
+    ) {
+    }
 
     /**
      * Sends a transactional email and returns the API envelope with its message id.
