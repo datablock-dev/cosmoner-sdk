@@ -3,12 +3,12 @@ from __future__ import annotations
 from .email import EmailService
 
 
-class Datablock:
+class Cosmoner:
     def __init__(
         self,
         api_key: str,
         project_id: str,
-        base_url: str = "https://api.datablock.dev",
+        base_url: str = "https://api.cosmoner.com",
     ) -> None:
         if not api_key:
             raise ValueError("api_key is required")

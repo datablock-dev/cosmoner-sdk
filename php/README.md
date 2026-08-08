@@ -1,19 +1,19 @@
-# datablock/sdk
+# cosmoner/sdk
 
-Official Datablock SDK for PHP.
+Official Cosmoner SDK for PHP.
 
 ## Installation
 
 ```bash
-composer require datablock/sdk
+composer require cosmoner/sdk
 ```
 
 ## Usage
 
 ```php
-use Datablock\Sdk\Datablock;
+use Cosmoner\Sdk\Cosmoner;
 
-$client = new Datablock(
+$client = new Cosmoner(
     apiKey: 'your-api-key',
     projectId: 'your-project-id',
 );
@@ -22,7 +22,7 @@ $client = new Datablock(
 $result = $client->email->send(
     credentialId: 'your-credential-id',
     to: 'recipient@example.com',
-    subject: 'Hello from Datablock',
+    subject: 'Hello from Cosmoner',
     html: '<h1>Hello!</h1><p>This is a test email.</p>',
 );
 
@@ -42,9 +42,9 @@ $client->email->send(
 
 | Parameter    | Required | Default                      | Description                |
 | ------------ | -------- | ---------------------------- | -------------------------- |
-| `apiKey`     | Yes      | —                            | Your Datablock API key     |
-| `projectId`  | Yes      | —                            | Your Datablock project ID  |
-| `baseUrl`    | No       | `https://api.datablock.dev`  | API base URL override      |
+| `apiKey`     | Yes      | —                            | Your Cosmoner API key      |
+| `projectId`  | Yes      | —                            | Your Cosmoner project ID   |
+| `baseUrl`    | No       | `https://api.cosmoner.com`   | API base URL override      |
 
 ## Email
 
@@ -64,12 +64,12 @@ $client->email->send(
 ## Error Handling
 
 ```php
-use Datablock\Sdk\Datablock;
-use Datablock\Sdk\DatablockError;
+use Cosmoner\Sdk\Cosmoner;
+use Cosmoner\Sdk\CosmonerError;
 
 try {
     $client->email->send(...);
-} catch (DatablockError $e) {
+} catch (CosmonerError $e) {
     echo $e->errorCode; // e.g. "INSUFFICIENT_SCOPE"
     echo $e->status;    // e.g. 403
     echo $e->getMessage(); // Human-readable message

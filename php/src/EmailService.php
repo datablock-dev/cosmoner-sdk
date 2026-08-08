@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Datablock\Sdk;
+namespace Cosmoner\Sdk;
 
 class EmailService
 {
-    public function __construct(private readonly Datablock $client) {}
+    public function __construct(private readonly Cosmoner $client) {}
 
     /**
      * @param string             $credentialId SMTP credential ID.
@@ -18,7 +18,7 @@ class EmailService
      *
      * @return array{success: true, data: array{messageId: string}}
      *
-     * @throws DatablockError On API errors.
+     * @throws CosmonerError On API errors.
      * @throws \InvalidArgumentException On invalid input.
      */
     public function send(
@@ -68,7 +68,7 @@ class EmailService
         if ($response === false) {
             $error = curl_error($ch);
             curl_close($ch);
-            throw new DatablockError(0, 'CURL_ERROR', 'Request failed: ' . $error);
+            throw new CosmonerError(0, 'CURL_ERROR', 'Request failed: ' . $error);
         }
 
         curl_close($ch);
@@ -77,7 +77,7 @@ class EmailService
 
         if ($statusCode >= 400) {
             $error = $body['error'] ?? [];
-            throw new DatablockError(
+            throw new CosmonerError(
                 $statusCode,
                 $error['code'] ?? 'UNKNOWN',
                 $error['message'] ?? 'Unknown error',

@@ -1,19 +1,19 @@
-# datablock-sdk
+# cosmoner-sdk
 
-Official Datablock SDK for Python.
+Official Cosmoner SDK for Python.
 
 ## Installation
 
 ```bash
-pip install datablock-sdk
+pip install cosmoner-sdk
 ```
 
 ## Usage
 
 ```python
-from datablock import Datablock
+from cosmoner import Cosmoner
 
-client = Datablock(
+client = Cosmoner(
     api_key="your-api-key",
     project_id="your-project-id",
 )
@@ -22,7 +22,7 @@ client = Datablock(
 result = client.email.send(
     credential_id="your-credential-id",
     to="recipient@example.com",
-    subject="Hello from Datablock",
+    subject="Hello from Cosmoner",
     html="<h1>Hello!</h1><p>This is a test email.</p>",
 )
 print(result["data"]["messageId"])
@@ -41,9 +41,9 @@ client.email.send(
 
 | Parameter    | Required | Default                      | Description                |
 | ------------ | -------- | ---------------------------- | -------------------------- |
-| `api_key`    | Yes      | —                            | Your Datablock API key     |
-| `project_id` | Yes      | —                            | Your Datablock project ID  |
-| `base_url`   | No       | `https://api.datablock.dev`  | API base URL override      |
+| `api_key`    | Yes      | —                            | Your Cosmoner API key      |
+| `project_id` | Yes      | —                            | Your Cosmoner project ID   |
+| `base_url`   | No       | `https://api.cosmoner.com`   | API base URL override      |
 
 ## Email
 
@@ -63,11 +63,11 @@ client.email.send(
 ## Error Handling
 
 ```python
-from datablock import Datablock, DatablockError
+from cosmoner import Cosmoner, CosmonerError
 
 try:
     client.email.send(...)
-except DatablockError as e:
+except CosmonerError as e:
     print(e.code)    # e.g. "INSUFFICIENT_SCOPE"
     print(e.status)  # e.g. 403
     print(str(e))    # Human-readable message
