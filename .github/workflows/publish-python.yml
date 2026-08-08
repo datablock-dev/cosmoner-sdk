@@ -58,11 +58,28 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add pyproject.toml
           git commit -m "chore(release): python ${{ steps.release_version.outputs.next }} [skip ci]"
-          git push origin HEAD:main
+          # Sibling language jobs push to main in parallel, so rebase and retry
+          # instead of failing the release on a lost ref-lock race.
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then exit 0; fi
+            echo "push attempt $attempt failed; rebasing onto origin/main"
+            sleep $(( (RANDOM % 5) + 2 ))
+            git pull --rebase origin main
+          done
+          exit 1
 
       - name: Build package
         if: steps.release_version.outputs.next != ''
         run: python -m build
+
+      # Publish before tagging so a registry failure does not leave behind a
+      # GitHub release for a version that was never published.
+      - name: Publish to PyPI
+        if: steps.release_version.outputs.next != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+          packages-dir: python/dist/
 
       - name: Create GitHub Release
         if: steps.release_version.outputs.next != ''
@@ -78,10 +95,3 @@ jobs:
               generate_release_notes: true
             });
             console.log(`Created release ${release.id} at ${release.html_url}`);
-
-      - name: Publish to PyPI
-        if: steps.release_version.outputs.next != ''
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_TOKEN }}
-          packages-dir: python/dist/
