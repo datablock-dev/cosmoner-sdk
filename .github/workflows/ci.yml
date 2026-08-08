@@ -142,7 +142,15 @@ jobs:
         run: composer validate --strict
 
       - name: Install dependencies
+        if: matrix.php-version != '8.1'
         run: composer install --no-interaction --no-progress
+
+      # The lock file pins PHPUnit 11, which needs PHP 8.2+. On the floor
+      # version the dev tools are resolved fresh so PHPUnit 10 is chosen —
+      # which is the point: the library itself still has to work on 8.1.
+      - name: Install dependencies (resolved for PHP 8.1)
+        if: matrix.php-version == '8.1'
+        run: composer update --no-interaction --no-progress
 
       - name: Lint
         if: matrix.php-version == '8.4'
