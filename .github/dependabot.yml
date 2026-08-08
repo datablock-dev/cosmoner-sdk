@@ -1,0 +1,98 @@
+# Dependabot version updates for the three SDKs and the release workflows.
+# Each SDK has its own manifest directory, so it needs its own update entry.
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # Actions used by release.yml and the three reusable publish workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Stockholm"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      # One PR for all action bumps — they are reviewed together anyway.
+      github-actions:
+        patterns:
+          - "*"
+
+  # JavaScript SDK — tsup, typescript and vitest are all devDependencies.
+  - package-ecosystem: "npm"
+    directory: "/javascript"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Stockholm"
+    open-pull-requests-limit: 5
+    versioning-strategy: "increase-if-necessary"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "javascript"
+    groups:
+      # Minor and patch bumps land in one PR; majors get their own for review.
+      javascript-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Python SDK — httpx at runtime, pytest and pytest-httpx via the test extra.
+  - package-ecosystem: "pip"
+    directory: "/python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Stockholm"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # PHP SDK — phpunit is the only dependency, and composer.lock is committed.
+  - package-ecosystem: "composer"
+    directory: "/php"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Stockholm"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "php"
+    groups:
+      php-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
