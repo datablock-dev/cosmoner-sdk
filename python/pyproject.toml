@@ -20,10 +20,12 @@ packages = ["src/cosmoner"]
 test = [
   "pytest>=7.0",
   "pytest-httpx>=0.28",
+  "pytest-asyncio>=0.23",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [project.urls]
 Homepage = "https://cosmoner.com"

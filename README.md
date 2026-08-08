@@ -12,6 +12,11 @@ Official Cosmoner SDKs for JavaScript, Python, and PHP.
 
 Each SDK provides a `Cosmoner` client with service namespaces. Currently supports `client.email`.
 
+All three share the same behaviour: automatic retries with jittered backoff, a
+configurable timeout, a typed error hierarchy, and an optional project id that
+can be set on the client or passed per call. Python additionally ships an
+`AsyncCosmoner` client.
+
 ### JavaScript / TypeScript
 
 ```typescript

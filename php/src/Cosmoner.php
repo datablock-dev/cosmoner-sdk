@@ -4,27 +4,43 @@ declare(strict_types=1);
 
 namespace Cosmoner\Sdk;
 
+/**
+ * Cosmoner API client.
+ *
+ * `$projectId` is optional: set it here to make it the default for every call,
+ * or omit it and pass `$projectId` per method to work across projects with one
+ * client.
+ */
 class Cosmoner
 {
     public readonly string $apiKey;
-    public readonly string $projectId;
+    public readonly ?string $projectId;
     public readonly string $baseUrl;
+    public readonly float $timeout;
+    public readonly int $maxRetries;
 
     public readonly EmailService $email;
 
-    public function __construct(string $apiKey, string $projectId, string $baseUrl = 'https://api.cosmoner.com')
-    {
-        if ($apiKey === '') {
-            throw new \InvalidArgumentException('apiKey is required');
-        }
-        if ($projectId === '') {
-            throw new \InvalidArgumentException('projectId is required');
-        }
+    private readonly Config $config;
+    private readonly Transport $transport;
 
-        $this->apiKey = $apiKey;
-        $this->projectId = $projectId;
-        $this->baseUrl = rtrim($baseUrl, '/');
+    public function __construct(
+        string $apiKey,
+        ?string $projectId = null,
+        string $baseUrl = Config::DEFAULT_BASE_URL,
+        float $timeout = Config::DEFAULT_TIMEOUT,
+        int $maxRetries = Config::DEFAULT_MAX_RETRIES,
+        ?HttpClient $httpClient = null,
+    ) {
+        $this->config = new Config($apiKey, $projectId, $baseUrl, $timeout, $maxRetries);
 
-        $this->email = new EmailService($this);
+        $this->apiKey = $this->config->apiKey;
+        $this->projectId = $this->config->projectId;
+        $this->baseUrl = $this->config->baseUrl;
+        $this->timeout = $this->config->timeout;
+        $this->maxRetries = $this->config->maxRetries;
+
+        $this->transport = new Transport($this->config, $httpClient ?? new CurlHttpClient());
+        $this->email = new EmailService($this->transport, $this->config);
     }
 }

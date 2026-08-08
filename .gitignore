@@ -9,9 +9,11 @@ dist/
 build/
 *.pyc
 .pytest_cache/
+.mypy_cache/
 
 # PHP
 vendor/
+.phpunit.result.cache
 
 # IDE
 .idea/
