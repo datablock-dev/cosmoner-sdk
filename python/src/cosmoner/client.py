@@ -10,6 +10,7 @@ from ._config import (
 )
 from ._transport import AsyncTransport, Transport
 from .email import AsyncEmailService, EmailService
+from .webhooks import AsyncWebhooksService, WebhooksService
 
 
 class Cosmoner:
@@ -41,6 +42,7 @@ class Cosmoner:
         self._transport = Transport(config)
 
         self.email = EmailService(self._transport, config)
+        self.webhooks = WebhooksService(self._transport, config)
 
     def close(self) -> None:
         """Releases the underlying connection pool."""
@@ -79,6 +81,7 @@ class AsyncCosmoner:
         self._transport = AsyncTransport(config)
 
         self.email = AsyncEmailService(self._transport, config)
+        self.webhooks = AsyncWebhooksService(self._transport, config)
 
     async def aclose(self) -> None:
         """Releases the underlying connection pool."""

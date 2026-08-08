@@ -20,6 +20,7 @@ class Cosmoner
     public readonly int $maxRetries;
 
     public readonly EmailService $email;
+    public readonly WebhooksService $webhooks;
 
     private readonly Config $config;
     private readonly Transport $transport;
@@ -42,5 +43,6 @@ class Cosmoner
 
         $this->transport = new Transport($this->config, $httpClient ?? new CurlHttpClient());
         $this->email = new EmailService($this->transport, $this->config);
+        $this->webhooks = new WebhooksService($this->transport, $this->config);
     }
 }

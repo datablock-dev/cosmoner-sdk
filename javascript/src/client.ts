@@ -2,6 +2,7 @@
 
 import { resolveConfig, type CosmonerConfig, type ResolvedConfig } from "./config";
 import { EmailService } from "./services/email";
+import { WebhooksService } from "./services/webhooks";
 import { Transport } from "./transport";
 
 /**
@@ -27,6 +28,7 @@ export class Cosmoner {
   private readonly transport: Transport;
 
   readonly email: EmailService;
+  readonly webhooks: WebhooksService;
 
   constructor(config: CosmonerConfig) {
     this.config = resolveConfig(config);
@@ -39,5 +41,6 @@ export class Cosmoner {
 
     this.transport = new Transport(this.config);
     this.email = new EmailService(this.transport, this.config);
+    this.webhooks = new WebhooksService(this.transport, this.config);
   }
 }
