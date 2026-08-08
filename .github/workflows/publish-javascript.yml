@@ -40,10 +40,10 @@ jobs:
         uses: ietf-tools/semver-action@v1.11.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          prefix: javascript/v
+          prefix: javascript/
           patchAll: true
           noVersionBumpBehavior: patch
-          fallbackTag: javascript/v1.0.0
+          maxTagsToFetch: 100
 
       - name: Bump version in package.json
         if: steps.release_version.outputs.next != ''
