@@ -39,10 +39,10 @@ jobs:
         uses: ietf-tools/semver-action@v1.11.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          prefix: php/v
+          prefix: php/
           patchAll: true
           noVersionBumpBehavior: patch
-          fallbackTag: php/v1.0.0
+          maxTagsToFetch: 100
 
       - name: Create GitHub Release
         if: steps.release_version.outputs.next != ''
