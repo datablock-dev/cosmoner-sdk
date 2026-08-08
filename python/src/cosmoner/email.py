@@ -1,63 +1,101 @@
+"""Email service namespace — transactional sending through a project's SMTP credential."""
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import Any, Dict, Optional, Union
 
-import httpx
+from ._config import ClientConfig, resolve_project_id
+from ._transport import AsyncTransport, Transport
 
-from .errors import CosmonerError
+Recipients = Union[str, "list[str]"]
 
-if TYPE_CHECKING:
-    from .client import Cosmoner
+
+def _build_payload(
+    credential_id: str,
+    to: Recipients,
+    subject: str,
+    html: Optional[str],
+    text: Optional[str],
+    reply_to: Optional[Recipients],
+) -> Dict[str, Any]:
+    """Validates send arguments and shapes them into the API request body."""
+    if not html and not text:
+        raise ValueError("Either html or text must be provided")
+
+    payload: Dict[str, Any] = {
+        "credentialId": credential_id,
+        "to": to,
+        "subject": subject,
+    }
+    if html is not None:
+        payload["html"] = html
+    if text is not None:
+        payload["text"] = text
+    if reply_to is not None:
+        payload["replyTo"] = reply_to
+
+    return payload
 
 
 class EmailService:
-    def __init__(self, client: Cosmoner) -> None:
-        self._client = client
+    """Synchronous email operations for a project."""
+
+    def __init__(self, transport: Transport, config: ClientConfig) -> None:
+        self._transport = transport
+        self._config = config
 
     def send(
         self,
         credential_id: str,
-        to: Union[str, list[str]],
+        to: Recipients,
         subject: str,
         *,
-        html: str | None = None,
-        text: str | None = None,
-        reply_to: Union[str, list[str], None] = None,
+        html: Optional[str] = None,
+        text: Optional[str] = None,
+        reply_to: Optional[Recipients] = None,
+        project_id: Optional[str] = None,
     ) -> dict:
-        if not html and not text:
-            raise ValueError("Either html or text must be provided")
+        """
+        Sends a transactional email and returns the API envelope with its message id.
 
-        url = f"{self._client.base_url}/v1/projects/{self._client.project_id}/email/send"
+        At least one of ``html`` or ``text`` is required. ``project_id`` overrides
+        the client-level default for this call.
+        """
+        payload = _build_payload(credential_id, to, subject, html, text, reply_to)
+        project = resolve_project_id(self._config, project_id)
 
-        payload: dict = {
-            "credentialId": credential_id,
-            "to": to,
-            "subject": subject,
-        }
-        if html is not None:
-            payload["html"] = html
-        if text is not None:
-            payload["text"] = text
-        if reply_to is not None:
-            payload["replyTo"] = reply_to
-
-        response = httpx.post(
-            url,
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {self._client.api_key}",
-                "Content-Type": "application/json",
-            },
+        return self._transport.request(
+            "POST", f"/v1/projects/{project}/email/send", json=payload
         )
 
-        body = response.json()
 
-        if not response.is_success:
-            error = body.get("error", {})
-            raise CosmonerError(
-                status=response.status_code,
-                code=error.get("code", "UNKNOWN"),
-                message=error.get("message", "Unknown error"),
-            )
+class AsyncEmailService:
+    """Asynchronous counterpart to :class:`EmailService`."""
 
-        return body
+    def __init__(self, transport: AsyncTransport, config: ClientConfig) -> None:
+        self._transport = transport
+        self._config = config
+
+    async def send(
+        self,
+        credential_id: str,
+        to: Recipients,
+        subject: str,
+        *,
+        html: Optional[str] = None,
+        text: Optional[str] = None,
+        reply_to: Optional[Recipients] = None,
+        project_id: Optional[str] = None,
+    ) -> dict:
+        """
+        Sends a transactional email and returns the API envelope with its message id.
+
+        At least one of ``html`` or ``text`` is required. ``project_id`` overrides
+        the client-level default for this call.
+        """
+        payload = _build_payload(credential_id, to, subject, html, text, reply_to)
+        project = resolve_project_id(self._config, project_id)
+
+        return await self._transport.request(
+            "POST", f"/v1/projects/{project}/email/send", json=payload
+        )

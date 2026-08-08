@@ -1,16 +1,20 @@
-import pytest
-import httpx
+import json
 
-from cosmoner import Cosmoner, CosmonerError
+import pytest
+
+from cosmoner import AsyncCosmoner, Cosmoner, CosmonerError, RateLimitError
+
+URL = "https://api.test.dev/v1/projects/proj-1/email/send"
 
 
 @pytest.fixture()
 def client():
-    """Provide a Cosmoner client configured for testing."""
+    """Provide a Cosmoner client configured for testing, with retries disabled."""
     return Cosmoner(
         api_key="key-123",
         project_id="proj-1",
         base_url="https://api.test.dev",
+        max_retries=0,
     )
 
 
@@ -21,14 +25,20 @@ class TestEmailValidation:
         with pytest.raises(ValueError, match="Either html or text must be provided"):
             client.email.send(credential_id="cred-1", to="user@test.com", subject="Hello")
 
+    def test_raises_when_no_project_id_is_available(self):
+        client = Cosmoner(api_key="key-123", max_retries=0)
+        with pytest.raises(ValueError, match="project_id is required"):
+            client.email.send(
+                credential_id="cred-1", to="user@test.com", subject="Hi", text="body"
+            )
+
 
 class TestEmailSend:
     """Tests for email sending via mocked HTTP."""
 
     def test_sends_email_successfully(self, client, httpx_mock):
         httpx_mock.add_response(
-            url="https://api.test.dev/v1/projects/proj-1/email/send",
-            json={"success": True, "data": {"messageId": "msg-abc"}},
+            url=URL, json={"success": True, "data": {"messageId": "msg-abc"}}
         )
 
         result = client.email.send(
@@ -41,15 +51,25 @@ class TestEmailSend:
         assert result == {"success": True, "data": {"messageId": "msg-abc"}}
 
         request = httpx_mock.get_request()
-        assert request.url == "https://api.test.dev/v1/projects/proj-1/email/send"
+        assert str(request.url) == URL
         assert request.method == "POST"
         assert request.headers["authorization"] == "Bearer key-123"
         assert request.headers["content-type"] == "application/json"
 
+    def test_sends_sdk_user_agent_and_idempotency_key(self, client, httpx_mock):
+        httpx_mock.add_response(url=URL, json={"success": True, "data": {}})
+
+        client.email.send(
+            credential_id="cred-1", to="user@test.com", subject="Test", text="body"
+        )
+
+        request = httpx_mock.get_request()
+        assert request.headers["user-agent"].startswith("cosmoner-python/")
+        assert request.headers["idempotency-key"]
+
     def test_sends_correct_payload_with_all_fields(self, client, httpx_mock):
         httpx_mock.add_response(
-            url="https://api.test.dev/v1/projects/proj-1/email/send",
-            json={"success": True, "data": {"messageId": "msg-def"}},
+            url=URL, json={"success": True, "data": {"messageId": "msg-def"}}
         )
 
         client.email.send(
@@ -61,10 +81,7 @@ class TestEmailSend:
             reply_to="reply@test.com",
         )
 
-        import json
-
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
+        body = json.loads(httpx_mock.get_request().content)
         assert body["credentialId"] == "cred-1"
         assert body["to"] == ["a@test.com", "b@test.com"]
         assert body["subject"] == "Test"
@@ -74,8 +91,21 @@ class TestEmailSend:
 
     def test_omits_optional_fields_when_none(self, client, httpx_mock):
         httpx_mock.add_response(
-            url="https://api.test.dev/v1/projects/proj-1/email/send",
-            json={"success": True, "data": {"messageId": "msg-ghi"}},
+            url=URL, json={"success": True, "data": {"messageId": "msg-ghi"}}
+        )
+
+        client.email.send(
+            credential_id="cred-1", to="user@test.com", subject="Test", text="body"
+        )
+
+        body = json.loads(httpx_mock.get_request().content)
+        assert "html" not in body
+        assert "replyTo" not in body
+
+    def test_per_call_project_id_overrides_client_default(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/send",
+            json={"success": True, "data": {}},
         )
 
         client.email.send(
@@ -83,17 +113,14 @@ class TestEmailSend:
             to="user@test.com",
             subject="Test",
             text="body",
+            project_id="proj-2",
         )
 
-        import json
-
-        body = json.loads(httpx_mock.get_request().content)
-        assert "html" not in body
-        assert "replyTo" not in body
+        assert "proj-2" in str(httpx_mock.get_request().url)
 
     def test_raises_cosmoner_error_on_api_failure(self, client, httpx_mock):
         httpx_mock.add_response(
-            url="https://api.test.dev/v1/projects/proj-1/email/send",
+            url=URL,
             status_code=429,
             json={
                 "success": False,
@@ -101,12 +128,9 @@ class TestEmailSend:
             },
         )
 
-        with pytest.raises(CosmonerError) as exc_info:
+        with pytest.raises(RateLimitError) as exc_info:
             client.email.send(
-                credential_id="cred-1",
-                to="user@test.com",
-                subject="Test",
-                text="body",
+                credential_id="cred-1", to="user@test.com", subject="Test", text="body"
             )
 
         err = exc_info.value
@@ -115,21 +139,85 @@ class TestEmailSend:
         assert str(err) == "Too many requests"
 
     def test_handles_error_response_with_missing_fields(self, client, httpx_mock):
-        httpx_mock.add_response(
-            url="https://api.test.dev/v1/projects/proj-1/email/send",
-            status_code=500,
-            json={},
-        )
+        httpx_mock.add_response(url=URL, status_code=500, json={})
 
         with pytest.raises(CosmonerError) as exc_info:
             client.email.send(
-                credential_id="cred-1",
-                to="user@test.com",
-                subject="Test",
-                text="body",
+                credential_id="cred-1", to="user@test.com", subject="Test", text="body"
             )
 
         err = exc_info.value
         assert err.status == 500
         assert err.code == "UNKNOWN"
         assert str(err) == "Unknown error"
+
+    def test_surfaces_validation_details(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=URL,
+            status_code=422,
+            json={
+                "success": False,
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Invalid input",
+                    "details": {"to": "must be an email"},
+                },
+            },
+        )
+
+        with pytest.raises(CosmonerError) as exc_info:
+            client.email.send(
+                credential_id="cred-1", to="bad", subject="Test", text="body"
+            )
+
+        assert exc_info.value.details == {"to": "must be an email"}
+
+
+class TestAsyncEmailSend:
+    """Tests for the async email service."""
+
+    async def test_sends_email_successfully(self, httpx_mock):
+        httpx_mock.add_response(
+            url=URL, json={"success": True, "data": {"messageId": "msg-async"}}
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.email.send(
+                credential_id="cred-1",
+                to="user@test.com",
+                subject="Test",
+                text="Hello world",
+            )
+
+        assert result == {"success": True, "data": {"messageId": "msg-async"}}
+
+    async def test_raises_mapped_error(self, httpx_mock):
+        httpx_mock.add_response(
+            url=URL,
+            status_code=401,
+            json={
+                "success": False,
+                "error": {"code": "INVALID_API_KEY", "message": "Invalid API key"},
+            },
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(CosmonerError) as exc_info:
+                await client.email.send(
+                    credential_id="cred-1",
+                    to="user@test.com",
+                    subject="Test",
+                    text="body",
+                )
+
+        assert exc_info.value.status == 401
