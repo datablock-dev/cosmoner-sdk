@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Datablock, DatablockError } from "./index";
+import { Cosmoner, CosmonerError } from "./index";
 import type { SendEmailParams } from "./index";
 
-describe("Datablock", () => {
+describe("Cosmoner", () => {
   it("initializes with valid config", () => {
-    const client = new Datablock({ apiKey: "key-123", projectId: "proj-1" });
+    const client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1" });
     expect(client.apiKey).toBe("key-123");
     expect(client.projectId).toBe("proj-1");
-    expect(client.baseUrl).toBe("https://api.datablock.dev");
+    expect(client.baseUrl).toBe("https://api.cosmoner.com");
   });
 
   it("uses custom baseUrl", () => {
-    const client = new Datablock({
+    const client = new Cosmoner({
       apiKey: "key-123",
       projectId: "proj-1",
       baseUrl: "https://custom.api.dev",
@@ -20,7 +20,7 @@ describe("Datablock", () => {
   });
 
   it("strips trailing slash from baseUrl", () => {
-    const client = new Datablock({
+    const client = new Cosmoner({
       apiKey: "key-123",
       projectId: "proj-1",
       baseUrl: "https://custom.api.dev/",
@@ -30,43 +30,43 @@ describe("Datablock", () => {
 
   it("throws when apiKey is missing", () => {
     expect(
-      () => new Datablock({ apiKey: "", projectId: "proj-1" })
+      () => new Cosmoner({ apiKey: "", projectId: "proj-1" })
     ).toThrow("apiKey is required");
   });
 
   it("throws when projectId is missing", () => {
     expect(
-      () => new Datablock({ apiKey: "key-123", projectId: "" })
+      () => new Cosmoner({ apiKey: "key-123", projectId: "" })
     ).toThrow("projectId is required");
   });
 
   it("exposes email service", () => {
-    const client = new Datablock({ apiKey: "key-123", projectId: "proj-1" });
+    const client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1" });
     expect(client.email).toBeDefined();
     expect(client.email.send).toBeInstanceOf(Function);
   });
 });
 
-describe("DatablockError", () => {
+describe("CosmonerError", () => {
   it("stores status, code, and message", () => {
-    const err = new DatablockError(422, "VALIDATION_ERROR", "Invalid input");
+    const err = new CosmonerError(422, "VALIDATION_ERROR", "Invalid input");
     expect(err.status).toBe(422);
     expect(err.code).toBe("VALIDATION_ERROR");
     expect(err.message).toBe("Invalid input");
-    expect(err.name).toBe("DatablockError");
+    expect(err.name).toBe("CosmonerError");
   });
 
   it("is an instance of Error", () => {
-    const err = new DatablockError(500, "INTERNAL", "fail");
+    const err = new CosmonerError(500, "INTERNAL", "fail");
     expect(err).toBeInstanceOf(Error);
   });
 });
 
 describe("EmailService", () => {
-  let client: Datablock;
+  let client: Cosmoner;
 
   beforeEach(() => {
-    client = new Datablock({
+    client = new Cosmoner({
       apiKey: "key-123",
       projectId: "proj-1",
       baseUrl: "https://api.test.dev",
@@ -172,7 +172,7 @@ describe("EmailService", () => {
       expect(body.replyTo).toBe("reply@test.com");
     });
 
-    it("throws DatablockError on API failure", async () => {
+    it("throws CosmonerError on API failure", async () => {
       fetchSpy.mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -192,8 +192,8 @@ describe("EmailService", () => {
         });
         expect.unreachable("Should have thrown");
       } catch (err) {
-        expect(err).toBeInstanceOf(DatablockError);
-        const e = err as DatablockError;
+        expect(err).toBeInstanceOf(CosmonerError);
+        const e = err as CosmonerError;
         expect(e.status).toBe(429);
         expect(e.code).toBe("RATE_LIMITED");
         expect(e.message).toBe("Too many requests");
@@ -214,7 +214,7 @@ describe("EmailService", () => {
         });
         expect.unreachable("Should have thrown");
       } catch (err) {
-        const e = err as DatablockError;
+        const e = err as CosmonerError;
         expect(e.status).toBe(500);
         expect(e.code).toBe("UNKNOWN");
         expect(e.message).toBe("Unknown error");

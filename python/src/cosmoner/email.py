@@ -4,14 +4,14 @@ from typing import TYPE_CHECKING, Union
 
 import httpx
 
-from .errors import DatablockError
+from .errors import CosmonerError
 
 if TYPE_CHECKING:
-    from .client import Datablock
+    from .client import Cosmoner
 
 
 class EmailService:
-    def __init__(self, client: Datablock) -> None:
+    def __init__(self, client: Cosmoner) -> None:
         self._client = client
 
     def send(
@@ -54,7 +54,7 @@ class EmailService:
 
         if not response.is_success:
             error = body.get("error", {})
-            raise DatablockError(
+            raise CosmonerError(
                 status=response.status_code,
                 code=error.get("code", "UNKNOWN"),
                 message=error.get("message", "Unknown error"),

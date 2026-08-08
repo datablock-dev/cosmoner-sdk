@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Datablock\Sdk\Tests;
+namespace Cosmoner\Sdk\Tests;
 
-use Datablock\Sdk\Datablock;
-use Datablock\Sdk\EmailService;
+use Cosmoner\Sdk\Cosmoner;
+use Cosmoner\Sdk\EmailService;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
 class EmailServiceTest extends TestCase
 {
-    private Datablock $client;
+    private Cosmoner $client;
 
     protected function setUp(): void
     {
-        $this->client = new Datablock('key-123', 'proj-1', 'https://api.test.dev');
+        $this->client = new Cosmoner('key-123', 'proj-1', 'https://api.test.dev');
     }
 
     public function testThrowsWhenNeitherHtmlNorTextProvided(): void

@@ -1,6 +1,6 @@
 {
-  "name": "datablock/sdk",
-  "description": "Datablock SDK for PHP",
+  "name": "cosmoner/sdk",
+  "description": "Cosmoner SDK for PHP",
   "type": "library",
   "license": "MIT",
   "require": {
@@ -8,12 +8,12 @@
   },
   "autoload": {
     "psr-4": {
-      "Datablock\\Sdk\\": "src/"
+      "Cosmoner\\Sdk\\": "src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "Datablock\\Sdk\\Tests\\": "tests/"
+      "Cosmoner\\Sdk\\Tests\\": "tests/"
     }
   },
   "require-dev": {
@@ -23,7 +23,7 @@
     "test": "phpunit --testdox"
   },
   "keywords": [
-    "datablock",
+    "cosmoner",
     "sdk"
   ]
 }
