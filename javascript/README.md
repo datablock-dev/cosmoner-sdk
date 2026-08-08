@@ -1,19 +1,19 @@
-# @datablock/sdk
+# @cosmoner/sdk
 
-Official Datablock SDK for Node.js.
+Official Cosmoner SDK for Node.js.
 
 ## Installation
 
 ```bash
-npm install @datablock/sdk
+npm install @cosmoner/sdk
 ```
 
 ## Usage
 
 ```typescript
-import { Datablock } from "@datablock/sdk";
+import { Cosmoner } from "@cosmoner/sdk";
 
-const client = new Datablock({
+const client = new Cosmoner({
   apiKey: "your-api-key",
   projectId: "your-project-id",
 });
@@ -22,7 +22,7 @@ const client = new Datablock({
 const result = await client.email.send({
   credentialId: "your-credential-id",
   to: "recipient@example.com",
-  subject: "Hello from Datablock",
+  subject: "Hello from Cosmoner",
   html: "<h1>Hello!</h1><p>This is a test email.</p>",
 });
 
@@ -42,9 +42,9 @@ await client.email.send({
 
 | Option      | Required | Default                      | Description                |
 | ----------- | -------- | ---------------------------- | -------------------------- |
-| `apiKey`    | Yes      | —                            | Your Datablock API key     |
-| `projectId` | Yes      | —                            | Your Datablock project ID  |
-| `baseUrl`   | No       | `https://api.datablock.dev`  | API base URL override      |
+| `apiKey`    | Yes      | —                            | Your Cosmoner API key      |
+| `projectId` | Yes      | —                            | Your Cosmoner project ID   |
+| `baseUrl`   | No       | `https://api.cosmoner.com`   | API base URL override      |
 
 ## Email
 
@@ -64,12 +64,12 @@ await client.email.send({
 ## Error Handling
 
 ```typescript
-import { Datablock, DatablockError } from "@datablock/sdk";
+import { Cosmoner, CosmonerError } from "@cosmoner/sdk";
 
 try {
   await client.email.send({ ... });
 } catch (err) {
-  if (err instanceof DatablockError) {
+  if (err instanceof CosmonerError) {
     console.error(err.code);    // e.g. "INSUFFICIENT_SCOPE"
     console.error(err.status);  // e.g. 403
     console.error(err.message); // Human-readable message

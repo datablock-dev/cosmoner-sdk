@@ -1,23 +1,23 @@
-# Datablock SDK
+# Cosmoner SDK
 
-Official Datablock SDKs for JavaScript, Python, and PHP.
+Official Cosmoner SDKs for JavaScript, Python, and PHP.
 
-| Language   | Package           | Install                        |
-| ---------- | ----------------- | ------------------------------ |
-| JavaScript | `@datablock/sdk`  | `npm install @datablock/sdk`   |
-| Python     | `datablock-sdk`   | `pip install datablock-sdk`    |
-| PHP        | `datablock/sdk`   | `composer require datablock/sdk` |
+| Language   | Package         | Install                         |
+| ---------- | --------------- | ------------------------------- |
+| JavaScript | `@cosmoner/sdk` | `npm install @cosmoner/sdk`     |
+| Python     | `cosmoner-sdk`  | `pip install cosmoner-sdk`      |
+| PHP        | `cosmoner/sdk`  | `composer require cosmoner/sdk` |
 
 ## Usage
 
-Each SDK provides a `Datablock` client with service namespaces. Currently supports `client.email`.
+Each SDK provides a `Cosmoner` client with service namespaces. Currently supports `client.email`.
 
 ### JavaScript / TypeScript
 
 ```typescript
-import { Datablock } from "@datablock/sdk";
+import { Cosmoner } from "@cosmoner/sdk";
 
-const client = new Datablock({
+const client = new Cosmoner({
   apiKey: "your-api-key",
   projectId: "your-project-id",
 });
@@ -25,7 +25,7 @@ const client = new Datablock({
 await client.email.send({
   credentialId: "your-credential-id",
   to: ["alice@example.com", "bob@example.com"],
-  subject: "Hello from Datablock",
+  subject: "Hello from Cosmoner",
   html: "<h1>Hello!</h1>",
 });
 ```
@@ -33,14 +33,14 @@ await client.email.send({
 ### Python
 
 ```python
-from datablock import Datablock
+from cosmoner import Cosmoner
 
-client = Datablock(api_key="your-api-key", project_id="your-project-id")
+client = Cosmoner(api_key="your-api-key", project_id="your-project-id")
 
 client.email.send(
     credential_id="your-credential-id",
     to=["alice@example.com", "bob@example.com"],
-    subject="Hello from Datablock",
+    subject="Hello from Cosmoner",
     html="<h1>Hello!</h1>",
 )
 ```
@@ -48,14 +48,14 @@ client.email.send(
 ### PHP
 
 ```php
-use Datablock\Sdk\Datablock;
+use Cosmoner\Sdk\Cosmoner;
 
-$client = new Datablock(apiKey: 'your-api-key', projectId: 'your-project-id');
+$client = new Cosmoner(apiKey: 'your-api-key', projectId: 'your-project-id');
 
 $client->email->send(
     credentialId: 'your-credential-id',
     to: ['alice@example.com', 'bob@example.com'],
-    subject: 'Hello from Datablock',
+    subject: 'Hello from Cosmoner',
     html: '<h1>Hello!</h1>',
 );
 ```

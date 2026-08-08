@@ -1,4 +1,4 @@
-export interface DatablockConfig {
+export interface CosmonerConfig {
   apiKey: string;
   projectId: string;
   baseUrl?: string;
@@ -23,20 +23,20 @@ interface ErrorResponse {
   error: { code: string; message: string };
 }
 
-export class DatablockError extends Error {
+export class CosmonerError extends Error {
   public readonly code: string;
   public readonly status: number;
 
   constructor(status: number, code: string, message: string) {
     super(message);
-    this.name = "DatablockError";
+    this.name = "CosmonerError";
     this.code = code;
     this.status = status;
   }
 }
 
 class EmailService {
-  constructor(private readonly client: Datablock) {}
+  constructor(private readonly client: Cosmoner) {}
 
   async send(params: SendEmailParams): Promise<SendEmailResponse> {
     if (!params.to) throw new Error("to is required");
@@ -67,7 +67,7 @@ class EmailService {
 
     if (!res.ok) {
       const err = body as ErrorResponse;
-      throw new DatablockError(
+      throw new CosmonerError(
         res.status,
         err.error?.code ?? "UNKNOWN",
         err.error?.message ?? "Unknown error"
@@ -78,7 +78,7 @@ class EmailService {
   }
 }
 
-export class Datablock {
+export class Cosmoner {
   /** @internal */
   readonly apiKey: string;
   /** @internal */
@@ -88,13 +88,13 @@ export class Datablock {
 
   readonly email: EmailService;
 
-  constructor(config: DatablockConfig) {
+  constructor(config: CosmonerConfig) {
     if (!config.apiKey) throw new Error("apiKey is required");
     if (!config.projectId) throw new Error("projectId is required");
 
     this.apiKey = config.apiKey;
     this.projectId = config.projectId;
-    this.baseUrl = (config.baseUrl ?? "https://api.datablock.dev").replace(
+    this.baseUrl = (config.baseUrl ?? "https://api.cosmoner.com").replace(
       /\/$/,
       ""
     );
@@ -103,4 +103,4 @@ export class Datablock {
   }
 }
 
-export default Datablock;
+export default Cosmoner;

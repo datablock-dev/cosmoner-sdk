@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Datablock\Sdk;
+namespace Cosmoner\Sdk;
 
 use RuntimeException;
 
-class DatablockError extends RuntimeException
+class CosmonerError extends RuntimeException
 {
     public function __construct(
         public readonly int $status,

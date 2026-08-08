@@ -1,13 +1,13 @@
 import pytest
 import httpx
 
-from datablock import Datablock, DatablockError
+from cosmoner import Cosmoner, CosmonerError
 
 
 @pytest.fixture()
 def client():
-    """Provide a Datablock client configured for testing."""
-    return Datablock(
+    """Provide a Cosmoner client configured for testing."""
+    return Cosmoner(
         api_key="key-123",
         project_id="proj-1",
         base_url="https://api.test.dev",
@@ -91,7 +91,7 @@ class TestEmailSend:
         assert "html" not in body
         assert "replyTo" not in body
 
-    def test_raises_datablock_error_on_api_failure(self, client, httpx_mock):
+    def test_raises_cosmoner_error_on_api_failure(self, client, httpx_mock):
         httpx_mock.add_response(
             url="https://api.test.dev/v1/projects/proj-1/email/send",
             status_code=429,
@@ -101,7 +101,7 @@ class TestEmailSend:
             },
         )
 
-        with pytest.raises(DatablockError) as exc_info:
+        with pytest.raises(CosmonerError) as exc_info:
             client.email.send(
                 credential_id="cred-1",
                 to="user@test.com",
@@ -121,7 +121,7 @@ class TestEmailSend:
             json={},
         )
 
-        with pytest.raises(DatablockError) as exc_info:
+        with pytest.raises(CosmonerError) as exc_info:
             client.email.send(
                 credential_id="cred-1",
                 to="user@test.com",
