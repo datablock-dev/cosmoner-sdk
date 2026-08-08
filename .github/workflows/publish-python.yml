@@ -39,10 +39,10 @@ jobs:
         uses: ietf-tools/semver-action@v1.11.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          prefix: python/v
+          prefix: python/
           patchAll: true
           noVersionBumpBehavior: patch
-          fallbackTag: python/v1.0.0
+          maxTagsToFetch: 100
 
       - name: Bump version in pyproject.toml
         if: steps.release_version.outputs.next != ''
