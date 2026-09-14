@@ -1,0 +1,6 @@
+services:
+  - name: docs
+    type: static
+    port: 3000
+    build:
+      strategy: docker

@@ -1,0 +1,9 @@
+name: 12
+region: true
+services:
+  - name: web
+    port: "3000"
+    instances: 1.5
+    autodeploy: sometimes
+    build: nixpacks
+    envs: {}

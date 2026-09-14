@@ -1,0 +1,4 @@
+services:
+  - name: web
+    prot: 3000
+regionn: ams

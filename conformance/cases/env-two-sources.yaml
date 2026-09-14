@@ -1,0 +1,6 @@
+services:
+  - name: web
+    envs:
+      - key: API_URL
+        value: https://example.com
+        from_variable: PUBLIC_API_URL

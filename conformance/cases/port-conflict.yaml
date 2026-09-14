@@ -1,0 +1,5 @@
+services:
+  - name: web
+    port: 3000
+    http_port: 8080
+    internal_port: 9090

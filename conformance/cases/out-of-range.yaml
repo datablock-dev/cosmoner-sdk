@@ -1,0 +1,4 @@
+services:
+  - name: web
+    port: 70000
+    instances: 99

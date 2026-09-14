@@ -1,0 +1,107 @@
+{
+  "cases": [
+    { "name": "minimal", "valid": true, "issues": [] },
+    { "name": "full", "valid": true, "issues": [] },
+    { "name": "schema-key", "valid": true, "issues": [] },
+
+    { "name": "empty", "valid": false, "issues": [
+      { "path": "(root)", "severity": "error", "message": "File is empty" }
+    ] },
+    { "name": "blank-lines", "valid": false, "issues": [
+      { "path": "(root)", "severity": "error", "message": "File is empty" }
+    ] },
+    { "name": "invalid-yaml", "valid": false, "issues": [
+      { "path": "(root)", "severity": "error", "messageStartsWith": "Invalid YAML: " }
+    ] },
+    { "name": "top-level-sequence", "valid": false, "issues": [
+      { "path": "(root)", "severity": "error", "message": "Expected a mapping at the top level of the file" }
+    ] },
+    { "name": "top-level-scalar", "valid": false, "issues": [
+      { "path": "(root)", "severity": "error", "message": "Expected a mapping at the top level of the file" }
+    ] },
+
+    { "name": "services-missing", "valid": false, "issues": [
+      { "path": "services", "severity": "error", "message": "Required" }
+    ] },
+    { "name": "services-empty", "valid": false, "issues": [
+      { "path": "services", "severity": "error", "message": "At least one service is required" }
+    ] },
+    { "name": "services-not-a-list", "valid": false, "issues": [
+      { "path": "services", "severity": "error", "message": "Expected a list" }
+    ] },
+    { "name": "service-name-missing", "valid": false, "issues": [
+      { "path": "services.0.name", "severity": "error", "message": "Required" }
+    ] },
+    { "name": "service-name-invalid", "valid": false, "issues": [
+      { "path": "services.0.name", "severity": "error", "message": "Service names must be lowercase letters, numbers, or hyphens, and start with a letter or number" }
+    ] },
+    { "name": "service-name-duplicate", "valid": false, "issues": [
+      { "path": "services.1.name", "severity": "error", "message": "Duplicate service name \"web\"" }
+    ] },
+    { "name": "unsupported-version", "valid": false, "issues": [
+      { "path": "version", "severity": "error", "message": "Unsupported file version — this platform reads version 1 files" }
+    ] },
+
+    { "name": "unknown-fields", "valid": true, "issues": [
+      { "path": "regionn", "severity": "warning", "message": "Unknown field \"regionn\" — it will be ignored" },
+      { "path": "services.0.prot", "severity": "warning", "message": "Unknown field \"prot\" — it will be ignored" }
+    ] },
+    { "name": "deprecated-port", "valid": true, "issues": [
+      { "path": "services.0.http_port", "severity": "warning", "message": "http_port is deprecated — use port" }
+    ] },
+    { "name": "port-conflict", "valid": false, "issues": [
+      { "path": "services.0.http_port", "severity": "warning", "message": "http_port is deprecated — use port" },
+      { "path": "services.0.internal_port", "severity": "warning", "message": "internal_port is deprecated — use port" },
+      { "path": "services.0.http_port", "severity": "error", "message": "port replaces http_port and internal_port — remove them" }
+    ] },
+
+    { "name": "static-run-command", "valid": false, "issues": [
+      { "path": "services.0.run_command", "severity": "error", "message": "Static sites cannot define a run_command" }
+    ] },
+    { "name": "static-port", "valid": false, "issues": [
+      { "path": "services.0.port", "severity": "error", "message": "port does not apply to a static site — the platform serves it" }
+    ] },
+    { "name": "static-port-docker", "valid": true, "issues": [] },
+    { "name": "output-dir-on-service", "valid": false, "issues": [
+      { "path": "services.0.build.output_dir", "severity": "error", "message": "output_dir only applies to static sites" }
+    ] },
+
+    { "name": "env-no-source", "valid": false, "issues": [
+      { "path": "services.0.envs.0.value", "severity": "error", "message": "Set one of value, secret, from_variable, or from_secret" }
+    ] },
+    { "name": "env-two-sources", "valid": false, "issues": [
+      { "path": "services.0.envs.0.from_variable", "severity": "error", "message": "A variable takes its value from one place only — remove from_variable" }
+    ] },
+    { "name": "env-committed-secret", "valid": false, "issues": [
+      { "path": "services.0.envs.0.secret", "severity": "error", "message": "A variable takes its value from one place only — remove secret" },
+      { "path": "services.0.envs.0.value", "severity": "error", "message": "A secret value must not be committed — remove value, or link a stored secret with from_secret" }
+    ] },
+    { "name": "env-duplicate-key", "valid": false, "issues": [
+      { "path": "services.0.envs.1.key", "severity": "error", "message": "Duplicate environment variable \"NODE_ENV\"" }
+    ] },
+    { "name": "env-key-invalid", "valid": false, "issues": [
+      { "path": "services.0.envs.0.key", "severity": "error", "message": "Env var keys must start with a letter or underscore and contain only letters, numbers, or underscores" }
+    ] },
+    { "name": "env-ref-invalid", "valid": false, "issues": [
+      { "path": "services.0.envs.0.from_variable", "severity": "error", "message": "from_variable must name a project variable, e.g. PUBLIC_API_URL" }
+    ] },
+
+    { "name": "wrong-types", "valid": false, "issues": [
+      { "path": "name", "severity": "error", "message": "Expected a string" },
+      { "path": "region", "severity": "error", "message": "Expected a string" },
+      { "path": "services.0.build", "severity": "error", "message": "Expected a mapping" },
+      { "path": "services.0.port", "severity": "error", "message": "Expected an integer" },
+      { "path": "services.0.instances", "severity": "error", "message": "Expected an integer" },
+      { "path": "services.0.autodeploy", "severity": "error", "message": "Expected a boolean" },
+      { "path": "services.0.envs", "severity": "error", "message": "Expected a list" }
+    ] },
+    { "name": "out-of-range", "valid": false, "issues": [
+      { "path": "services.0.port", "severity": "error", "message": "Must be between 1 and 65535" },
+      { "path": "services.0.instances", "severity": "error", "message": "Must be between 1 and 10" }
+    ] },
+    { "name": "enum-invalid", "valid": false, "issues": [
+      { "path": "services.0.type", "severity": "error", "message": "Must be one of: service, static" },
+      { "path": "services.0.build.strategy", "severity": "error", "message": "Must be one of: nixpacks, docker" }
+    ] }
+  ]
+}
