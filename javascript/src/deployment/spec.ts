@@ -186,3 +186,19 @@ export const ROOT_FIELDS: FieldTable = {
     item: { kind: "object", fields: SERVICE_FIELDS },
   },
 };
+
+/**
+ * The order fields are written in, for tools that rewrite the file.
+ *
+ * Derived from the tables above rather than listed again, so a field added
+ * there cannot be left out of a formatter's ordering and silently sorted to the
+ * end. Exported because `@cosmoner/cli`'s `fmt` needs it and a second copy of
+ * this order living there is exactly the kind of drift the rest of this module
+ * exists to prevent.
+ */
+export const DEPLOYMENT_KEY_ORDER = {
+  root: Object.keys(ROOT_FIELDS),
+  service: Object.keys(SERVICE_FIELDS),
+  build: Object.keys(BUILD_FIELDS),
+  env: Object.keys(ENV_FIELDS),
+} as const;

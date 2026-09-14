@@ -23,6 +23,7 @@ export {
 export {
   APP_SCHEMA_URL,
   DEPLOYMENT_FILE_PATHS,
+  DEPLOYMENT_KEY_ORDER,
   DEPLOYMENT_VERSION,
   MAX_DEPLOYMENT_BYTES,
 } from "./deployment/spec";

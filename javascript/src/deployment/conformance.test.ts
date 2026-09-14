@@ -60,9 +60,8 @@ describe("deployment conformance", () => {
     // looking like coverage it is not providing.
     const fixtures = readdirSync(join(CONFORMANCE_DIR, "cases"))
       .filter((file) => file.endsWith(".yaml"))
-      .map((file) => file.replace(/\.yaml$/, ""))
-      .toSorted();
+      .map((file) => file.replace(/\.yaml$/, ""));
 
-    expect(cases.map((c) => c.name).toSorted()).toEqual(fixtures);
+    expect(new Set(cases.map((c) => c.name))).toEqual(new Set(fixtures));
   });
 });

@@ -30,8 +30,10 @@ const SCHEMA: Node = JSON.parse(
 
 /** Compares one field table against the schema node that should describe it. */
 function expectTableMatches(table: FieldTable, node: Node, where: string): void {
-  expect(Object.keys(table).toSorted(), `${where}: field names`).toEqual(
-    Object.keys(node.properties).toSorted()
+  // Compared as sets: the two are describing the same fields, and neither one
+  // claims anything about the order the other lists them in.
+  expect(new Set(Object.keys(table)), `${where}: field names`).toEqual(
+    new Set(Object.keys(node.properties))
   );
 
   const required = new Set<string>(node.required ?? []);

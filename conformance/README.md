@@ -53,7 +53,13 @@ language, for the same reason, with the same message.
 
 ## Ordering
 
-Issues come out in a fixed order rather than a sorted one, so that CLI output
-reads down the file. Within each mapping: unknown keys first, then the known
+Issues come out in a fixed order, which is what makes them comparable across
+three implementations. Within each mapping: unknown keys first, then the known
 fields in the order they are declared in the validator's field table, then the
 rules that span more than one field. Lists are walked in index order.
+
+That is not the order a person reads a file in — an unknown key on line 40 is
+reported before a bad service name on line 2 — so `cosmoner validate` sorts its
+own output by position before printing. The verdict and the findings are the
+same either way; only the display order differs, and only in the one place that
+knows where the lines are.
