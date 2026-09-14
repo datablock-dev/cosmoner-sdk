@@ -65,8 +65,11 @@ final class DeploymentConformanceTest extends TestCase
         self::assertSame($expectedKeys, $actualKeys);
 
         foreach ($result->issues as $index => $issue) {
-            if (isset($expected[$index]['messageStartsWith'])) {
-                self::assertStringStartsWith($expected[$index]['messageStartsWith'], $issue->message);
+            // Read into a local and compared against '' so that the type is a
+            // non-empty-string by the time assertStringStartsWith sees it.
+            $prefix = $expected[$index]['messageStartsWith'] ?? '';
+            if ($prefix !== '') {
+                self::assertStringStartsWith($prefix, $issue->message);
             } else {
                 self::assertSame($expected[$index]['message'], $issue->message);
             }

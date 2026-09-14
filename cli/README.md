@@ -130,10 +130,16 @@ end result. The cost is that `cli/` reaches into `../javascript/src`, so a
 change to the SDK re-runs the CLI's tests and re-releases the CLI.
 
 ```bash
-cd cli
-npm ci
+cd javascript && npm ci   # the type check reads the SDK's source, so it
+cd ../cli && npm ci       # needs the SDK's dependencies resolvable too
 npm run lint && npm run typecheck && npm test
 ```
+
+The first line is not optional for `npm run typecheck`: tsc follows
+`../javascript/src` and that source imports `yaml`, which module resolution
+looks for beside the importing file rather than in `cli/node_modules`. Lint,
+build and test do not need it — tsup treats `yaml` as external because the CLI
+depends on it as well.
 
 `npm test` builds first, because two things only exist after a build: the JSON
 Schema copied next to the bundle, and the shebang that makes it runnable. Both

@@ -116,8 +116,8 @@ cd python && pip install -e ".[test,lint]" && ruff check . && ruff format --chec
 # PHP
 cd php && composer install && composer run lint && composer run analyse && composer run test
 
-# CLI
-cd cli && npm ci && npm run lint && npm run typecheck && npm test
+# CLI (the type check reads the SDK's source, so install that first)
+cd javascript && npm ci && cd ../cli && npm ci && npm run lint && npm run typecheck && npm test
 ```
 
 The CLI bundles the JavaScript SDK's source rather than depending on the

@@ -33,10 +33,9 @@ final class Version
     /**
      * Returns the installed version, or `0.0.0` when there is not one.
      *
-     * A source checkout has no version: Composer answers for the root package
-     * with its `1.0.0+no-version-set` placeholder, which would put a
-     * plausible-looking `1.0.0` in the User-Agent and be worse than admitting
-     * we do not know.
+     * Only a released, tagged install has one. A checkout — which is what the
+     * SDK's own test suite runs from — does not, and saying so is better than
+     * reporting whatever Composer names the working tree by.
      */
     public static function get(): string
     {
@@ -56,12 +55,25 @@ final class Version
             return self::UNKNOWN;
         }
 
-        if ($version === null || str_contains($version, '+no-version-set')) {
+        if ($version === null) {
             return self::UNKNOWN;
         }
 
         // Versions come from git tags, which carry the `v` the tag was named
         // with. The User-Agent should not.
-        return ltrim($version, 'v');
+        $version = ltrim($version, 'v');
+
+        // Only a release has a version to report. Composer answers for anything
+        // else with something that is not one: `dev-main` or `dev-<sha>` for a
+        // branch install, and `1.0.0+no-version-set` for a checkout with no tag
+        // to read. The placeholder is the dangerous one — it would put a
+        // plausible-looking 1.0.0 in the header of every request — but a 40
+        // character commit sha is no more a version than it is, so the rule is
+        // the shape of a release rather than a list of the ways it can fail.
+        if (preg_match('/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/', $version) !== 1) {
+            return self::UNKNOWN;
+        }
+
+        return $version;
     }
 }

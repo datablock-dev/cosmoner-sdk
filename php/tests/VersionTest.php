@@ -34,6 +34,14 @@ final class VersionTest extends TestCase
         self::assertStringNotContainsString('+', Version::get());
     }
 
+    public function testDoesNotReportADevelopmentInstallAsAVersion(): void
+    {
+        // Composer names a branch install `dev-main`, and a detached checkout
+        // `dev-<commit sha>` — which is what CI runs from, and what this caught
+        // going into the User-Agent verbatim.
+        self::assertStringStartsNotWith('dev-', Version::get());
+    }
+
     public function testIsStable(): void
     {
         self::assertSame(Version::get(), Version::get());
