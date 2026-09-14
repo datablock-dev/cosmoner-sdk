@@ -6,4 +6,4 @@ services:
     instances: 1.5
     autodeploy: sometimes
     build: nixpacks
-    envs: {}
+    envs: 5

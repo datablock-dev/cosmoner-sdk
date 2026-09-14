@@ -43,6 +43,14 @@ PHP parsers are 1.2 already, and PyYAML is 1.1, where `yes`, `no`, `on` and
 `off` are booleans. The Python SDK narrows its resolver to match rather than
 telling a customer a file is fine that the platform will read differently.
 
+## What the fixtures avoid
+
+PHP arrays are both lists and mappings, so once a YAML document is parsed there
+is nothing left to tell `{}` from `[]`. A fixture written to check that a list
+field rejects a mapping would pass in PHP for a reason that has nothing to do
+with the validator, so `wrong-types` uses a scalar instead — wrong in every
+language, for the same reason, with the same message.
+
 ## Ordering
 
 Issues come out in a fixed order rather than a sorted one, so that CLI output
