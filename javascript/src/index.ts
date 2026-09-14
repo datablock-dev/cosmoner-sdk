@@ -21,6 +21,27 @@ export {
   WebhookSignatureError,
 } from "./errors";
 export {
+  APP_SCHEMA_URL,
+  DEPLOYMENT_FILE_PATHS,
+  DEPLOYMENT_KEY_ORDER,
+  DEPLOYMENT_VERSION,
+  MAX_DEPLOYMENT_BYTES,
+} from "./deployment/spec";
+export {
+  validateDeployment,
+  validateDeploymentDocument,
+} from "./deployment/validate";
+export type {
+  DeploymentBuild,
+  DeploymentEnvVar,
+  DeploymentIssue,
+  DeploymentIssueSeverity,
+  DeploymentService,
+  DeploymentTemplate,
+  DeploymentValidationResult,
+  ValidateDeploymentOptions,
+} from "./deployment/types";
+export {
   EmailService,
   type SendEmailParams,
   type SendEmailResponse,

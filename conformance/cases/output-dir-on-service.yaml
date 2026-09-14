@@ -1,0 +1,4 @@
+services:
+  - name: web
+    build:
+      output_dir: dist

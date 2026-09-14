@@ -1,0 +1,31 @@
+version: 1
+name: Acme storefront
+region: ams
+environment: production
+services:
+  - name: web
+    type: service
+    source_dir: ./apps/web
+    build:
+      strategy: nixpacks
+      command: npm run build
+    run_command: npm start
+    port: 3000
+    instance_size: k8s-s
+    instances: 2
+    autodeploy: true
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: API_URL
+        from_variable: PUBLIC_API_URL
+      - key: DATABASE_PASSWORD
+        from_secret: DATABASE_PASSWORD
+      - key: STRIPE_KEY
+        secret: true
+  - name: docs
+    type: static
+    source_dir: ./apps/docs
+    build:
+      command: npm run build
+      output_dir: dist

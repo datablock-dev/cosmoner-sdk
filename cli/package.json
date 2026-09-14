@@ -1,0 +1,41 @@
+{
+  "name": "@cosmoner/cli",
+  "version": "0.1.0",
+  "description": "Command line tools for Cosmoner deployment files",
+  "bin": {
+    "cosmoner": "dist/cli.js"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/copy-schema.mjs && tsup",
+    "lint": "oxlint",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "cosmoner",
+    "cli",
+    "deployment"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "yaml": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "oxlint": "^1.77.0",
+    "tsup": "^8.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.9"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

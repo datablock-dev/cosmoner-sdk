@@ -1,0 +1,7 @@
+services:
+  - name: web
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_ENV
+        value: staging

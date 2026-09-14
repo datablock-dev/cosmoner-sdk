@@ -11,6 +11,7 @@ jobs:
       python: ${{ steps.changes.outputs.python }}
       javascript: ${{ steps.changes.outputs.javascript }}
       php: ${{ steps.changes.outputs.php }}
+      cli: ${{ steps.changes.outputs.cli }}
     steps:
       - uses: actions/checkout@v7
 
@@ -24,6 +25,13 @@ jobs:
               - 'javascript/**'
             php:
               - 'php/**'
+            # The CLI bundles the JavaScript SDK's source, so an SDK release is
+            # also a CLI release — otherwise the published CLI keeps shipping
+            # the validator from whenever cli/ last changed.
+            cli:
+              - 'cli/**'
+              - 'javascript/**'
+              - 'schemas/**'
 
   publish-python:
     needs: detect-changes
@@ -41,4 +49,12 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.php == 'true'
     uses: ./.github/workflows/publish-php.yml
+    secrets: inherit
+
+  # After the SDK, so that a commit touching both publishes a CLI built from the
+  # SDK source it was released with rather than racing it.
+  publish-cli:
+    needs: [detect-changes, publish-javascript]
+    if: always() && needs.detect-changes.outputs.cli == 'true' && needs.publish-javascript.result != 'failure'
+    uses: ./.github/workflows/publish-cli.yml
     secrets: inherit

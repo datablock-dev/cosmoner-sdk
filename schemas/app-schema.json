@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmoner.com/schemas/app.schema.json",
+  "title": "Cosmoner app template",
+  "description": "Deployment template for a Cosmoner app, committed to a repository as .cosmoner/deployment.yaml or deployment.yaml at the root. The deploy wizard reads it and fills its form in from the service you pick.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "URL of this schema, for editors that read it from the document.",
+      "type": "string"
+    },
+    "version": {
+      "default": 1,
+      "description": "Version of the file format. Optional: a file without it is read as version 1, which is the only version there is.",
+      "type": "number",
+      "const": 1
+    },
+    "name": {
+      "description": "Display name for the deployment described by this file.",
+      "type": "string",
+      "maxLength": 100
+    },
+    "region": {
+      "description": "Region slug to preselect, e.g. `ams`. Ignored when the slug is not one you can deploy to.",
+      "type": "string",
+      "maxLength": 32
+    },
+    "environment": {
+      "description": "Which environment from_variable and from_secret resolve against. Defaults to `default`, and an environment-specific entry wins over the `default` one of the same name.",
+      "type": "string",
+      "enum": [
+        "default",
+        "development",
+        "staging",
+        "production"
+      ]
+    },
+    "services": {
+      "minItems": 1,
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "Identifies the service within this file. Shown in the wizard when the file defines several."
+          },
+          "type": {
+            "default": "service",
+            "description": "`service` runs a long-lived process on a port; `static` builds once and is served as files.",
+            "type": "string",
+            "enum": [
+              "service",
+              "static"
+            ]
+          },
+          "source_dir": {
+            "description": "Directory the service is built from, relative to the repository root wherever this file lives — `.` is the root. Defaults to the root.",
+            "type": "string",
+            "maxLength": 512
+          },
+          "build": {
+            "description": "How the service is built.",
+            "type": "object",
+            "properties": {
+              "strategy": {
+                "description": "`docker` builds the Dockerfile in source_dir; `nixpacks` detects the language. Defaults to auto-detection.",
+                "type": "string",
+                "enum": [
+                  "nixpacks",
+                  "docker"
+                ]
+              },
+              "command": {
+                "description": "Build command. Leave unset to use the detected default. Ignored by `docker` builds, which run the Dockerfile.",
+                "type": "string",
+                "maxLength": 1024
+              },
+              "output_dir": {
+                "description": "Directory the build writes the site into, relative to source_dir. Static sites only.",
+                "type": "string",
+                "maxLength": 512
+              }
+            },
+            "additionalProperties": false
+          },
+          "run_command": {
+            "description": "Command that starts the service. Web services only; overrides the image's default command.",
+            "type": "string",
+            "maxLength": 1024
+          },
+          "port": {
+            "description": "Port the process listens on. Usually unnecessary: the app is given its port in the PORT environment variable, so a service that listens on $PORT needs nothing here. Without it, a Dockerfile's EXPOSE is used, then 8080.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "http_port": {
+            "description": "Deprecated — use port.",
+            "deprecated": true,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "internal_port": {
+            "description": "Deprecated — use port.",
+            "deprecated": true,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "instance_size": {
+            "description": "Size slug to preselect, e.g. `k8s-s`. Ignored when the slug is not one you can buy.",
+            "type": "string",
+            "maxLength": 64
+          },
+          "instances": {
+            "description": "How many instances to run.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "autodeploy": {
+            "description": "Deploy automatically on every push to the selected branch.",
+            "type": "boolean"
+          },
+          "envs": {
+            "description": "Environment variables available at build and run time.",
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                  "description": "Name of the environment variable as the app reads it."
+                },
+                "value": {
+                  "description": "Literal value, committed with the file. Only for non-sensitive configuration.",
+                  "type": "string"
+                },
+                "secret": {
+                  "description": "Marks the variable as sensitive without giving it a value: the deploy wizard asks for the value and stores it masked. Never commit a secret value — reference a stored secret with from_secret instead.",
+                  "type": "boolean"
+                },
+                "from_variable": {
+                  "description": "Name of a project variable to link. The app reads the stored value at build and run time.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "pattern": "^[A-Z][A-Z0-9_]*$"
+                },
+                "from_secret": {
+                  "description": "Name of a stored secret to link. The value stays in the vault — it is never written into this file, shown in the wizard, or returned by the API.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "pattern": "^[A-Z][A-Z0-9_]*$"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The services this repository deploys. Each deploy sets up one of them."
+    }
+  },
+  "required": [
+    "services"
+  ],
+  "additionalProperties": false
+}

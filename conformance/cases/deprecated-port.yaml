@@ -1,0 +1,3 @@
+services:
+  - name: web
+    http_port: 8080

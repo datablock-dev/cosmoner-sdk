@@ -10,8 +10,6 @@ final class Transport
     /** Methods that mutate state and therefore carry an idempotency key. */
     private const WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
-    private const VERSION = '1.0.0';
-
     private readonly Retry $retry;
 
     public function __construct(
@@ -102,7 +100,7 @@ final class Transport
         $headers = [
             'Authorization' => 'Bearer ' . $this->config->apiKey,
             'Accept' => 'application/json',
-            'User-Agent' => 'cosmoner-php/' . self::VERSION,
+            'User-Agent' => 'cosmoner-php/' . Version::get(),
         ];
 
         if ($hasBody) {

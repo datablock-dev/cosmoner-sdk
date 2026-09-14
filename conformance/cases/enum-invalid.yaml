@@ -1,0 +1,5 @@
+services:
+  - name: web
+    type: worker
+    build:
+      strategy: buildpacks

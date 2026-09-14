@@ -17,22 +17,44 @@ jobs:
       python: ${{ steps.changes.outputs.python }}
       javascript: ${{ steps.changes.outputs.javascript }}
       php: ${{ steps.changes.outputs.php }}
+      cli: ${{ steps.changes.outputs.cli }}
+      schemas: ${{ steps.changes.outputs.schemas }}
     steps:
       - uses: actions/checkout@v7
 
       - uses: dorny/paths-filter@v4
         id: changes
         with:
-          # Changing the workflow itself re-runs every language.
+          # Changing the workflow itself re-runs every language, and so do the
+          # shared assets: schemas/app-schema.json is what every drift test
+          # compares against, and conformance/ is run by all three suites, so a
+          # change to either has to be proved against all of them at once.
           filters: |
             python:
               - 'python/**'
+              - 'schemas/**'
+              - 'conformance/**'
               - '.github/workflows/ci.yml'
             javascript:
               - 'javascript/**'
+              - 'schemas/**'
+              - 'conformance/**'
               - '.github/workflows/ci.yml'
             php:
               - 'php/**'
+              - 'schemas/**'
+              - 'conformance/**'
+              - '.github/workflows/ci.yml'
+            # The CLI bundles the JavaScript SDK's source rather than depending
+            # on the published package, so a change there is a change to the CLI.
+            cli:
+              - 'cli/**'
+              - 'javascript/**'
+              - 'schemas/**'
+              - 'conformance/**'
+              - '.github/workflows/ci.yml'
+            schemas:
+              - 'schemas/**'
               - '.github/workflows/ci.yml'
 
   python:
@@ -116,6 +138,89 @@ jobs:
       - name: Test
         run: npm test
 
+  cli:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22"]
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: |
+            cli/package-lock.json
+            javascript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The type check follows the SDK's source through the `paths` entry in
+      # cli/tsconfig.json, and that source imports `yaml`. Module resolution
+      # looks for it beside the importing file and then upwards — never in
+      # cli/node_modules — so the SDK's own dependencies have to be installed
+      # for tsc to resolve it. Nothing else in this job needs them: tsup treats
+      # `yaml` as external because the CLI depends on it too.
+      - name: Install the SDK's dependencies
+        if: matrix.node-version == '22'
+        run: npm ci
+        working-directory: javascript
+
+      - name: Lint
+        if: matrix.node-version == '22'
+        run: npm run lint
+
+      - name: Type check
+        if: matrix.node-version == '22'
+        run: npm run typecheck
+
+      # `npm test` builds first: the schema and the shebang only exist after a
+      # build, and the end-to-end tests run the built binary.
+      - name: Test
+        run: npm test
+
+  # The hand-written validators are held to schemas/app-schema.json by each
+  # language's drift test. That is only worth anything while the file matches
+  # what the platform serves, which is what this checks. A failure here means
+  # the format changed and the SDKs have not caught up — not that the copy needs
+  # blindly overwriting.
+  schema-drift:
+    needs: detect-changes
+    if: always() && needs.detect-changes.result == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Compare the vendored schema with the published one
+        run: |
+          URL=$(python3 -c "import json;print(json.load(open('schemas/app-schema.json'))['\$id'])")
+          echo "Fetching $URL"
+          if ! curl -fsSL --retry 3 --retry-delay 5 "$URL" -o /tmp/published.json; then
+            echo "::warning::Could not fetch $URL — skipping the drift check"
+            exit 0
+          fi
+          if ! diff -u schemas/app-schema.json /tmp/published.json; then
+            echo "::error file=schemas/app-schema.json::The vendored schema no longer matches $URL."
+            echo "The deployment file format changed. Update the copy, then run all three test suites"
+            echo "and act on what they report — see schemas/README.md."
+            exit 1
+          fi
+          echo "Vendored schema is current."
+
   php:
     needs: detect-changes
     if: needs.detect-changes.outputs.php == 'true'
@@ -167,13 +272,13 @@ jobs:
   # including when a language was skipped because it did not change.
   ci:
     if: always()
-    needs: [python, javascript, php]
+    needs: [python, javascript, php, cli, schema-drift]
     runs-on: ubuntu-latest
     steps:
       - name: Verify no job failed
         run: |
           if echo '${{ join(needs.*.result, ',') }}' | grep -qE 'failure|cancelled'; then
-            echo "One or more language jobs failed."
+            echo "One or more jobs failed."
             exit 1
           fi
-          echo "All language jobs passed or were skipped."
+          echo "All jobs passed or were skipped."

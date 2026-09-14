@@ -1,0 +1,5 @@
+services:
+  - name: web
+    envs:
+      - key: 9LIVES
+        value: "nine"

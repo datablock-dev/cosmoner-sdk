@@ -1,0 +1,91 @@
+name: Publish CLI (Reusable)
+
+on:
+  workflow_call:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    defaults:
+      run:
+        working-directory: cli
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # Credentials are the default GITHUB_TOKEN; the version-bump step pushes with them.
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `npm test` builds first — see cli/package.json.
+      - name: Build and test
+        run: npm test
+
+      - name: Determine next release version
+        id: release_version
+        uses: ietf-tools/semver-action@v1.11.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          prefix: cli/
+          patchAll: true
+          noVersionBumpBehavior: patch
+          maxTagsToFetch: 100
+
+      - name: Bump version in package.json
+        if: steps.release_version.outputs.next != ''
+        run: |
+          VERSION="${{ steps.release_version.outputs.next }}"
+          VERSION="${VERSION#cli/v}"
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Commit version bump
+        if: steps.release_version.outputs.next != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(release): cli ${{ steps.release_version.outputs.next }} [skip ci]"
+          # Sibling language jobs push to main in parallel, so rebase and retry
+          # instead of failing the release on a lost ref-lock race.
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then exit 0; fi
+            echo "push attempt $attempt failed; rebasing onto origin/main"
+            sleep $(( (RANDOM % 5) + 2 ))
+            git pull --rebase origin main
+          done
+          exit 1
+
+      # Publish before tagging so a registry failure does not leave behind a
+      # GitHub release for a version that was never published.
+      - name: Publish to npm
+        if: steps.release_version.outputs.next != ''
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: steps.release_version.outputs.next != ''
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ steps.release_version.outputs.next }}',
+              target_commitish: 'main',
+              name: 'CLI ${{ steps.release_version.outputs.next }}',
+              generate_release_notes: true
+            });
+            console.log(`Created release ${release.id} at ${release.html_url}`);

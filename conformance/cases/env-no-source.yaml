@@ -1,0 +1,4 @@
+services:
+  - name: web
+    envs:
+      - key: NODE_ENV

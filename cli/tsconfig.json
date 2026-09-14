@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@cosmoner/sdk": [
+        "../javascript/src/index.ts"
+      ]
+    },
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "vitest.config.mts"
+  ]
+}

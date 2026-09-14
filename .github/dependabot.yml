@@ -1,5 +1,5 @@
-# Dependabot version updates for the three SDKs and the release workflows.
-# Each SDK has its own manifest directory, so it needs its own update entry.
+# Dependabot version updates for the three SDKs, the CLI, and the release
+# workflows. Each has its own manifest directory, so each needs its own entry.
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
@@ -45,6 +45,32 @@ updates:
     groups:
       # Minor and patch bumps land in one PR; majors get their own for review.
       javascript-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # CLI — yaml at runtime; the JavaScript SDK is bundled from source, not
+  # installed, so it never appears here.
+  - package-ecosystem: "npm"
+    directory: "/cli"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Stockholm"
+    open-pull-requests-limit: 5
+    versioning-strategy: "increase-if-necessary"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "cli"
+    groups:
+      cli-minor-patch:
         patterns:
           - "*"
         update-types:

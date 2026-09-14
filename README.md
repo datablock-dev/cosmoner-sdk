@@ -1,12 +1,14 @@
 # Cosmoner SDK
 
-Official Cosmoner SDKs for JavaScript, Python, and PHP.
+Official Cosmoner SDKs for JavaScript, Python, and PHP, and the `cosmoner`
+command line tool.
 
 | Language   | Package         | Install                         |
 | ---------- | --------------- | ------------------------------- |
 | JavaScript | `@cosmoner/sdk` | `npm install @cosmoner/sdk`     |
 | Python     | `cosmoner-sdk`  | `pip install cosmoner-sdk`      |
 | PHP        | `cosmoner/sdk`  | `composer require cosmoner/sdk` |
+| CLI        | `@cosmoner/cli` | `npx @cosmoner/cli`             |
 
 ## Usage
 
@@ -65,6 +67,31 @@ $client->email->send(
 );
 ```
 
+## Deployment files
+
+All three SDKs validate a `.cosmoner/deployment.yaml` — the file you commit to
+describe how a repository deploys — with no API key and no network call. The
+CLI does the same from a terminal or a CI job, and does not care what language
+the repository it is checking is written in:
+
+```bash
+npx @cosmoner/cli validate --strict
+```
+
+```
+.cosmoner/deployment.yaml
+  2:11  error    Service names must be lowercase letters, numbers, or hyphens, and start with a letter or number  services.0.name
+  4:18  error    Static sites cannot define a run_command  services.0.run_command
+  5:11  warning  Unknown field "prot" — it will be ignored  services.0.prot
+
+2 errors, 1 warning
+```
+
+The four give the same answer to the same file. `conformance/` holds the
+fixtures and the exact output all of them are held to, and `schemas/` holds the
+platform's published JSON Schema, which each language's tests compare their
+field table against. See the README in either directory.
+
 ## Documentation
 
 See the README in each language directory for full API reference:
@@ -72,6 +99,7 @@ See the README in each language directory for full API reference:
 - [JavaScript](./javascript/README.md)
 - [Python](./python/README.md)
 - [PHP](./php/README.md)
+- [CLI](./cli/README.md)
 
 ## Development
 
@@ -87,7 +115,14 @@ cd python && pip install -e ".[test,lint]" && ruff check . && ruff format --chec
 
 # PHP
 cd php && composer install && composer run lint && composer run analyse && composer run test
+
+# CLI (the type check reads the SDK's source, so install that first)
+cd javascript && npm ci && cd ../cli && npm ci && npm run lint && npm run typecheck && npm test
 ```
+
+The CLI bundles the JavaScript SDK's source rather than depending on the
+published package, so a change under `javascript/` runs the CLI's checks too and
+releases a new CLI. [`cli/README.md`](./cli/README.md) explains why.
 
 `npm run lint` uses [oxlint](https://oxc.rs/docs/guide/usage/linter); `composer run lint:fix`
 and `ruff check --fix` apply the auto-fixable subset.

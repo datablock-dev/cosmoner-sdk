@@ -1,0 +1,4 @@
+services:
+  - name: docs
+    type: static
+    run_command: npm start
