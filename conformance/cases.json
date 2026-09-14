@@ -99,6 +99,9 @@
       { "path": "services.0.port", "severity": "error", "message": "Must be between 1 and 65535" },
       { "path": "services.0.instances", "severity": "error", "message": "Must be between 1 and 10" }
     ] },
+    { "name": "yaml-12-booleans", "valid": false, "issues": [
+      { "path": "services.0.autodeploy", "severity": "error", "message": "Expected a boolean" }
+    ] },
     { "name": "enum-invalid", "valid": false, "issues": [
       { "path": "services.0.type", "severity": "error", "message": "Must be one of: service, static" },
       { "path": "services.0.build.strategy", "severity": "error", "message": "Must be one of: nixpacks, docker" }

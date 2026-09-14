@@ -2,6 +2,16 @@
 
 from ._version import __version__
 from .client import AsyncCosmoner, Cosmoner
+from .deployment import (
+    APP_SCHEMA_URL,
+    DEPLOYMENT_FILE_PATHS,
+    DEPLOYMENT_VERSION,
+    MAX_DEPLOYMENT_BYTES,
+    DeploymentIssue,
+    DeploymentValidationResult,
+    validate_deployment,
+    validate_deployment_document,
+)
 from .errors import (
     AuthenticationError,
     ConflictError,
@@ -26,9 +36,13 @@ from .webhook_signature import (
 from .webhooks import WEBHOOK_EVENT_TYPES, AsyncWebhooksService, WebhooksService
 
 __all__ = [
+    "APP_SCHEMA_URL",
     "DEFAULT_TOLERANCE_SECONDS",
     "DELIVERY_ID_HEADER",
+    "DEPLOYMENT_FILE_PATHS",
+    "DEPLOYMENT_VERSION",
     "EVENT_TYPE_HEADER",
+    "MAX_DEPLOYMENT_BYTES",
     "SIGNATURE_HEADER",
     "WEBHOOK_EVENT_TYPES",
     "AsyncCosmoner",
@@ -39,6 +53,8 @@ __all__ = [
     "CosmonerConnectionError",
     "CosmonerError",
     "CosmonerTimeoutError",
+    "DeploymentIssue",
+    "DeploymentValidationResult",
     "InsufficientScopeError",
     "NotFoundError",
     "RateLimitError",
@@ -48,5 +64,7 @@ __all__ = [
     "WebhooksService",
     "__version__",
     "construct_event",
+    "validate_deployment",
+    "validate_deployment_document",
     "verify_webhook_signature",
 ]

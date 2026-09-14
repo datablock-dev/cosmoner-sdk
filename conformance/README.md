@@ -34,6 +34,15 @@ the case has done its job — but decide which behaviour is right before making
 the other two match it, because the expectation here is also what the CLI prints
 and what the README promises.
 
+## YAML dialects
+
+The platform reads these files with a YAML 1.2 parser, so `autodeploy: yes` is
+the string `"yes"` and not a boolean. `yaml-12-booleans` pins that, because it
+is the one place the three languages do not agree for free: the JavaScript and
+PHP parsers are 1.2 already, and PyYAML is 1.1, where `yes`, `no`, `on` and
+`off` are booleans. The Python SDK narrows its resolver to match rather than
+telling a customer a file is fine that the platform will read differently.
+
 ## Ordering
 
 Issues come out in a fixed order rather than a sorted one, so that CLI output

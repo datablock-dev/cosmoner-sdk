@@ -1,0 +1,6 @@
+services:
+  - name: web
+    autodeploy: yes
+    envs:
+      - key: FEATURE_FLAG
+        value: off
