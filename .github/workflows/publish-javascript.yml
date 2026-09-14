@@ -45,19 +45,24 @@ jobs:
           noVersionBumpBehavior: patch
           maxTagsToFetch: 100
 
-      - name: Bump version in package.json
+      # src/version.ts carries the version into the User-Agent, because the
+      # bundled SDK has no manifest to read at runtime. It is rewritten here so
+      # that it cannot fall behind package.json the way it did before this step
+      # existed; version.test.ts fails the build if it ever does again.
+      - name: Bump version in package.json and src/version.ts
         if: steps.release_version.outputs.next != ''
         run: |
           VERSION="${{ steps.release_version.outputs.next }}"
           VERSION="${VERSION#javascript/v}"
           npm version "$VERSION" --no-git-tag-version
+          node scripts/sync-version.mjs
 
       - name: Commit version bump
         if: steps.release_version.outputs.next != ''
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
+          git add package.json package-lock.json src/version.ts
           git commit -m "chore(release): javascript ${{ steps.release_version.outputs.next }} [skip ci]"
           # Sibling language jobs push to main in parallel, so rebase and retry
           # instead of failing the release on a lost ref-lock race.
