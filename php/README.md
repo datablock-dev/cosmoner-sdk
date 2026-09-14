@@ -114,6 +114,60 @@ $client = new Cosmoner(apiKey: 'your-api-key', httpClient: new MyHttpClient());
 
 \* At least one of `html` or `text` must be provided.
 
+## Deployment files
+
+Validates a `.cosmoner/deployment.yaml` — the file you commit to describe how a
+repository deploys — without an API key or a network call.
+
+```php
+use Cosmoner\Sdk\Deployment;
+
+$result = Deployment::validate(file_get_contents('.cosmoner/deployment.yaml'));
+
+foreach ($result->issues as $issue) {
+    echo "{$issue->severity} {$issue->path}: {$issue->message}\n";
+}
+```
+
+```
+error services.0.run_command: Static sites cannot define a run_command
+warning services.0.prot: Unknown field "prot" — it will be ignored
+```
+
+Warnings are things the platform tolerates and you probably did not mean. An
+unknown key is the main one: the platform drops it rather than rejecting the
+file, so a template written for a newer field still applies its known settings
+against an older deploy. Treating that as fatal here would reject files the
+platform accepts, so it is reported as a warning that names the consequence.
+Pass `strict` when you would rather not let a typo through — it changes the
+verdict, not the finding.
+
+`template` is the file as the platform reads it: defaults applied, unknown keys
+dropped. Comparing it against what you wrote is the point — it is the settings
+that will actually arrive.
+
+The same check is available on the command line, for CI or a pre-commit hook,
+without installing anything:
+
+```bash
+npx @cosmoner/cli validate --strict
+```
+
+### `Deployment::validate(string $source, bool $strict = false)`
+
+| Parameter | Type | |
+| --- | --- | --- |
+| `$source` | `string` | The file as written — raw text, not a parsed value. |
+| `$strict` | `bool` | Treat warnings as errors. Defaults to `false`. |
+
+Returns a `DeploymentValidationResult` with `$valid`, `$issues`, `$template`,
+and `errors()` / `warnings()` for the two halves of `$issues`.
+`Deployment::validateDocument()` is the same check over an already-parsed value.
+
+`Deployment::FILE_PATHS` lists the locations the platform checks, in the order
+it checks them, and `Deployment::APP_SCHEMA_URL` is the published JSON Schema an
+editor can be pointed at.
+
 ## Error Handling
 
 Every failure throws a subclass of `CosmonerError`, so you can catch broadly or
