@@ -43,6 +43,9 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.javascript == 'true'
     uses: ./.github/workflows/publish-javascript.yml
+    permissions:
+      contents: write
+      id-token: write
     secrets: inherit
 
   publish-php:
@@ -60,4 +63,7 @@ jobs:
     needs: [detect-changes, publish-javascript]
     if: always() && needs.detect-changes.outputs.cli == 'true'
     uses: ./.github/workflows/publish-cli.yml
+    permissions:
+      contents: write
+      id-token: write
     secrets: inherit
