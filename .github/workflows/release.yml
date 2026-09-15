@@ -51,10 +51,13 @@ jobs:
     uses: ./.github/workflows/publish-php.yml
     secrets: inherit
 
-  # After the SDK, so that a commit touching both publishes a CLI built from the
-  # SDK source it was released with rather than racing it.
+  # After the SDK so that a commit touching both does not race it, but not
+  # conditional on the SDK release succeeding. The CLI bundles the SDK's source
+  # rather than depending on the published package, so a CLI build is complete
+  # whether or not the SDK reached the registry — and gating on it meant one
+  # stuck package held the other back indefinitely, which is what happened.
   publish-cli:
     needs: [detect-changes, publish-javascript]
-    if: always() && needs.detect-changes.outputs.cli == 'true' && needs.publish-javascript.result != 'failure'
+    if: always() && needs.detect-changes.outputs.cli == 'true'
     uses: ./.github/workflows/publish-cli.yml
     secrets: inherit

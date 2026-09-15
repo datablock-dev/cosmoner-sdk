@@ -17,10 +17,17 @@ jobs:
           # Nothing here pushes, so keep the token out of .git/config.
           persist-credentials: false
 
+      # 8.4, not the 8.1 floor: this installs from the committed lock, and the
+      # lock is resolved on the newest supported version — symfony/yaml is
+      # pinned there at a release needing 8.4.1, so `composer install` cannot
+      # satisfy it on anything older. CI covers the floor separately by
+      # resolving fresh on 8.1, which is what proves the library still works
+      # there; this job only needs a sound install to run the tests before
+      # tagging a release.
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.3"
+          php-version: "8.4"
 
       - name: Validate composer.json
         run: composer validate --strict
