@@ -48,7 +48,15 @@ jobs:
         run: |
           VERSION="${{ steps.release_version.outputs.next }}"
           VERSION="${VERSION#cli/v}"
-          npm version "$VERSION" --no-git-tag-version
+          # --allow-same-version because package.json can already be at the
+          # computed version: an earlier run commits the bump and then fails
+          # before publishing and tagging, leaving the manifest ahead of the
+          # tags. Without this the next run dies here with "Version not
+          # changed", and every run after it, forever — which is how
+          # @cosmoner/sdk sat at 1.2.0 in the manifest with no v1.2.0 tag and
+          # nothing on npm. Recovering means finishing that release, not
+          # refusing to start it.
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Commit version bump
         if: steps.release_version.outputs.next != ''
@@ -56,6 +64,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json
+          # Nothing staged means the bump commit already landed in that earlier
+          # run. That is the state being recovered from, not a failure: skip
+          # straight to publishing.
+          if git diff --cached --quiet; then
+            echo "Already at ${{ steps.release_version.outputs.next }}; nothing to commit."
+            exit 0
+          fi
           git commit -m "chore(release): cli ${{ steps.release_version.outputs.next }} [skip ci]"
           # Sibling language jobs push to main in parallel, so rebase and retry
           # instead of failing the release on a lost ref-lock race.
