@@ -23,7 +23,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # Trusted publishing needs npm 11.5.1+, which Node 24 bundles.
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
@@ -86,9 +87,9 @@ jobs:
       # GitHub release for a version that was never published.
       - name: Publish to npm
         if: steps.release_version.outputs.next != ''
+        # No token: npm trusts the job's OIDC identity (id-token: write above),
+        # matched against the trusted publisher configured on the package.
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         if: steps.release_version.outputs.next != ''
