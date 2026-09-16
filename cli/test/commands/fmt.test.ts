@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { UsageError } from "../args";
-import { formatDeployment } from "./fmt";
+import { UsageError } from "../../src/args";
+import { formatDeployment } from "../../src/commands/fmt";
 
 describe("formatDeployment", () => {
   it("puts fields in the order the format documents them", () => {

@@ -1,11 +1,11 @@
 # @cosmoner/cli
 
 Command line tools for `.cosmoner/deployment.yaml`, the file you commit to
-describe how a repository deploys on Cosmoner.
+describe how a repository deploys on Cosmoner, and for deploying image apps.
 
-Everything here works offline. There is no account, no API key and no network
-call — a check that reaches the network is a check that fails when the network
-does, which is not what you want guarding a push.
+Everything except `cosmoner deploy` works offline. There is no account, no API
+key and no network call — a check that reaches the network is a check that
+fails when the network does, which is not what you want guarding a push.
 
 ```bash
 npx @cosmoner/cli validate
@@ -103,6 +103,50 @@ wants, and what `cosmoner fmt` writes into the file.
 cosmoner schema > .cosmoner/app.schema.json
 ```
 
+### `cosmoner deploy <app>`
+
+Deploys an image app — one that runs an image from a Cosmoner registry — and
+waits for the rollout to finish. `<app>` is the app's name or id. Apps built
+from a repository deploy by pushing to their branch, so this refuses them.
+
+```
+$ cosmoner deploy web --tag v2
+Deploying web (tag v2)
+  PENDING
+  DEPLOYING
+✓ web is live on registry.cosmoner.com/acme/web:v2 after 41s
+```
+
+With neither `--tag` nor `--digest`, the image the app already names is pulled
+again, which picks up a tag that was pushed over.
+
+| Option | |
+| --- | --- |
+| `--tag <tag>` | Deploy this tag from the app's repository. A commit SHA pushed as a tag goes here. |
+| `--digest <digest>` | Deploy this exact image. The `sha256:` prefix may be left off. |
+| `--project <id>` | Defaults to `COSMONER_PROJECT_ID`. |
+| `--no-wait` | Return once the deploy is accepted. |
+| `--timeout <seconds>` | How long to wait for the rollout. Defaults to 600. |
+| `--format text\|json` | `json` prints the app and the final deployment as one object. |
+
+Credentials come from the environment, never a flag, so a key cannot end up in
+a CI log: `COSMONER_API_KEY` (with `apps:read` and `apps:write`), and optionally
+`COSMONER_PROJECT_ID` and `COSMONER_API_URL`.
+
+Exit codes: `0` the deploy went live (or was accepted, with `--no-wait`), `1` it
+failed, timed out or the API refused it, `2` the command itself was wrong. A
+timeout stops the wait, not the deploy.
+
+#### In GitHub Actions
+
+```yaml
+- name: Deploy
+  run: npx @cosmoner/cli deploy web --tag ${{ github.sha }}
+  env:
+    COSMONER_API_KEY: ${{ secrets.COSMONER_API_KEY }}
+    COSMONER_PROJECT_ID: ${{ vars.COSMONER_PROJECT_ID }}
+```
+
 ## Same answer as the SDKs
 
 The rules live in the SDK, not here. `@cosmoner/sdk`, `cosmoner-sdk` (Python)
@@ -143,7 +187,7 @@ depends on it as well.
 
 `npm test` builds first, because two things only exist after a build: the JSON
 Schema copied next to the bundle, and the shebang that makes it runnable. Both
-are covered by `src/e2e.test.ts`, which runs the built binary.
+are covered by `test/e2e.test.ts`, which runs the built binary.
 
 ## License
 
