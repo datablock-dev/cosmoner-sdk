@@ -30,6 +30,11 @@
     "cosmoner",
     "sdk"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datablock-dev/cosmoner-sdk.git",
+    "directory": "javascript"
+  },
   "license": "MIT",
   "dependencies": {
     "yaml": "^2.6.0"

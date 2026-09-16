@@ -96,7 +96,11 @@ jobs:
         if: steps.release_version.outputs.next != ''
         # No token: npm trusts the job's OIDC identity (id-token: write above),
         # matched against the trusted publisher configured on the package.
-        run: npm publish --access public
+        # Verbose so a failed OIDC exchange says why; otherwise npm falls back to
+        # anonymous and reports only a 404.
+        run: |
+          npm --version
+          npm publish --access public --loglevel verbose
 
       - name: Create GitHub Release
         if: steps.release_version.outputs.next != ''
