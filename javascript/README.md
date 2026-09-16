@@ -86,6 +86,44 @@ Set `maxRetries: 0` to disable retries entirely.
 
 \* At least one of `html` or `text` must be provided.
 
+## Apps
+
+```ts
+const { data: apps } = await client.apps.list();
+const web = apps.find((app) => app.name === "web")!;
+
+const { data: started } = await client.apps.deploy(web.id, { tag: "v2" });
+const finished = await client.apps.waitForDeployment(web.id, started.id);
+
+if (finished.phase !== "ACTIVE") throw new Error(finished.error ?? finished.phase);
+```
+
+### `client.apps.deploy(appId, params?)`
+
+Starts deploying an image app — one that runs an image from a Cosmoner registry
+— and returns the deployment without waiting. Apps built from a repository are
+refused. Needs an API key with `apps:write`.
+
+| Parameter   | Type     | Required | Description                                           |
+| ----------- | -------- | -------- | ----------------------------------------------------- |
+| `tag`       | `string` | No       | Tag to deploy from the app's repository               |
+| `digest`    | `string` | No       | Exact image, `sha256:<64 hex characters>`             |
+| `projectId` | `string` | No       | Overrides the client-level project                    |
+
+Pass `tag` or `digest`, not both. With neither, the image the app already names
+is pulled again.
+
+### `client.apps.waitForDeployment(appId, deploymentId, params?)`
+
+Polls until the deployment finishes and resolves with it in its final phase —
+`ACTIVE`, `ERROR`, `CANCELED` or `SUPERSEDED`. It rejects only when a request
+fails or `timeout` (default 10 minutes) passes; the deployment carries on either
+way. `interval` defaults to 3 seconds, and `onPoll` is called with every result.
+Needs `apps:read`.
+
+`client.apps.list()` and `client.apps.getDeployment(appId, deploymentId)` are
+the single calls underneath.
+
 ## Deployment files
 
 Validates a `.cosmoner/deployment.yaml` — the file you commit to describe how a

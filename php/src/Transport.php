@@ -22,8 +22,11 @@ final class Transport
     /**
      * Issues a request, retrying transient failures, and returns the decoded body.
      *
-     * @param array<string, mixed>|null $body
-     * @param array<string, scalar>     $query
+     * An empty `stdClass` body encodes as `{}`, for routes that require an
+     * object but have nothing to send; an empty array would encode as `[]`.
+     *
+     * @param array<string, mixed>|\stdClass|null $body
+     * @param array<string, scalar>                $query
      *
      * @param non-empty-string $method
      *
@@ -34,7 +37,7 @@ final class Transport
     public function request(
         string $method,
         string $path,
-        ?array $body = null,
+        array|\stdClass|null $body = null,
         array $query = [],
         ?string $idempotencyKey = null,
         bool $retryNonIdempotent = false,

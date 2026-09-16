@@ -104,6 +104,40 @@ Set `max_retries=0` to disable retries entirely.
 
 \* At least one of `html` or `text` must be provided.
 
+## Apps
+
+Rolls an image app onto a new image and waits for the result. Only image apps
+pulling from a Cosmoner registry can be deployed this way.
+
+```python
+started = client.apps.deploy("app-id", tag="1.4.0")
+
+deployment = client.apps.wait_for_deployment(
+    "app-id",
+    started["data"]["id"],
+    on_poll=lambda d: print(d["phase"]),
+)
+if deployment["phase"] != "ACTIVE":
+    raise SystemExit(deployment["error"])
+```
+
+| Method | Description |
+| --- | --- |
+| `list(*, project_id=None)` | Every app in the project, newest first |
+| `deploy(app_id, *, tag=None, digest=None, project_id=None)` | Starts a deployment and returns it without waiting |
+| `get_deployment(app_id, deployment_id, *, project_id=None)` | One deployment's current phase |
+| `wait_for_deployment(app_id, deployment_id, *, interval=3.0, timeout=600.0, on_poll=None, project_id=None)` | Polls until the deployment finishes |
+
+Pass `tag` or `digest` (`sha256:` plus 64 hex characters) to deploy that image
+from the repository the app already pulls from, or neither to re-resolve the
+image the app names now. Passing both raises `ValueError`.
+
+`wait_for_deployment` returns the deployment in whichever phase it finished —
+`ACTIVE`, `ERROR`, `CANCELED` or `SUPERSEDED` — so check `phase` yourself. It
+raises only when a request fails, or `TimeoutError` once `timeout` seconds pass,
+in which case the deployment keeps going server-side. `interval` and `timeout`
+are in seconds.
+
 ## Deployment files
 
 Validates a `.cosmoner/deployment.yaml` — the file you commit to describe how a
