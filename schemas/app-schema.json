@@ -114,7 +114,7 @@
             "maximum": 65535
           },
           "instance_size": {
-            "description": "Size slug to preselect, e.g. `k8s-s`. Ignored when the slug is not one you can buy.",
+            "description": "Size slug to preselect, e.g. `shared-s`. Ignored when the slug is not one you can buy.",
             "type": "string",
             "maxLength": 64
           },

@@ -12,7 +12,7 @@ command line tool.
 
 ## Usage
 
-Each SDK provides a `Cosmoner` client with service namespaces. Currently supports `client.email`.
+Each SDK provides a `Cosmoner` client with service namespaces. Currently supports `client.email`, `client.webhooks` and `client.apps`.
 
 All three share the same behaviour: automatic retries with jittered backoff, a
 configurable timeout, a typed error hierarchy, and an optional project id that
@@ -91,6 +91,19 @@ The four give the same answer to the same file. `conformance/` holds the
 fixtures and the exact output all of them are held to, and `schemas/` holds the
 platform's published JSON Schema, which each language's tests compare their
 field table against. See the README in either directory.
+
+## Deploying image apps
+
+`client.apps.deploy()` rolls an app that runs an image from a Cosmoner registry
+onto a tag or digest, and `client.apps.waitForDeployment()` waits for it to go
+live. The CLI wraps both for CI:
+
+```bash
+COSMONER_API_KEY=... COSMONER_PROJECT_ID=... npx @cosmoner/cli deploy web --tag v2
+```
+
+It exits 0 once the app is live and 1 if the rollout fails or times out. See
+[`cli/README.md`](./cli/README.md) for every option.
 
 ## Documentation
 

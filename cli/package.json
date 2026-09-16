@@ -1,6 +1,6 @@
 {
   "name": "@cosmoner/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Command line tools for Cosmoner deployment files",
   "bin": {
     "cosmoner": "dist/cli.js"
@@ -24,6 +24,11 @@
     "cli",
     "deployment"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datablock-dev/cosmoner-sdk.git",
+    "directory": "cli"
+  },
   "license": "MIT",
   "dependencies": {
     "yaml": "^2.6.0"

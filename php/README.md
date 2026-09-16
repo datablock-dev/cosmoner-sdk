@@ -114,6 +114,57 @@ $client = new Cosmoner(apiKey: 'your-api-key', httpClient: new MyHttpClient());
 
 \* At least one of `html` or `text` must be provided.
 
+## Apps
+
+Rolls an image app onto a new image and waits for the result — the step a CI
+job runs after pushing to a Cosmoner registry.
+
+```php
+$apps = $client->apps->list()['data'];
+
+$deployment = $client->apps->deploy('app-id', tag: 'v2')['data'];
+
+$final = $client->apps->waitForDeployment(
+    'app-id',
+    $deployment['id'],
+    onPoll: fn (array $d) => print("{$d['phase']}\n"),
+);
+
+if ($final['phase'] !== 'ACTIVE') {
+    exit(1);
+}
+```
+
+`waitForDeployment()` returns for every finished phase (`ACTIVE`, `ERROR`,
+`CANCELED`, `SUPERSEDED`), so check `phase`. It throws only when a request fails
+or the timeout passes, and the deployment keeps going server-side either way.
+
+### `$client->apps->deploy(...)`
+
+| Parameter   | Type             | Required | Description                                        |
+| ----------- | ---------------- | -------- | -------------------------------------------------- |
+| `appId`     | `string`         | Yes      | The image app to deploy                            |
+| `tag`       | `string \| null` | No*      | Tag to deploy from the repository the app pulls from |
+| `digest`    | `string \| null` | No*      | `sha256:` followed by 64 hex characters            |
+| `projectId` | `string \| null` | No       | Overrides the client-level project                 |
+
+\* Pass `tag` or `digest`, not both. Pass neither to re-resolve the image the
+app already names.
+
+### `$client->apps->waitForDeployment(...)`
+
+| Parameter      | Type                | Required | Description                                  |
+| -------------- | ------------------- | -------- | -------------------------------------------- |
+| `appId`        | `string`            | Yes      | The app the deployment belongs to            |
+| `deploymentId` | `string`            | Yes      | `id` returned by `deploy()`                  |
+| `interval`     | `float`             | No       | Seconds between polls. Defaults to `3.0`     |
+| `timeout`      | `float`             | No       | Seconds to wait in total. Defaults to `600.0` |
+| `onPoll`       | `callable \| null`  | No       | Called with every poll result, including the last |
+| `projectId`    | `string \| null`    | No       | Overrides the client-level project           |
+
+`$client->apps->getDeployment($appId, $deploymentId)` fetches a single poll's
+worth of state.
+
 ## Deployment files
 
 Validates a `.cosmoner/deployment.yaml` — the file you commit to describe how a

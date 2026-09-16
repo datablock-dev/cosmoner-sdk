@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { run } from "./cli";
+import { run } from "../src/cli";
 
 /**
  * Drives the CLI the way a user does — a directory, a command line, an exit
@@ -19,6 +19,7 @@ let err: string[];
 /** Runs a command line in the temporary workspace, capturing what it printed. */
 function cli(...argv: string[]): { code: number; stdout: string; stderr: string } {
   const code = run(argv, workspace, false);
+  if (typeof code !== "number") throw new Error("offline commands must finish synchronously");
   return { code, stdout: out.join("\n"), stderr: err.join("\n") };
 }
 
@@ -55,7 +56,7 @@ describe("usage", () => {
     // 2, not 1: 1 has to keep meaning "a file was checked and did not pass", or
     // a CI job cannot tell a broken deployment file from a typo in its own
     // command line.
-    expect(cli("deploy").code).toBe(2);
+    expect(cli("deplyo").code).toBe(2);
   });
 
   it("exits 2 on an unknown option", () => {

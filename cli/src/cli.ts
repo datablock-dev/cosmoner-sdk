@@ -1,17 +1,17 @@
 /**
- * `cosmoner` — command line tools for Cosmoner deployment files.
+ * `cosmoner` — command line tools for Cosmoner deployment files and deploys.
  *
- * Every command here runs offline. Validating a file needs no account, and a
- * check that reaches the network is a check that fails when the network does,
- * which is not what anyone wants guarding a push. Commands that do need an API
- * key will come later, and will use `@cosmoner/sdk` for it; nothing in this
- * file should grow a credential in the meantime.
+ * Every command except `deploy` runs offline. Validating a file needs no
+ * account, and a check that reaches the network is a check that fails when the
+ * network does, which is not what anyone wants guarding a push. `deploy` is the
+ * exception by nature, and only it reads a credential.
  */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { parseArgs, UsageError, type ParsedArgs } from "./args";
+import { DEPLOY_HELP, DEPLOY_VALUE_FLAGS, runDeploy } from "./commands/deploy";
 import { FMT_HELP, runFmt } from "./commands/fmt";
 import { INIT_HELP, INIT_VALUE_FLAGS, runInit } from "./commands/init";
 import { runSchema, SCHEMA_HELP } from "./commands/schema";
@@ -27,10 +27,11 @@ Commands
   fmt        Rewrite a deployment file in canonical form.
   init       Write a starter deployment file.
   schema     Print the JSON Schema for the file.
+  deploy     Deploy an image app and wait for it to go live.
 
   cosmoner <command> --help for a command's options.
 
-Everything here works offline: no account, no API key, no network.`;
+Everything but deploy works offline: no account, no API key, no network.`;
 
 /** Flags taking a separate value, per command, for the argument parser. */
 const VALUE_FLAGS: Record<string, readonly string[]> = {
@@ -38,6 +39,7 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   fmt: [],
   init: INIT_VALUE_FLAGS,
   schema: [],
+  deploy: DEPLOY_VALUE_FLAGS,
 };
 
 const COMMAND_HELP: Record<string, string> = {
@@ -45,15 +47,22 @@ const COMMAND_HELP: Record<string, string> = {
   fmt: FMT_HELP,
   init: INIT_HELP,
   schema: SCHEMA_HELP,
+  deploy: DEPLOY_HELP,
 };
 
 /**
  * Runs one command line.
  *
  * Returns the exit code instead of calling `process.exit`, so the tests can run
- * the real thing rather than a rearrangement of it.
+ * the real thing rather than a rearrangement of it. Only `deploy` returns it as
+ * a promise; the offline commands stay synchronous.
  */
-export function run(argv: string[], cwd: string, isTty: boolean): number {
+export function run(
+  argv: string[],
+  cwd: string,
+  isTty: boolean,
+  env: NodeJS.ProcessEnv = process.env
+): number | Promise<number> {
   const [command, ...rest] = argv;
 
   if (command === undefined || command === "--help" || command === "-h" || command === "help") {
@@ -92,6 +101,8 @@ export function run(argv: string[], cwd: string, isTty: boolean): number {
         return runInit(args, cwd);
       case "schema":
         return runSchema(args);
+      case "deploy":
+        return runDeploy(args, env).catch((err: unknown) => reportUsage(err, command));
       default:
         return 2;
     }
@@ -137,11 +148,13 @@ function version(): string {
 // Guarded because the tests import this module as ESM, where require does not
 // exist; the built bundle is CommonJS, where it does.
 if (typeof require !== "undefined" && require.main === module) {
-  try {
-    process.exitCode = run(process.argv.slice(2), process.cwd(), process.stdout.isTTY === true);
-  } catch (err) {
-    console.error(err instanceof Error ? err.message : String(err));
-    process.exitCode = 2;
-  }
+  void (async () => {
+    try {
+      process.exitCode = await run(process.argv.slice(2), process.cwd(), process.stdout.isTTY === true);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exitCode = 2;
+    }
+  })();
 }
 /* c8 ignore stop */

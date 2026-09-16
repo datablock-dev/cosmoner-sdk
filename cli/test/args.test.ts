@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseArgs, readChoice, rejectUnknownFlags, UsageError } from "./args";
+import { parseArgs, readChoice, rejectUnknownFlags, UsageError } from "../src/args";
 
 describe("parseArgs", () => {
   it("separates paths from flags", () => {
