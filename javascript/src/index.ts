@@ -42,6 +42,20 @@ export type {
   ValidateDeploymentOptions,
 } from "./deployment/types";
 export {
+  AppsService,
+  FINISHED_DEPLOYMENT_PHASES,
+  type App,
+  type AppDeployment,
+  type AppStatus,
+  type DeployAppParams,
+  type DeployAppResponse,
+  type DeploymentPhase,
+  type GetDeploymentResponse,
+  type ImageDeployPolicy,
+  type ListAppsResponse,
+  type WaitForDeploymentParams,
+} from "./services/apps";
+export {
   EmailService,
   type SendEmailParams,
   type SendEmailResponse,

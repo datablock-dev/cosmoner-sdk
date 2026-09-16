@@ -9,6 +9,7 @@ from ._config import (
     build_config,
 )
 from ._transport import AsyncTransport, Transport
+from .apps import AppsService, AsyncAppsService
 from .email import AsyncEmailService, EmailService
 from .webhooks import AsyncWebhooksService, WebhooksService
 
@@ -41,6 +42,7 @@ class Cosmoner:
         self._config = config
         self._transport = Transport(config)
 
+        self.apps = AppsService(self._transport, config)
         self.email = EmailService(self._transport, config)
         self.webhooks = WebhooksService(self._transport, config)
 
@@ -80,6 +82,7 @@ class AsyncCosmoner:
         self._config = config
         self._transport = AsyncTransport(config)
 
+        self.apps = AsyncAppsService(self._transport, config)
         self.email = AsyncEmailService(self._transport, config)
         self.webhooks = AsyncWebhooksService(self._transport, config)
 

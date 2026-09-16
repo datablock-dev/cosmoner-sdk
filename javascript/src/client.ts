@@ -1,6 +1,7 @@
 /** Entry-point client exposing the API's service namespaces. */
 
 import { resolveConfig, type CosmonerConfig, type ResolvedConfig } from "./config";
+import { AppsService } from "./services/apps";
 import { EmailService } from "./services/email";
 import { WebhooksService } from "./services/webhooks";
 import { Transport } from "./transport";
@@ -27,6 +28,7 @@ export class Cosmoner {
   private readonly config: ResolvedConfig;
   private readonly transport: Transport;
 
+  readonly apps: AppsService;
   readonly email: EmailService;
   readonly webhooks: WebhooksService;
 
@@ -40,6 +42,7 @@ export class Cosmoner {
     this.maxRetries = this.config.maxRetries;
 
     this.transport = new Transport(this.config);
+    this.apps = new AppsService(this.transport, this.config);
     this.email = new EmailService(this.transport, this.config);
     this.webhooks = new WebhooksService(this.transport, this.config);
   }

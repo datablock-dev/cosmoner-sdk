@@ -19,6 +19,7 @@ class Cosmoner
     public readonly float $timeout;
     public readonly int $maxRetries;
 
+    public readonly AppsService $apps;
     public readonly EmailService $email;
     public readonly WebhooksService $webhooks;
 
@@ -42,6 +43,7 @@ class Cosmoner
         $this->maxRetries = $this->config->maxRetries;
 
         $this->transport = new Transport($this->config, $httpClient ?? new CurlHttpClient());
+        $this->apps = new AppsService($this->transport, $this->config);
         $this->email = new EmailService($this->transport, $this->config);
         $this->webhooks = new WebhooksService($this->transport, $this->config);
     }

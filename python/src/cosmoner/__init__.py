@@ -1,6 +1,7 @@
 """Cosmoner SDK for Python."""
 
 from ._version import __version__
+from .apps import FINISHED_DEPLOYMENT_PHASES, AppsService, AsyncAppsService
 from .client import AsyncCosmoner, Cosmoner
 from .deployment import (
     APP_SCHEMA_URL,
@@ -42,9 +43,12 @@ __all__ = [
     "DEPLOYMENT_FILE_PATHS",
     "DEPLOYMENT_VERSION",
     "EVENT_TYPE_HEADER",
+    "FINISHED_DEPLOYMENT_PHASES",
     "MAX_DEPLOYMENT_BYTES",
     "SIGNATURE_HEADER",
     "WEBHOOK_EVENT_TYPES",
+    "AppsService",
+    "AsyncAppsService",
     "AsyncCosmoner",
     "AsyncWebhooksService",
     "AuthenticationError",
