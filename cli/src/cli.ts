@@ -1,10 +1,11 @@
 /**
  * `cosmoner` — command line tools for Cosmoner deployment files and deploys.
  *
- * Every command except `deploy` runs offline. Validating a file needs no
- * account, and a check that reaches the network is a check that fails when the
- * network does, which is not what anyone wants guarding a push. `deploy` is the
- * exception by nature, and only it reads a credential.
+ * Every command except `deploy` and `upload` runs offline. Validating a file
+ * needs no account, and a check that reaches the network is a check that fails
+ * when the network does, which is not what anyone wants guarding a push.
+ * `deploy` and `upload` are the exceptions by nature, and only they read a
+ * credential.
  */
 
 import { readFileSync } from "node:fs";
@@ -15,6 +16,7 @@ import { DEPLOY_HELP, DEPLOY_VALUE_FLAGS, runDeploy } from "./commands/deploy";
 import { FMT_HELP, runFmt } from "./commands/fmt";
 import { INIT_HELP, INIT_VALUE_FLAGS, runInit } from "./commands/init";
 import { runSchema, SCHEMA_HELP } from "./commands/schema";
+import { runUpload, UPLOAD_HELP, UPLOAD_VALUE_FLAGS } from "./commands/upload";
 import { runValidate, VALIDATE_HELP } from "./commands/validate";
 
 const HELP = `cosmoner — tools for .cosmoner/deployment.yaml
@@ -28,10 +30,12 @@ Commands
   init       Write a starter deployment file.
   schema     Print the JSON Schema for the file.
   deploy     Deploy an image app and wait for it to go live.
+  upload     Upload a folder to a web hosting site over SFTP.
 
   cosmoner <command> --help for a command's options.
 
-Everything but deploy works offline: no account, no API key, no network.`;
+Everything but deploy and upload works offline: no account, no API key, no
+network.`;
 
 /** Flags taking a separate value, per command, for the argument parser. */
 const VALUE_FLAGS: Record<string, readonly string[]> = {
@@ -40,6 +44,7 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   init: INIT_VALUE_FLAGS,
   schema: [],
   deploy: DEPLOY_VALUE_FLAGS,
+  upload: UPLOAD_VALUE_FLAGS,
 };
 
 const COMMAND_HELP: Record<string, string> = {
@@ -48,14 +53,15 @@ const COMMAND_HELP: Record<string, string> = {
   init: INIT_HELP,
   schema: SCHEMA_HELP,
   deploy: DEPLOY_HELP,
+  upload: UPLOAD_HELP,
 };
 
 /**
  * Runs one command line.
  *
  * Returns the exit code instead of calling `process.exit`, so the tests can run
- * the real thing rather than a rearrangement of it. Only `deploy` returns it as
- * a promise; the offline commands stay synchronous.
+ * the real thing rather than a rearrangement of it. Only `deploy` and `upload`
+ * return it as a promise; the offline commands stay synchronous.
  */
 export function run(
   argv: string[],
@@ -103,6 +109,8 @@ export function run(
         return runSchema(args);
       case "deploy":
         return runDeploy(args, env).catch((err: unknown) => reportUsage(err, command));
+      case "upload":
+        return runUpload(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
       default:
         return 2;
     }

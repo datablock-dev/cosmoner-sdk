@@ -14,7 +14,7 @@ import {
   type DeployAppParams,
 } from "@cosmoner/sdk";
 
-import { readChoice, rejectUnknownFlags, UsageError, type ParsedArgs } from "../args";
+import { readChoice, readValue, rejectUnknownFlags, UsageError, type ParsedArgs } from "../args";
 
 export const DEPLOY_HELP = `cosmoner deploy <app> [options]
 
@@ -152,13 +152,6 @@ function readTimeout(args: ParsedArgs): number {
     throw new UsageError("--timeout must be a whole number of seconds");
   }
   return seconds;
-}
-
-/** Reads a value flag, refusing one given without its value. */
-function readValue(args: ParsedArgs, name: string): string | undefined {
-  const value = args.flags.get(name);
-  if (value === true || value === "") throw new UsageError(`--${name} needs a value`);
-  return value;
 }
 
 /**

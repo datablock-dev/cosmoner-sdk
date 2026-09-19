@@ -12,7 +12,7 @@ command line tool.
 
 ## Usage
 
-Each SDK provides a `Cosmoner` client with service namespaces. Currently supports `client.email`, `client.webhooks` and `client.apps`.
+Each SDK provides a `Cosmoner` client with service namespaces. Currently supports `client.email`, `client.webhooks`, `client.apps` and `client.hosting`.
 
 All three share the same behaviour: automatic retries with jittered backoff, a
 configurable timeout, a typed error hierarchy, and an optional project id that

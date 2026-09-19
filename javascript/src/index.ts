@@ -61,6 +61,18 @@ export {
   type SendEmailResponse,
 } from "./services/email";
 export {
+  HostingService,
+  type GetHostingAccessResponse,
+  type GetHostingSiteParams,
+  type GetHostingSiteResponse,
+  type GetHostingSiteWithCredentialsResponse,
+  type HostingAccess,
+  type HostingSite,
+  type HostingSiteStatus,
+  type HostingSiteWithCredentials,
+  type ListHostingSitesResponse,
+} from "./services/hosting";
+export {
   WEBHOOK_EVENT_TYPES,
   WebhooksService,
   type CreateWebhookEndpointParams,

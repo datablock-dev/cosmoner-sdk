@@ -138,6 +138,19 @@ raises only when a request fails, or `TimeoutError` once `timeout` seconds pass,
 in which case the deployment keeps going server-side. `interval` and `timeout`
 are in seconds.
 
+## Hosting
+
+Reads a project's shared hosting sites and where to reach their files. Needs an
+API key with `hosting:read`.
+
+| Method | Description |
+| --- | --- |
+| `list(*, project_id=None)` | Every site in the project that has not been deprovisioned |
+| `get(site_id, *, credentials=False, project_id=None)` | One site; `credentials=True` adds `sftpPassword` |
+| `access(site_id, *, project_id=None)` | `username`, `host`, `sftp.port` and `ssh.port`/`ssh.enabled` |
+
+The password needs no scope beyond `hosting:read`, so guard the key accordingly.
+
 ## Deployment files
 
 Validates a `.cosmoner/deployment.yaml` — the file you commit to describe how a

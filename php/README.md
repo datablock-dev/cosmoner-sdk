@@ -165,6 +165,21 @@ app already names.
 `$client->apps->getDeployment($appId, $deploymentId)` fetches a single poll's
 worth of state.
 
+## Hosting
+
+Reads a project's shared hosting sites and where to reach their files. Needs an
+API key with `hosting:read`.
+
+```php
+$sites = $client->hosting->list()['data'];
+$access = $client->hosting->access($sites[0]['id'])['data'];
+// $access['username'], $access['host'], $access['sftp']['port'], $access['ssh']
+```
+
+`$client->hosting->get($siteId, credentials: true)` also returns the site's
+`sftpPassword`. It needs no scope beyond `hosting:read`, so guard the key
+accordingly.
+
 ## Deployment files
 
 Validates a `.cosmoner/deployment.yaml` — the file you commit to describe how a
