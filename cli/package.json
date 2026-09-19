@@ -1,6 +1,6 @@
 {
   "name": "@cosmoner/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Command line tools for Cosmoner deployment files",
   "bin": {
     "cosmoner": "dist/cli.js"
