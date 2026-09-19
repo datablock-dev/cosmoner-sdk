@@ -40,7 +40,7 @@
     "yaml": "^2.6.0"
   },
   "devDependencies": {
-    "@types/node": "^22.20.1",
+    "@types/node": "^26.5.1",
     "oxlint": "^1.77.0",
     "tsup": "^8.0.0",
     "typescript": "^7.0.2",
