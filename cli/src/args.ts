@@ -90,6 +90,13 @@ export function readChoice<T extends string>(
   return value as T;
 }
 
+/** Reads a value flag, refusing one given without its value. */
+export function readValue(args: ParsedArgs, name: string): string | undefined {
+  const value = args.flags.get(name);
+  if (value === true || value === "") throw new UsageError(`--${name} needs a value`);
+  return value;
+}
+
 /** Rejects any flag the command does not define, so a typo is not ignored. */
 export function rejectUnknownFlags(args: ParsedArgs, known: readonly string[]): void {
   for (const name of args.flags.keys()) {

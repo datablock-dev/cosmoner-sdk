@@ -26,6 +26,7 @@ from .errors import (
     ValidationError,
     WebhookSignatureError,
 )
+from .hosting import AsyncHostingService, HostingService
 from .webhook_signature import (
     DEFAULT_TOLERANCE_SECONDS,
     DELIVERY_ID_HEADER,
@@ -50,6 +51,7 @@ __all__ = [
     "AppsService",
     "AsyncAppsService",
     "AsyncCosmoner",
+    "AsyncHostingService",
     "AsyncWebhooksService",
     "AuthenticationError",
     "ConflictError",
@@ -59,6 +61,7 @@ __all__ = [
     "CosmonerTimeoutError",
     "DeploymentIssue",
     "DeploymentValidationResult",
+    "HostingService",
     "InsufficientScopeError",
     "NotFoundError",
     "RateLimitError",

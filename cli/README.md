@@ -1,9 +1,10 @@
 # @cosmoner/cli
 
 Command line tools for `.cosmoner/deployment.yaml`, the file you commit to
-describe how a repository deploys on Cosmoner, and for deploying image apps.
+describe how a repository deploys on Cosmoner, for deploying image apps, and
+for uploading to web hosting sites.
 
-Everything except `cosmoner deploy` works offline. There is no account, no API
+Everything except `cosmoner deploy` and `cosmoner upload` works offline. There is no account, no API
 key and no network call — a check that reaches the network is a check that
 fails when the network does, which is not what you want guarding a push.
 
@@ -147,6 +148,54 @@ timeout stops the wait, not the deploy.
     COSMONER_PROJECT_ID: ${{ vars.COSMONER_PROJECT_ID }}
 ```
 
+### `cosmoner upload <site> <dir>`
+
+Uploads the contents of `<dir>` to a web hosting site over SFTP. `<site>` is the
+site's name or id. The SFTP login is fetched with the API key, so a CI job
+needs no password of its own.
+
+```
+$ cosmoner upload my-site dist --delete
+Uploading dist to my-site:/my-site.cosmoner.com/public_html (42 files, 1.3 MB)
+✓ Uploaded 42 files (1.3 MB), removed 3 in 6s
+```
+
+Every file is uploaded and existing ones are overwritten; files already on the
+site but not in `<dir>` are left alone unless `--delete` is given. `.git`
+folders and symlinks are never uploaded. An empty `<dir>` is refused, since it
+is usually a build that produced nothing.
+
+| Option | |
+| --- | --- |
+| `--remote <path>` | Folder to upload into, as an SFTP client shows it. Defaults to the one the site's own hostname serves. |
+| `--delete` | Afterwards, remove what is under the target but not in `<dir>`. Refused when the target is `/`. |
+| `--dry-run` | Connect and list what would change, changing nothing. |
+| `--host-key <sha256>` | Refuse a server whose host key has another fingerprint. Defaults to `COSMONER_SFTP_HOST_KEY`. |
+| `--project <id>` | Defaults to `COSMONER_PROJECT_ID`. |
+| `--format text\|json` | `json` prints the site, target and the files uploaded and removed. |
+
+The key needs `hosting:read`. Without a pinned host key the upload goes ahead
+and prints the fingerprint it saw; pin it, and a server presenting another key
+is refused before the password is sent. The gateway's key is:
+
+```
+SHA256:PfqYSl1pbMjfMKAbcmjzGZ0t1kpuCZ2mtymdyLu9HwA
+```
+
+Exit codes: `0` every file was uploaded, `1` the upload failed or the API
+refused it, `2` the command itself was wrong.
+
+#### In GitHub Actions
+
+```yaml
+- name: Upload site
+  run: npx @cosmoner/cli upload my-site dist --delete
+  env:
+    COSMONER_API_KEY: ${{ secrets.COSMONER_API_KEY }}
+    COSMONER_PROJECT_ID: ${{ vars.COSMONER_PROJECT_ID }}
+    COSMONER_SFTP_HOST_KEY: SHA256:PfqYSl1pbMjfMKAbcmjzGZ0t1kpuCZ2mtymdyLu9HwA
+```
+
 ## Same answer as the SDKs
 
 The rules live in the SDK, not here. `@cosmoner/sdk`, `cosmoner-sdk` (Python)
@@ -183,7 +232,8 @@ The first line is not optional for `npm run typecheck`: tsc follows
 `../javascript/src` and that source imports `yaml`, which module resolution
 looks for beside the importing file rather than in `cli/node_modules`. Lint,
 build and test do not need it — tsup treats `yaml` as external because the CLI
-depends on it as well.
+depends on it as well. `ssh2` is bundled but its two optional native addons
+are left out, see `tsup.config.ts`.
 
 `npm test` builds first, because two things only exist after a build: the JSON
 Schema copied next to the bundle, and the shebang that makes it runnable. Both

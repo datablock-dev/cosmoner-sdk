@@ -124,6 +124,21 @@ Needs `apps:read`.
 `client.apps.list()` and `client.apps.getDeployment(appId, deploymentId)` are
 the single calls underneath.
 
+## Hosting
+
+Reads a project's shared hosting sites and where to reach their files. Needs an
+API key with `hosting:read`.
+
+```ts
+const { data: sites } = await client.hosting.list();
+const { data: access } = await client.hosting.access(sites[0].id);
+// access.username, access.host, access.sftp.port, access.ssh.{port,enabled}
+```
+
+`client.hosting.get(siteId, { credentials: true })` also returns the site's
+`sftpPassword`. It needs no scope beyond `hosting:read`, so guard the key
+accordingly.
+
 ## Deployment files
 
 Validates a `.cosmoner/deployment.yaml` — the file you commit to describe how a
