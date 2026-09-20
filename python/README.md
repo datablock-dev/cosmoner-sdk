@@ -151,6 +151,66 @@ API key with `hosting:read`.
 
 The password needs no scope beyond `hosting:read`, so guard the key accordingly.
 
+## Secrets
+
+Stores the values a deployment file refers to with `from_secret`. Needs an API
+key with `secrets:read`, and `secrets:write` to change anything.
+
+```python
+secret = client.secrets.create("DB_PASSWORD", "hunter2", environment="production")
+secret["data"]["value"]        # "hunter2" — returned here and nowhere else
+secret["data"]["maskedValue"]  # "hu••••r2", safe to display
+
+listed = client.secrets.list(environment="production")
+# name, environment, version, who changed it and when — never the value
+```
+
+| Method | Description |
+| --- | --- |
+| `list(*, environment=None, project_id=None)` | Metadata for every secret, or for one environment |
+| `get(secret_id, *, project_id=None)` | One secret's metadata, without its value |
+| `create(name, value, *, description=None, environment=None, project_id=None)` | Stores a secret; returns the plaintext once |
+| `update(secret_id, value, *, description=None, project_id=None)` | Replaces the value and bumps `version` |
+| `delete(secret_id, *, project_id=None)` | Removes it |
+| `usage(*, project_id=None)` | How many secrets the project holds and may hold |
+| `audit(secret_id, *, project_id=None)` | Who changed it and when, never to what |
+
+A secret's value is encrypted at rest and returned exactly once, by the call
+that sets it. No route decrypts one, so a lost value is replaced rather than
+recovered.
+
+Two API behaviours are worth knowing before you debug them:
+
+- **Writes need an owner or admin.** The API checks the member's role
+  independently of the key's scopes, so a plain member's key is refused with a
+  403 even when it carries `secrets:write`.
+- **Creating is rate-limited** to 10 requests per 10 minutes, and a project at
+  its secret limit answers 402.
+
+## Variables
+
+The plaintext sibling of secrets, for non-sensitive configuration a deployment
+file refers to with `from_variable`. Needs `variables:read`, and
+`variables:write` to change anything.
+
+```python
+client.variables.create("LOG_LEVEL", "debug")
+client.variables.list()["data"][0]["value"]  # "debug" — returned on every read
+```
+
+| Method | Description |
+| --- | --- |
+| `list(*, environment=None, project_id=None)` | Every variable, values included |
+| `get(variable_id, *, project_id=None)` | One variable, value included |
+| `create(name, value, *, description=None, environment=None, project_id=None)` | Stores a variable |
+| `update(variable_id, *, value=None, description=None, project_id=None)` | Changes the value, the description, or both |
+| `delete(variable_id, *, project_id=None)` | Removes it |
+
+That values are returned in full is the difference between the two resources,
+not an oversight: anything worth hiding belongs in `client.secrets`.
+
+`AsyncCosmoner` exposes the same two namespaces, with `await`.
+
 ## Deployment files
 
 Validates a `.cosmoner/deployment.yaml` — the file you commit to describe how a

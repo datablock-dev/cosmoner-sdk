@@ -27,6 +27,8 @@ from .errors import (
     WebhookSignatureError,
 )
 from .hosting import AsyncHostingService, HostingService
+from .secrets import AsyncSecretsService, SecretsService
+from .variables import AsyncVariablesService, VariablesService
 from .webhook_signature import (
     DEFAULT_TOLERANCE_SECONDS,
     DELIVERY_ID_HEADER,
@@ -52,6 +54,8 @@ __all__ = [
     "AsyncAppsService",
     "AsyncCosmoner",
     "AsyncHostingService",
+    "AsyncSecretsService",
+    "AsyncVariablesService",
     "AsyncWebhooksService",
     "AuthenticationError",
     "ConflictError",
@@ -65,8 +69,10 @@ __all__ = [
     "InsufficientScopeError",
     "NotFoundError",
     "RateLimitError",
+    "SecretsService",
     "ServerError",
     "ValidationError",
+    "VariablesService",
     "WebhookSignatureError",
     "WebhooksService",
     "__version__",

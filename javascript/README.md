@@ -139,6 +139,56 @@ const { data: access } = await client.hosting.access(sites[0].id);
 `sftpPassword`. It needs no scope beyond `hosting:read`, so guard the key
 accordingly.
 
+## Secrets
+
+Stores the values a deployment file refers to with `from_secret`. Needs an API
+key with `secrets:read`, and `secrets:write` to change anything.
+
+```ts
+const { data: secret } = await client.secrets.create({
+  name: "DB_PASSWORD",
+  value: "hunter2",
+  environment: "production",
+});
+secret.value; // "hunter2" — returned here and nowhere else
+secret.maskedValue; // "hu••••r2", safe to display
+
+const { data: secrets } = await client.secrets.list({ environment: "production" });
+// name, environment, version, who changed it and when — never the value
+```
+
+A secret's value is encrypted at rest and returned exactly once, by the call
+that sets it. `list()` and `get()` describe a secret without its value, and no
+route decrypts one, so a lost value is replaced rather than recovered.
+
+`update(id, { value })` replaces a value and bumps `version`; `delete(id)`
+removes it; `usage()` reports how many secrets the project holds and may hold;
+`audit(id)` reads who changed it and when.
+
+Two API behaviours are worth knowing before you debug them:
+
+- **Writes need an owner or admin.** The API checks the member's role
+  independently of the key's scopes, so a plain member's key is refused with a
+  403 even when it carries `secrets:write`.
+- **Creating is rate-limited** to 10 requests per 10 minutes, and a project at
+  its secret limit answers 402.
+
+## Variables
+
+The plaintext sibling of secrets, for non-sensitive configuration a deployment
+file refers to with `from_variable`. Needs `variables:read`, and
+`variables:write` to change anything.
+
+```ts
+await client.variables.create({ name: "LOG_LEVEL", value: "debug" });
+const { data: variables } = await client.variables.list();
+variables[0].value; // "debug" — returned in full on every read
+```
+
+That is the difference between the two resources, not an oversight: anything
+worth hiding belongs in `client.secrets`. `update()` here takes a value, a
+description, or both.
+
 ## Deployment files
 
 Validates a `.cosmoner/deployment.yaml` — the file you commit to describe how a

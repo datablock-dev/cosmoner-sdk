@@ -1,10 +1,10 @@
 /**
  * `cosmoner` — command line tools for Cosmoner deployment files and deploys.
  *
- * Every command except `deploy` and `upload` runs offline. Validating a file
- * needs no account, and a check that reaches the network is a check that fails
- * when the network does, which is not what anyone wants guarding a push.
- * `deploy` and `upload` are the exceptions by nature, and only they read a
+ * The file commands run offline. Validating a file needs no account, and a
+ * check that reaches the network is a check that fails when the network does,
+ * which is not what anyone wants guarding a push. `deploy`, `upload`,
+ * `secrets` and `variables` are the exceptions by nature, and only they read a
  * credential.
  */
 
@@ -16,8 +16,10 @@ import { DEPLOY_HELP, DEPLOY_VALUE_FLAGS, runDeploy } from "./commands/deploy";
 import { FMT_HELP, runFmt } from "./commands/fmt";
 import { INIT_HELP, INIT_VALUE_FLAGS, runInit } from "./commands/init";
 import { runSchema, SCHEMA_HELP } from "./commands/schema";
+import { runSecrets, SECRETS_HELP, SECRETS_VALUE_FLAGS } from "./commands/secrets";
 import { runUpload, UPLOAD_HELP, UPLOAD_VALUE_FLAGS } from "./commands/upload";
 import { runValidate, VALIDATE_HELP } from "./commands/validate";
+import { runVariables, VARIABLES_HELP, VARIABLES_VALUE_FLAGS } from "./commands/variables";
 
 const HELP = `cosmoner — tools for .cosmoner/deployment.yaml
 
@@ -31,11 +33,13 @@ Commands
   schema     Print the JSON Schema for the file.
   deploy     Deploy an image app and wait for it to go live.
   upload     Upload a folder to a web hosting site over SFTP.
+  secrets    List, set and remove a project's secrets.
+  variables  List, set and remove a project's variables.
 
   cosmoner <command> --help for a command's options.
 
-Everything but deploy and upload works offline: no account, no API key, no
-network.`;
+Everything but deploy, upload, secrets and variables works offline: no
+account, no API key, no network.`;
 
 /** Flags taking a separate value, per command, for the argument parser. */
 const VALUE_FLAGS: Record<string, readonly string[]> = {
@@ -45,6 +49,8 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   schema: [],
   deploy: DEPLOY_VALUE_FLAGS,
   upload: UPLOAD_VALUE_FLAGS,
+  secrets: SECRETS_VALUE_FLAGS,
+  variables: VARIABLES_VALUE_FLAGS,
 };
 
 const COMMAND_HELP: Record<string, string> = {
@@ -54,6 +60,8 @@ const COMMAND_HELP: Record<string, string> = {
   schema: SCHEMA_HELP,
   deploy: DEPLOY_HELP,
   upload: UPLOAD_HELP,
+  secrets: SECRETS_HELP,
+  variables: VARIABLES_HELP,
 };
 
 /**
@@ -111,6 +119,10 @@ export function run(
         return runDeploy(args, env).catch((err: unknown) => reportUsage(err, command));
       case "upload":
         return runUpload(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
+      case "secrets":
+        return runSecrets(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
+      case "variables":
+        return runVariables(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
       default:
         return 2;
     }
