@@ -4,9 +4,11 @@ Command line tools for `.cosmoner/deployment.yaml`, the file you commit to
 describe how a repository deploys on Cosmoner, for deploying image apps, and
 for uploading to web hosting sites.
 
-Everything except `cosmoner deploy` and `cosmoner upload` works offline. There is no account, no API
-key and no network call — a check that reaches the network is a check that
-fails when the network does, which is not what you want guarding a push.
+The file commands — `validate`, `fmt`, `init` and `schema` — work offline.
+There is no account, no API key and no network call: a check that reaches the
+network is a check that fails when the network does, which is not what you want
+guarding a push. `deploy`, `upload`, `secrets` and `variables` talk to the API
+by nature, and only they read a credential.
 
 ```bash
 npx @cosmoner/cli validate
@@ -195,6 +197,77 @@ refused it, `2` the command itself was wrong.
     COSMONER_PROJECT_ID: ${{ vars.COSMONER_PROJECT_ID }}
     COSMONER_SFTP_HOST_KEY: SHA256:PfqYSl1pbMjfMKAbcmjzGZ0t1kpuCZ2mtymdyLu9HwA
 ```
+
+### `cosmoner secrets <list|set|rm>`
+
+Manages the values a deployment file refers to with `from_secret`. A secret's
+value is encrypted and returned only as it is set, so this command never prints
+one back — the value it would print is the value you just supplied, and putting
+it on stdout writes it into a CI log.
+
+```
+$ cosmoner secrets list
+NAME            ENVIRONMENT  VERSION  UPDATED
+DB_PASSWORD     production   2        2026-09-02
+STRIPE_KEY      production   1        2026-08-30
+
+$ cosmoner secrets set DB_PASSWORD --environment production < password.txt
+✓ Set DB_PASSWORD to hu••••r3 in production, version 2
+```
+
+`set` stores a new secret, or replaces the value of one that already exists in
+the same environment. `rm` takes the same name.
+
+| Option | |
+| --- | --- |
+| `--environment <env>` | `default` (the default), `development`, `staging` or `production`. `set` and `rm` address one name in one environment; a bare `list` shows them all. |
+| `--value <value>` | The value to store, taken literally. |
+| `--from-file <path>` | Read the value from a file. One trailing newline is stripped. |
+| `--description <text>` | Set alongside the value. |
+| `--project <id>` | Project to work in. Defaults to `COSMONER_PROJECT_ID`. |
+| `--format text\|json` | `json` never includes a value. |
+
+The value comes from `--value`, `--from-file`, or whatever is piped in, in that
+order. **Piping is safest**: a value passed as `--value` is recoverable from
+shell history and may be echoed by a CI runner. Stdin is the last resort rather
+than a competing source, because a CI runner often hands a command a
+non-terminal stdin with nothing behind it.
+
+Two API behaviours will otherwise look like bugs:
+
+- **Writing needs the key's owner to be an owner or admin** of the project. The
+  scope alone is not enough, so a member's key with `secrets:write` still gets
+  a 403.
+- **Creating is rate-limited** to 10 secrets per 10 minutes, so a loop that
+  imports many of them will meet a 429.
+
+Exit codes: `0` the change was made, `1` the API refused it or the name was not
+found, `2` the command itself was wrong.
+
+#### In GitHub Actions
+
+```yaml
+- name: Publish the build's database password
+  run: echo "$DB_PASSWORD" | npx @cosmoner/cli secrets set DB_PASSWORD --environment production
+  env:
+    COSMONER_API_KEY: ${{ secrets.COSMONER_API_KEY }}
+    COSMONER_PROJECT_ID: ${{ vars.COSMONER_PROJECT_ID }}
+    DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+```
+
+### `cosmoner variables <list|set|rm>`
+
+The plaintext sibling of `cosmoner secrets`, for the non-sensitive values a
+deployment file refers to with `from_variable`. Same subcommands and same
+options; the difference is that a variable's value is returned on every read,
+so `list` prints it.
+
+```
+$ cosmoner variables set LOG_LEVEL --value debug --environment development
+✓ Created LOG_LEVEL=debug in development
+```
+
+Anything worth hiding belongs in `cosmoner secrets` instead.
 
 ## Same answer as the SDKs
 

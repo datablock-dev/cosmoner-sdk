@@ -4,6 +4,8 @@ import { resolveConfig, type CosmonerConfig, type ResolvedConfig } from "./confi
 import { AppsService } from "./services/apps";
 import { EmailService } from "./services/email";
 import { HostingService } from "./services/hosting";
+import { SecretsService } from "./services/secrets";
+import { VariablesService } from "./services/variables";
 import { WebhooksService } from "./services/webhooks";
 import { Transport } from "./transport";
 
@@ -32,6 +34,8 @@ export class Cosmoner {
   readonly apps: AppsService;
   readonly email: EmailService;
   readonly hosting: HostingService;
+  readonly secrets: SecretsService;
+  readonly variables: VariablesService;
   readonly webhooks: WebhooksService;
 
   constructor(config: CosmonerConfig) {
@@ -47,6 +51,8 @@ export class Cosmoner {
     this.apps = new AppsService(this.transport, this.config);
     this.email = new EmailService(this.transport, this.config);
     this.hosting = new HostingService(this.transport, this.config);
+    this.secrets = new SecretsService(this.transport, this.config);
+    this.variables = new VariablesService(this.transport, this.config);
     this.webhooks = new WebhooksService(this.transport, this.config);
   }
 }

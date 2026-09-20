@@ -73,6 +73,36 @@ export {
   type ListHostingSitesResponse,
 } from "./services/hosting";
 export {
+  PROJECT_ENVIRONMENTS,
+  type Actor,
+  type ProjectEnvironment,
+} from "./services/project-config";
+export {
+  SecretsService,
+  type CreateSecretParams,
+  type GetSecretAuditResponse,
+  type GetSecretResponse,
+  type GetSecretsUsageResponse,
+  type ListSecretsParams,
+  type ListSecretsResponse,
+  type ProjectSecret,
+  type RevealedProjectSecret,
+  type SecretAuditEntry,
+  type SecretsUsage,
+  type SetSecretResponse,
+  type UpdateSecretParams,
+} from "./services/secrets";
+export {
+  VariablesService,
+  type CreateVariableParams,
+  type GetVariableResponse,
+  type ListVariablesParams,
+  type ListVariablesResponse,
+  type ProjectVariable,
+  type SetVariableResponse,
+  type UpdateVariableParams,
+} from "./services/variables";
+export {
   WEBHOOK_EVENT_TYPES,
   WebhooksService,
   type CreateWebhookEndpointParams,

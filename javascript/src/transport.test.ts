@@ -179,6 +179,18 @@ describe("Transport retries", () => {
 
     await expect(send(makeClient(0))).rejects.toThrow("non-JSON");
   });
+
+  it("accepts an empty 204, which DELETE routes answer with", async () => {
+    fetchSpy.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(makeClient(0).secrets.delete("sec-1")).resolves.toBeUndefined();
+  });
+
+  it("still rejects an empty body on a status that promised one", async () => {
+    fetchSpy.mockResolvedValue(new Response("", { status: 200 }));
+
+    await expect(send(makeClient(0))).rejects.toThrow("non-JSON");
+  });
 });
 
 describe("error mapping", () => {

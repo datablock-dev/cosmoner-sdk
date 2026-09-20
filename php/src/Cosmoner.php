@@ -22,6 +22,8 @@ class Cosmoner
     public readonly AppsService $apps;
     public readonly EmailService $email;
     public readonly HostingService $hosting;
+    public readonly SecretsService $secrets;
+    public readonly VariablesService $variables;
     public readonly WebhooksService $webhooks;
 
     private readonly Config $config;
@@ -47,6 +49,8 @@ class Cosmoner
         $this->apps = new AppsService($this->transport, $this->config);
         $this->email = new EmailService($this->transport, $this->config);
         $this->hosting = new HostingService($this->transport, $this->config);
+        $this->secrets = new SecretsService($this->transport, $this->config);
+        $this->variables = new VariablesService($this->transport, $this->config);
         $this->webhooks = new WebhooksService($this->transport, $this->config);
     }
 }

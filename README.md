@@ -12,7 +12,9 @@ command line tool.
 
 ## Usage
 
-Each SDK provides a `Cosmoner` client with service namespaces. Currently supports `client.email`, `client.webhooks`, `client.apps` and `client.hosting`.
+Each SDK provides a `Cosmoner` client with service namespaces. Currently supports
+`client.email`, `client.webhooks`, `client.apps`, `client.hosting`,
+`client.secrets` and `client.variables`.
 
 All three share the same behaviour: automatic retries with jittered backoff, a
 configurable timeout, a typed error hierarchy, and an optional project id that
@@ -104,6 +106,24 @@ COSMONER_API_KEY=... COSMONER_PROJECT_ID=... npx @cosmoner/cli deploy web --tag 
 
 It exits 0 once the app is live and 1 if the rollout fails or times out. See
 [`cli/README.md`](./cli/README.md) for every option.
+
+## Secrets and variables
+
+`client.secrets` and `client.variables` manage the values a deployment file
+refers to with `from_secret` and `from_variable`. The CLI wraps both:
+
+```bash
+echo "$DB_PASSWORD" | npx @cosmoner/cli secrets set DB_PASSWORD --environment production
+npx @cosmoner/cli variables set LOG_LEVEL --value debug
+```
+
+The two resources differ in one way that shapes the whole API: a variable's
+value is returned on every read, and a secret's is returned exactly once, by
+the call that sets it. Nothing decrypts a secret afterwards, so a lost value is
+replaced rather than recovered — and `cosmoner secrets` never prints one.
+
+Writing either needs an owner or admin on top of the `secrets:write` /
+`variables:write` scope.
 
 ## Documentation
 
