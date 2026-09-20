@@ -8,6 +8,6 @@
  * the release workflow runs that straight after `npm version`, and
  * `version.test.ts` fails the build if the two ever disagree.
  */
-export const VERSION = "1.4.0";
+export const VERSION = "1.5.0";
 
 export const USER_AGENT = `cosmoner-node/${VERSION}`;
