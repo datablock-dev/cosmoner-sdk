@@ -2,19 +2,20 @@
  * `cosmoner deploy` — roll an image app onto a new image and wait for it.
  *
  * The one command that needs an account. It reads its credentials from the
- * environment rather than from flags, so an API key never lands in a CI log or
- * a shell history.
+ * environment or the saved `cosmoner login`, never from flags, so an API key
+ * never lands in a CI log or a shell history.
  */
 
 import {
-  Cosmoner,
   CosmonerError,
+  type Cosmoner,
   type App,
   type AppDeployment,
   type DeployAppParams,
 } from "@cosmoner/sdk";
 
 import { readChoice, readValue, rejectUnknownFlags, UsageError, type ParsedArgs } from "../args";
+import { makeClient } from "../credentials";
 
 export const DEPLOY_HELP = `cosmoner deploy <app> [options]
 
@@ -29,13 +30,15 @@ Options
                        pushed as a tag goes here.
   --digest <digest>    Deploy this exact image: sha256:<64 hex characters>. The
                        sha256: prefix may be left off.
-  --project <id>       Project the app is in. Defaults to COSMONER_PROJECT_ID.
+  --project <id>       Project the app is in. Defaults to COSMONER_PROJECT_ID,
+                       then the project you logged in to.
   --no-wait            Return once the deploy is accepted, without waiting.
   --timeout <seconds>  How long to wait for the rollout. Defaults to 600.
   --format <format>    text (default) or json.
 
 Environment
-  COSMONER_API_KEY     Required. The key needs apps:read and apps:write.
+  COSMONER_API_KEY     API key to use instead of cosmoner login. Needs
+                       apps:read and apps:write.
   COSMONER_PROJECT_ID  Project to use when --project is not given.
   COSMONER_API_URL     API base URL. Defaults to https://api.cosmoner.com.
 
@@ -66,16 +69,11 @@ export async function runDeploy(args: ParsedArgs, env: NodeJS.ProcessEnv): Promi
   if (extra.length > 0) throw new UsageError(`Unexpected argument "${extra[0]}"`);
 
   const target = readTarget(args);
-  const projectId = readValue(args, "project") ?? env.COSMONER_PROJECT_ID;
   const wait = args.flags.get("no-wait") !== true;
   const timeoutSeconds = readTimeout(args);
   const format = readChoice<DeployFormat>(args, "format", FORMATS, "text");
 
-  const apiKey = env.COSMONER_API_KEY;
-  if (!apiKey) throw new UsageError("Set COSMONER_API_KEY to an API key with apps:read and apps:write");
-  if (!projectId) throw new UsageError("Pass --project or set COSMONER_PROJECT_ID");
-
-  const client = new Cosmoner({ apiKey, projectId, baseUrl: env.COSMONER_API_URL || undefined });
+  const client = makeClient(args, env, "apps:read and apps:write");
   const say = format === "text" ? (line: string) => console.log(line) : () => {};
 
   try {

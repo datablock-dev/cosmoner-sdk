@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { Cosmoner, CosmonerError, type ProjectEnvironment } from "@cosmoner/sdk";
+import { CosmonerError, type ProjectEnvironment } from "@cosmoner/sdk";
 
 import { readValue, UsageError, type ParsedArgs } from "../args";
 import { readStdin, stdinIsTty } from "../stdin";
@@ -66,21 +66,6 @@ export function readEnvironment(args: ParsedArgs): ProjectEnvironment {
     throw new UsageError(`--environment must be one of: ${ENVIRONMENTS.join(", ")}`);
   }
   return value as ProjectEnvironment;
-}
-
-/** Builds an authenticated client, taking the credential from the environment alone. */
-export function makeClient(
-  args: ParsedArgs,
-  env: NodeJS.ProcessEnv,
-  scope: string
-): Cosmoner {
-  const projectId = readValue(args, "project") ?? env.COSMONER_PROJECT_ID;
-  const apiKey = env.COSMONER_API_KEY;
-
-  if (!apiKey) throw new UsageError(`Set COSMONER_API_KEY to an API key with ${scope}`);
-  if (!projectId) throw new UsageError("Pass --project or set COSMONER_PROJECT_ID");
-
-  return new Cosmoner({ apiKey, projectId, baseUrl: env.COSMONER_API_URL || undefined });
 }
 
 /**

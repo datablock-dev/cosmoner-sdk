@@ -170,7 +170,7 @@ describe("variables", () => {
     const result = await variables(["list"], { COSMONER_PROJECT_ID: "proj-1" });
 
     expect(result.code).toBe(2);
-    expect(result.stderr).toContain("Set COSMONER_API_KEY to an API key with variables:read");
+    expect(result.stderr).toContain("set COSMONER_API_KEY to an API key with variables:read");
   });
 
   it("names the variable to set before asking for a value", async () => {

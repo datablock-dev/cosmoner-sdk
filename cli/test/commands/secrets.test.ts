@@ -316,7 +316,7 @@ describe("secrets usage errors", () => {
     const result = await secrets(["list"], { COSMONER_PROJECT_ID: "proj-1" });
 
     expect(result.code).toBe(2);
-    expect(result.stderr).toContain("Set COSMONER_API_KEY to an API key with secrets:read");
+    expect(result.stderr).toContain("set COSMONER_API_KEY to an API key with secrets:read");
   });
 
   it("names the write scope for a write", async () => {
@@ -324,7 +324,7 @@ describe("secrets usage errors", () => {
       COSMONER_PROJECT_ID: "proj-1",
     });
 
-    expect(result.stderr).toContain("Set COSMONER_API_KEY to an API key with secrets:write");
+    expect(result.stderr).toContain("set COSMONER_API_KEY to an API key with secrets:write");
   });
 
   it("rejects a name for rm that was not given", async () => {
