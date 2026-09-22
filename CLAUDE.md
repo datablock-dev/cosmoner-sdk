@@ -50,8 +50,11 @@ else — including the CLI, where they live in `cli/test/`, not beside the sourc
   objects exist only for the offline deployment validator. Public methods
   first, private helpers last.
 - **CLI** — credentials come from the environment (`COSMONER_API_KEY`,
-  `COSMONER_PROJECT_ID`, `COSMONER_API_URL`) and never from a flag, so a key
-  cannot land in shell history or a CI log. Exit codes mean one thing each: `0`
+  `COSMONER_PROJECT_ID`, `COSMONER_API_URL`) or the key `cosmoner login`
+  saved, and never from a flag, so a key cannot land in shell history or a CI
+  log. The environment key always wins over the saved one, and commands build
+  their client through `makeClient` in `src/credentials.ts` so that order holds
+  everywhere. Exit codes mean one thing each: `0`
   success, `1` the operation failed, `2` the command line itself was wrong
   (`UsageError`). `run()` returns the code rather than calling `process.exit`,
   so tests drive the real entry point.

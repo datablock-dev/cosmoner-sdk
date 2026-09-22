@@ -8,7 +8,8 @@ The file commands — `validate`, `fmt`, `init` and `schema` — work offline.
 There is no account, no API key and no network call: a check that reaches the
 network is a check that fails when the network does, which is not what you want
 guarding a push. `deploy`, `upload`, `secrets` and `variables` talk to the API
-by nature, and only they read a credential.
+by nature, and only they read a credential — from `cosmoner login` on your own
+machine, or `COSMONER_API_KEY` in CI.
 
 ```bash
 npx @cosmoner/cli validate
@@ -106,6 +107,39 @@ wants, and what `cosmoner fmt` writes into the file.
 cosmoner schema > .cosmoner/app.schema.json
 ```
 
+### `cosmoner login`
+
+Signs the CLI in through your browser. The terminal shows a code and opens
+`cosmoner.com/cli/<code>`, where you check the code matches, pick a project and
+approve. The CLI then saves an API key for that project to
+`~/.config/cosmoner/credentials.json`, readable only by you.
+
+```
+$ cosmoner login
+Your code is BCDF-GHJK
+
+Opened https://cosmoner.com/cli/BCDF-GHJK in your browser.
+Or go to https://cosmoner.com/cli and enter the code.
+
+Waiting for approval…
+
+Logged in to Acme, until 2026-12-21.
+```
+
+The key expires after 90 days and appears under the project's API keys, where
+it can be revoked. It carries the scopes `deploy`, `upload`, `secrets` and
+`variables` need, and those are listed on the approval page before anything is
+issued. `--no-browser` prints the link instead of opening it, for a machine
+reached over SSH.
+
+`COSMONER_API_KEY` always takes priority over a saved login, so CI keeps using
+the key it was given. There is deliberately no flag for passing a key: a flag
+ends up in shell history and CI logs.
+
+`cosmoner logout` revokes the saved key and deletes it. `cosmoner whoami` shows
+which credential and project the CLI is using, and checks that the key still
+works.
+
 ### `cosmoner deploy <app>`
 
 Deploys an image app — one that runs an image from a Cosmoner registry — and
@@ -127,14 +161,14 @@ again, which picks up a tag that was pushed over.
 | --- | --- |
 | `--tag <tag>` | Deploy this tag from the app's repository. A commit SHA pushed as a tag goes here. |
 | `--digest <digest>` | Deploy this exact image. The `sha256:` prefix may be left off. |
-| `--project <id>` | Defaults to `COSMONER_PROJECT_ID`. |
+| `--project <id>` | Defaults to `COSMONER_PROJECT_ID`, then the project you logged in to. |
 | `--no-wait` | Return once the deploy is accepted. |
 | `--timeout <seconds>` | How long to wait for the rollout. Defaults to 600. |
 | `--format text\|json` | `json` prints the app and the final deployment as one object. |
 
-Credentials come from the environment, never a flag, so a key cannot end up in
-a CI log: `COSMONER_API_KEY` (with `apps:read` and `apps:write`), and optionally
-`COSMONER_PROJECT_ID` and `COSMONER_API_URL`.
+Credentials come from `cosmoner login` or the environment, never a flag, so a
+key cannot end up in a CI log: `COSMONER_API_KEY` (with `apps:read` and
+`apps:write`), and optionally `COSMONER_PROJECT_ID` and `COSMONER_API_URL`.
 
 Exit codes: `0` the deploy went live (or was accepted, with `--no-wait`), `1` it
 failed, timed out or the API refused it, `2` the command itself was wrong. A
@@ -173,7 +207,7 @@ is usually a build that produced nothing.
 | `--delete` | Afterwards, remove what is under the target but not in `<dir>`. Refused when the target is `/`. |
 | `--dry-run` | Connect and list what would change, changing nothing. |
 | `--host-key <sha256>` | Refuse a server whose host key has another fingerprint. Defaults to `COSMONER_SFTP_HOST_KEY`. |
-| `--project <id>` | Defaults to `COSMONER_PROJECT_ID`. |
+| `--project <id>` | Defaults to `COSMONER_PROJECT_ID`, then the project you logged in to. |
 | `--format text\|json` | `json` prints the site, target and the files uploaded and removed. |
 
 The key needs `hosting:read`. Without a pinned host key the upload goes ahead

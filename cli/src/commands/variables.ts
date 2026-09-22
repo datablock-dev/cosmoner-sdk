@@ -15,13 +15,13 @@ import {
   ENTRY_VALUE_FLAGS,
   explain,
   FORMATS,
-  makeClient,
   readEntryValue,
   readEnvironment,
   readSubcommand,
   renderTable,
   type EntryFormat,
 } from "./config-entries";
+import { makeClient } from "../credentials";
 
 export const VARIABLES_HELP = `cosmoner variables <list|set|rm> [name] [options]
 
@@ -45,12 +45,13 @@ Options
   --from-file <path>   Read the value from a file. One trailing newline is
                        stripped.
   --description <text> Set alongside the value.
-  --project <id>       Project to work in. Defaults to COSMONER_PROJECT_ID.
+  --project <id>       Project to work in. Defaults to COSMONER_PROJECT_ID, then
+                       the project you logged in to.
   --format <format>    text (default) or json.
 
 Environment
-  COSMONER_API_KEY     Required. Reads need variables:read, writes
-                       variables:write.
+  COSMONER_API_KEY     API key to use instead of cosmoner login. Reads need
+                       variables:read, writes variables:write.
   COSMONER_PROJECT_ID  Project to use when --project is not given.
   COSMONER_API_URL     API base URL. Defaults to https://api.cosmoner.com.
 

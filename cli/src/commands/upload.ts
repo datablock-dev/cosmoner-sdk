@@ -9,9 +9,10 @@
 import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { Cosmoner, CosmonerError, type HostingSite } from "@cosmoner/sdk";
+import { CosmonerError, type Cosmoner, type HostingSite } from "@cosmoner/sdk";
 
 import { readChoice, readValue, rejectUnknownFlags, UsageError, type ParsedArgs } from "../args";
+import { makeClient } from "../credentials";
 import { connectSftp, HostKeyMismatchError, type RemoteFs, type SftpTarget } from "../sftp";
 import { extraneous, joinRemote, walkLocal, walkRemote, type LocalTree, type Tree } from "../tree";
 
@@ -33,11 +34,13 @@ Options
   --host-key <sha256>  Refuse any server whose host key has another
                        fingerprint. Comma-separate several. Defaults to
                        COSMONER_SFTP_HOST_KEY.
-  --project <id>       Project the site is in. Defaults to COSMONER_PROJECT_ID.
+  --project <id>       Project the site is in. Defaults to COSMONER_PROJECT_ID,
+                       then the project you logged in to.
   --format <format>    text (default) or json.
 
 Environment
-  COSMONER_API_KEY       Required. The key needs hosting:read.
+  COSMONER_API_KEY       API key to use instead of cosmoner login. Needs
+                         hosting:read.
   COSMONER_PROJECT_ID    Project to use when --project is not given.
   COSMONER_SFTP_HOST_KEY Host key fingerprint(s) to pin, as --host-key.
   COSMONER_API_URL       API base URL. Defaults to https://api.cosmoner.com.
@@ -81,12 +84,9 @@ export async function runUpload(args: ParsedArgs, cwd: string, env: NodeJS.Proce
     .split(",")
     .map((key) => key.trim())
     .filter(Boolean);
-  const projectId = readValue(args, "project") ?? env.COSMONER_PROJECT_ID;
   const format = readChoice<UploadFormat>(args, "format", FORMATS, "text");
 
-  const apiKey = env.COSMONER_API_KEY;
-  if (!apiKey) throw new UsageError("Set COSMONER_API_KEY to an API key with hosting:read");
-  if (!projectId) throw new UsageError("Pass --project or set COSMONER_PROJECT_ID");
+  const client = makeClient(args, env, "hosting:read");
   if (!existsSync(localRoot) || !statSync(localRoot).isDirectory()) {
     throw new UsageError(`${dir} is not a folder`);
   }
@@ -102,7 +102,6 @@ export async function runUpload(args: ParsedArgs, cwd: string, env: NodeJS.Proce
     // --delete it would empty the live site.
     if (local.files.length === 0) throw new Error(`${dir} has no files to upload`);
 
-    const client = new Cosmoner({ apiKey, projectId, baseUrl: env.COSMONER_API_URL || undefined });
     const site = await findSite(client, siteRef);
     const { data: detail } = await client.hosting.get(site.id, { credentials: true });
     const target = sftpTarget(detail, hostKeys);
