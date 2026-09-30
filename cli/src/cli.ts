@@ -1,10 +1,11 @@
 /**
  * `cosmoner` — command line tools for Cosmoner deployment files and deploys.
  *
- * Every command except `deploy` runs offline. Validating a file needs no
- * account, and a check that reaches the network is a check that fails when the
- * network does, which is not what anyone wants guarding a push. `deploy` is the
- * exception by nature, and only it reads a credential.
+ * The file commands run offline. Validating a file needs no account, and a
+ * check that reaches the network is a check that fails when the network does,
+ * which is not what anyone wants guarding a push. `deploy`, `upload`,
+ * `secrets`, `variables` and the login commands are the exceptions by nature,
+ * and only they read a credential.
  */
 
 import { readFileSync } from "node:fs";
@@ -14,8 +15,14 @@ import { parseArgs, UsageError, type ParsedArgs } from "./args";
 import { DEPLOY_HELP, DEPLOY_VALUE_FLAGS, runDeploy } from "./commands/deploy";
 import { FMT_HELP, runFmt } from "./commands/fmt";
 import { INIT_HELP, INIT_VALUE_FLAGS, runInit } from "./commands/init";
+import { LOGIN_HELP, runLogin } from "./commands/login";
+import { LOGOUT_HELP, runLogout } from "./commands/logout";
 import { runSchema, SCHEMA_HELP } from "./commands/schema";
+import { runSecrets, SECRETS_HELP, SECRETS_VALUE_FLAGS } from "./commands/secrets";
+import { runUpload, UPLOAD_HELP, UPLOAD_VALUE_FLAGS } from "./commands/upload";
 import { runValidate, VALIDATE_HELP } from "./commands/validate";
+import { runVariables, VARIABLES_HELP, VARIABLES_VALUE_FLAGS } from "./commands/variables";
+import { runWhoami, WHOAMI_HELP } from "./commands/whoami";
 
 const HELP = `cosmoner — tools for .cosmoner/deployment.yaml
 
@@ -28,10 +35,17 @@ Commands
   init       Write a starter deployment file.
   schema     Print the JSON Schema for the file.
   deploy     Deploy an image app and wait for it to go live.
+  upload     Upload a folder to a web hosting site over SFTP.
+  secrets    List, set and remove a project's secrets.
+  variables  List, set and remove a project's variables.
+  login      Sign in through the browser and save a key for a project.
+  logout     Revoke and forget the saved key.
+  whoami     Show which credential and project the CLI is using.
 
   cosmoner <command> --help for a command's options.
 
-Everything but deploy works offline: no account, no API key, no network.`;
+validate, fmt, init and schema work offline: no account, no API key, no
+network.`;
 
 /** Flags taking a separate value, per command, for the argument parser. */
 const VALUE_FLAGS: Record<string, readonly string[]> = {
@@ -40,6 +54,12 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   init: INIT_VALUE_FLAGS,
   schema: [],
   deploy: DEPLOY_VALUE_FLAGS,
+  upload: UPLOAD_VALUE_FLAGS,
+  secrets: SECRETS_VALUE_FLAGS,
+  variables: VARIABLES_VALUE_FLAGS,
+  login: [],
+  logout: [],
+  whoami: [],
 };
 
 const COMMAND_HELP: Record<string, string> = {
@@ -48,14 +68,20 @@ const COMMAND_HELP: Record<string, string> = {
   init: INIT_HELP,
   schema: SCHEMA_HELP,
   deploy: DEPLOY_HELP,
+  upload: UPLOAD_HELP,
+  secrets: SECRETS_HELP,
+  variables: VARIABLES_HELP,
+  login: LOGIN_HELP,
+  logout: LOGOUT_HELP,
+  whoami: WHOAMI_HELP,
 };
 
 /**
  * Runs one command line.
  *
  * Returns the exit code instead of calling `process.exit`, so the tests can run
- * the real thing rather than a rearrangement of it. Only `deploy` returns it as
- * a promise; the offline commands stay synchronous.
+ * the real thing rather than a rearrangement of it. Only the commands that reach
+ * the API return it as a promise; the offline commands stay synchronous.
  */
 export function run(
   argv: string[],
@@ -103,6 +129,18 @@ export function run(
         return runSchema(args);
       case "deploy":
         return runDeploy(args, env).catch((err: unknown) => reportUsage(err, command));
+      case "upload":
+        return runUpload(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
+      case "secrets":
+        return runSecrets(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
+      case "variables":
+        return runVariables(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
+      case "login":
+        return runLogin(args, env).catch((err: unknown) => reportUsage(err, command));
+      case "logout":
+        return runLogout(args, env).catch((err: unknown) => reportUsage(err, command));
+      case "whoami":
+        return runWhoami(args, env).catch((err: unknown) => reportUsage(err, command));
       default:
         return 2;
     }

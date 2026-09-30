@@ -61,6 +61,12 @@ class _BaseTransport:
 
     def _decode(self, response: httpx.Response) -> Any:
         """Parses a successful response body, or raises the mapped API error."""
+        # A 204 has no body by design, so there is nothing to parse. Falling
+        # through would hit the INVALID_RESPONSE check below, which exists to
+        # catch a truncated body on a status that promised one.
+        if response.status_code == 204:
+            return None
+
         try:
             body: Any = response.json()
         except ValueError:

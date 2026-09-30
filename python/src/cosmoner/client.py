@@ -11,6 +11,9 @@ from ._config import (
 from ._transport import AsyncTransport, Transport
 from .apps import AppsService, AsyncAppsService
 from .email import AsyncEmailService, EmailService
+from .hosting import AsyncHostingService, HostingService
+from .secrets import AsyncSecretsService, SecretsService
+from .variables import AsyncVariablesService, VariablesService
 from .webhooks import AsyncWebhooksService, WebhooksService
 
 
@@ -44,6 +47,9 @@ class Cosmoner:
 
         self.apps = AppsService(self._transport, config)
         self.email = EmailService(self._transport, config)
+        self.hosting = HostingService(self._transport, config)
+        self.secrets = SecretsService(self._transport, config)
+        self.variables = VariablesService(self._transport, config)
         self.webhooks = WebhooksService(self._transport, config)
 
     def close(self) -> None:
@@ -84,6 +90,9 @@ class AsyncCosmoner:
 
         self.apps = AsyncAppsService(self._transport, config)
         self.email = AsyncEmailService(self._transport, config)
+        self.hosting = AsyncHostingService(self._transport, config)
+        self.secrets = AsyncSecretsService(self._transport, config)
+        self.variables = AsyncVariablesService(self._transport, config)
         self.webhooks = AsyncWebhooksService(self._transport, config)
 
     async def aclose(self) -> None:

@@ -1,11 +1,15 @@
 # @cosmoner/cli
 
 Command line tools for `.cosmoner/deployment.yaml`, the file you commit to
-describe how a repository deploys on Cosmoner, and for deploying image apps.
+describe how a repository deploys on Cosmoner, for deploying image apps, and
+for uploading to web hosting sites.
 
-Everything except `cosmoner deploy` works offline. There is no account, no API
-key and no network call — a check that reaches the network is a check that
-fails when the network does, which is not what you want guarding a push.
+The file commands — `validate`, `fmt`, `init` and `schema` — work offline.
+There is no account, no API key and no network call: a check that reaches the
+network is a check that fails when the network does, which is not what you want
+guarding a push. `deploy`, `upload`, `secrets` and `variables` talk to the API
+by nature, and only they read a credential — from `cosmoner login` on your own
+machine, or `COSMONER_API_KEY` in CI.
 
 ```bash
 npx @cosmoner/cli validate
@@ -103,6 +107,39 @@ wants, and what `cosmoner fmt` writes into the file.
 cosmoner schema > .cosmoner/app.schema.json
 ```
 
+### `cosmoner login`
+
+Signs the CLI in through your browser. The terminal shows a code and opens
+`cosmoner.com/cli/<code>`, where you check the code matches, pick a project and
+approve. The CLI then saves an API key for that project to
+`~/.config/cosmoner/credentials.json`, readable only by you.
+
+```
+$ cosmoner login
+Your code is BCDF-GHJK
+
+Opened https://cosmoner.com/cli/BCDF-GHJK in your browser.
+Or go to https://cosmoner.com/cli and enter the code.
+
+Waiting for approval…
+
+Logged in to Acme, until 2026-12-21.
+```
+
+The key expires after 90 days and appears under the project's API keys, where
+it can be revoked. It carries the scopes `deploy`, `upload`, `secrets` and
+`variables` need, and those are listed on the approval page before anything is
+issued. `--no-browser` prints the link instead of opening it, for a machine
+reached over SSH.
+
+`COSMONER_API_KEY` always takes priority over a saved login, so CI keeps using
+the key it was given. There is deliberately no flag for passing a key: a flag
+ends up in shell history and CI logs.
+
+`cosmoner logout` revokes the saved key and deletes it. `cosmoner whoami` shows
+which credential and project the CLI is using, and checks that the key still
+works.
+
 ### `cosmoner deploy <app>`
 
 Deploys an image app — one that runs an image from a Cosmoner registry — and
@@ -124,14 +161,14 @@ again, which picks up a tag that was pushed over.
 | --- | --- |
 | `--tag <tag>` | Deploy this tag from the app's repository. A commit SHA pushed as a tag goes here. |
 | `--digest <digest>` | Deploy this exact image. The `sha256:` prefix may be left off. |
-| `--project <id>` | Defaults to `COSMONER_PROJECT_ID`. |
+| `--project <id>` | Defaults to `COSMONER_PROJECT_ID`, then the project you logged in to. |
 | `--no-wait` | Return once the deploy is accepted. |
 | `--timeout <seconds>` | How long to wait for the rollout. Defaults to 600. |
 | `--format text\|json` | `json` prints the app and the final deployment as one object. |
 
-Credentials come from the environment, never a flag, so a key cannot end up in
-a CI log: `COSMONER_API_KEY` (with `apps:read` and `apps:write`), and optionally
-`COSMONER_PROJECT_ID` and `COSMONER_API_URL`.
+Credentials come from `cosmoner login` or the environment, never a flag, so a
+key cannot end up in a CI log: `COSMONER_API_KEY` (with `apps:read` and
+`apps:write`), and optionally `COSMONER_PROJECT_ID` and `COSMONER_API_URL`.
 
 Exit codes: `0` the deploy went live (or was accepted, with `--no-wait`), `1` it
 failed, timed out or the API refused it, `2` the command itself was wrong. A
@@ -146,6 +183,125 @@ timeout stops the wait, not the deploy.
     COSMONER_API_KEY: ${{ secrets.COSMONER_API_KEY }}
     COSMONER_PROJECT_ID: ${{ vars.COSMONER_PROJECT_ID }}
 ```
+
+### `cosmoner upload <site> <dir>`
+
+Uploads the contents of `<dir>` to a web hosting site over SFTP. `<site>` is the
+site's name or id. The SFTP login is fetched with the API key, so a CI job
+needs no password of its own.
+
+```
+$ cosmoner upload my-site dist --delete
+Uploading dist to my-site:/my-site.cosmoner.com/public_html (42 files, 1.3 MB)
+✓ Uploaded 42 files (1.3 MB), removed 3 in 6s
+```
+
+Every file is uploaded and existing ones are overwritten; files already on the
+site but not in `<dir>` are left alone unless `--delete` is given. `.git`
+folders and symlinks are never uploaded. An empty `<dir>` is refused, since it
+is usually a build that produced nothing.
+
+| Option | |
+| --- | --- |
+| `--remote <path>` | Folder to upload into, as an SFTP client shows it. Defaults to the one the site's own hostname serves. |
+| `--delete` | Afterwards, remove what is under the target but not in `<dir>`. Refused when the target is `/`. |
+| `--dry-run` | Connect and list what would change, changing nothing. |
+| `--host-key <sha256>` | Refuse a server whose host key has another fingerprint. Defaults to `COSMONER_SFTP_HOST_KEY`. |
+| `--project <id>` | Defaults to `COSMONER_PROJECT_ID`, then the project you logged in to. |
+| `--format text\|json` | `json` prints the site, target and the files uploaded and removed. |
+
+The key needs `hosting:read`. Without a pinned host key the upload goes ahead
+and prints the fingerprint it saw; pin it, and a server presenting another key
+is refused before the password is sent. The gateway's key is:
+
+```
+SHA256:PfqYSl1pbMjfMKAbcmjzGZ0t1kpuCZ2mtymdyLu9HwA
+```
+
+Exit codes: `0` every file was uploaded, `1` the upload failed or the API
+refused it, `2` the command itself was wrong.
+
+#### In GitHub Actions
+
+```yaml
+- name: Upload site
+  run: npx @cosmoner/cli upload my-site dist --delete
+  env:
+    COSMONER_API_KEY: ${{ secrets.COSMONER_API_KEY }}
+    COSMONER_PROJECT_ID: ${{ vars.COSMONER_PROJECT_ID }}
+    COSMONER_SFTP_HOST_KEY: SHA256:PfqYSl1pbMjfMKAbcmjzGZ0t1kpuCZ2mtymdyLu9HwA
+```
+
+### `cosmoner secrets <list|set|rm>`
+
+Manages the values a deployment file refers to with `from_secret`. A secret's
+value is encrypted and returned only as it is set, so this command never prints
+one back — the value it would print is the value you just supplied, and putting
+it on stdout writes it into a CI log.
+
+```
+$ cosmoner secrets list
+NAME            ENVIRONMENT  VERSION  UPDATED
+DB_PASSWORD     production   2        2026-09-02
+STRIPE_KEY      production   1        2026-08-30
+
+$ cosmoner secrets set DB_PASSWORD --environment production < password.txt
+✓ Set DB_PASSWORD to hu••••r3 in production, version 2
+```
+
+`set` stores a new secret, or replaces the value of one that already exists in
+the same environment. `rm` takes the same name.
+
+| Option | |
+| --- | --- |
+| `--environment <env>` | `default` (the default), `development`, `staging` or `production`. `set` and `rm` address one name in one environment; a bare `list` shows them all. |
+| `--value <value>` | The value to store, taken literally. |
+| `--from-file <path>` | Read the value from a file. One trailing newline is stripped. |
+| `--description <text>` | Set alongside the value. |
+| `--project <id>` | Project to work in. Defaults to `COSMONER_PROJECT_ID`. |
+| `--format text\|json` | `json` never includes a value. |
+
+The value comes from `--value`, `--from-file`, or whatever is piped in, in that
+order. **Piping is safest**: a value passed as `--value` is recoverable from
+shell history and may be echoed by a CI runner. Stdin is the last resort rather
+than a competing source, because a CI runner often hands a command a
+non-terminal stdin with nothing behind it.
+
+Two API behaviours will otherwise look like bugs:
+
+- **Writing needs the key's owner to be an owner or admin** of the project. The
+  scope alone is not enough, so a member's key with `secrets:write` still gets
+  a 403.
+- **Creating is rate-limited** to 10 secrets per 10 minutes, so a loop that
+  imports many of them will meet a 429.
+
+Exit codes: `0` the change was made, `1` the API refused it or the name was not
+found, `2` the command itself was wrong.
+
+#### In GitHub Actions
+
+```yaml
+- name: Publish the build's database password
+  run: echo "$DB_PASSWORD" | npx @cosmoner/cli secrets set DB_PASSWORD --environment production
+  env:
+    COSMONER_API_KEY: ${{ secrets.COSMONER_API_KEY }}
+    COSMONER_PROJECT_ID: ${{ vars.COSMONER_PROJECT_ID }}
+    DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+```
+
+### `cosmoner variables <list|set|rm>`
+
+The plaintext sibling of `cosmoner secrets`, for the non-sensitive values a
+deployment file refers to with `from_variable`. Same subcommands and same
+options; the difference is that a variable's value is returned on every read,
+so `list` prints it.
+
+```
+$ cosmoner variables set LOG_LEVEL --value debug --environment development
+✓ Created LOG_LEVEL=debug in development
+```
+
+Anything worth hiding belongs in `cosmoner secrets` instead.
 
 ## Same answer as the SDKs
 
@@ -183,7 +339,8 @@ The first line is not optional for `npm run typecheck`: tsc follows
 `../javascript/src` and that source imports `yaml`, which module resolution
 looks for beside the importing file rather than in `cli/node_modules`. Lint,
 build and test do not need it — tsup treats `yaml` as external because the CLI
-depends on it as well.
+depends on it as well. `ssh2` is bundled but its two optional native addons
+are left out, see `tsup.config.ts`.
 
 `npm test` builds first, because two things only exist after a build: the JSON
 Schema copied next to the bundle, and the shebang that makes it runnable. Both

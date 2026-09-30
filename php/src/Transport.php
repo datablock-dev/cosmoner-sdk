@@ -124,6 +124,13 @@ final class Transport
      */
     private function decode(HttpResponse $response): array
     {
+        // A 204 has no body by design, so there is nothing to parse. Falling
+        // through would hit the INVALID_RESPONSE check below, which exists to
+        // catch a truncated body on a status that promised one.
+        if ($response->status === 204) {
+            return [];
+        }
+
         $body = json_decode($response->body, true);
         if (!is_array($body)) {
             $body = null;
