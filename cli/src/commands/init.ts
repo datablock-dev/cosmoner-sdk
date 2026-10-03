@@ -3,11 +3,20 @@
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { APP_SCHEMA_URL, validateDeployment } from "@cosmoner/sdk";
 
 import { rejectUnknownFlags, UsageError, type ParsedArgs } from "../args";
+import {
+  AGENTS_FILE,
+  agentsSection,
+  MarkerError,
+  planAgentsFile,
+  repositoryPath,
+  writeAgentsPlan,
+  type AgentsPlan,
+} from "./agents";
 
 export const INIT_HELP = `cosmoner init [file]
 
@@ -20,9 +29,18 @@ Options
                    Defaults to web.
   --type <type>    service (default) for a long-lived process, or static for a
                    site built once and served as files.
-  --force          Overwrite an existing file.`;
+  --agents         Also write a "Deploying to Cosmoner" section into AGENTS.md
+                   in the current directory, for coding agents. See
+                   cosmoner agents --help; on a project that already has a
+                   deployment file, run cosmoner agents instead.
+  --force          Overwrite an existing deployment file. AGENTS.md is never
+                   overwritten: only the Cosmoner section in it is replaced.
 
-const FLAGS = ["name", "type", "force", "help"];
+Nothing is written unless everything can be: an existing deployment file
+without --force, or an AGENTS.md whose markers do not match up, leaves both
+files as they were.`;
+
+const FLAGS = ["name", "type", "force", "agents", "help"];
 
 /** Flags that take a value, for the argument parser. */
 export const INIT_VALUE_FLAGS = ["name", "type"];
@@ -42,8 +60,15 @@ export function runInit(args: ParsedArgs, cwd: string): number {
   if (type !== "service" && type !== "static") {
     throw new UsageError("--type must be one of: service, static");
   }
+  const agents = args.flags.get("agents") === true;
+
   if (existsSync(path) && args.flags.get("force") !== true) {
-    throw new UsageError(`${path} already exists. Pass --force to overwrite it.`);
+    // --agents does not quietly skip the existing file instead: init either
+    // writes everything it was asked to or nothing, whatever the flags.
+    throw new UsageError(
+      `${path} already exists. Pass --force to overwrite it` +
+        (agents ? `, or run \`cosmoner agents\` to write only ${AGENTS_FILE}.` : ".")
+    );
   }
 
   const contents = template(name, type);
@@ -58,11 +83,30 @@ export function runInit(args: ParsedArgs, cwd: string): number {
     );
   }
 
+  // Planned before anything is written, so AGENTS.md markers that cannot be
+  // matched up stop the command before it has half done its job.
+  let agentsPlan: AgentsPlan | undefined;
+  if (agents) {
+    try {
+      agentsPlan = planAgentsFile(
+        join(cwd, AGENTS_FILE),
+        agentsSection({ deploymentFile: repositoryPath(resolve(cwd, path), cwd), exists: true })
+      );
+    } catch (err) {
+      if (err instanceof MarkerError) {
+        console.error(err.message);
+        return 1;
+      }
+      throw err;
+    }
+  }
+
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, contents, "utf8");
 
   console.log(`Wrote ${path}`);
   console.log("Check it with `cosmoner validate`.");
+  if (agentsPlan) writeAgentsPlan(agentsPlan, cwd);
   return 0;
 }
 
