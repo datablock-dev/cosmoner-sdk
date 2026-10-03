@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { parseArgs, UsageError, type ParsedArgs } from "./args";
+import { AGENTS_HELP, runAgents } from "./commands/agents";
 import { DEPLOY_HELP, DEPLOY_VALUE_FLAGS, runDeploy } from "./commands/deploy";
 import { FMT_HELP, runFmt } from "./commands/fmt";
 import { INIT_HELP, INIT_VALUE_FLAGS, runInit } from "./commands/init";
@@ -34,6 +35,7 @@ Commands
   fmt        Rewrite a deployment file in canonical form.
   init       Write a starter deployment file.
   schema     Print the JSON Schema for the file.
+  agents     Write deploy instructions for coding agents into AGENTS.md.
   deploy     Deploy an image app and wait for it to go live.
   upload     Upload a folder to a web hosting site over SFTP.
   secrets    List, set and remove a project's secrets.
@@ -44,8 +46,8 @@ Commands
 
   cosmoner <command> --help for a command's options.
 
-validate, fmt, init and schema work offline: no account, no API key, no
-network.`;
+validate, fmt, init, schema and agents work offline: no account, no API key,
+no network.`;
 
 /** Flags taking a separate value, per command, for the argument parser. */
 const VALUE_FLAGS: Record<string, readonly string[]> = {
@@ -53,6 +55,7 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   fmt: [],
   init: INIT_VALUE_FLAGS,
   schema: [],
+  agents: [],
   deploy: DEPLOY_VALUE_FLAGS,
   upload: UPLOAD_VALUE_FLAGS,
   secrets: SECRETS_VALUE_FLAGS,
@@ -62,11 +65,16 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   whoami: [],
 };
 
-const COMMAND_HELP: Record<string, string> = {
+/**
+ * Every command and its help text. Exported so the tests can hold the AGENTS.md
+ * section to the commands and flags that actually exist.
+ */
+export const COMMAND_HELP: Record<string, string> = {
   validate: VALIDATE_HELP,
   fmt: FMT_HELP,
   init: INIT_HELP,
   schema: SCHEMA_HELP,
+  agents: AGENTS_HELP,
   deploy: DEPLOY_HELP,
   upload: UPLOAD_HELP,
   secrets: SECRETS_HELP,
@@ -127,6 +135,8 @@ export function run(
         return runInit(args, cwd);
       case "schema":
         return runSchema(args);
+      case "agents":
+        return runAgents(args, cwd);
       case "deploy":
         return runDeploy(args, env).catch((err: unknown) => reportUsage(err, command));
       case "upload":

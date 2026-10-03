@@ -254,6 +254,25 @@ describe("secrets set", () => {
     expect(result.stderr).toContain("Secret limit reached (PAYMENT_REQUIRED)");
   });
 
+  it("links the API's docs page for an error that has one", async () => {
+    const docsUrl = "https://cosmoner.com/docs#validation_error";
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: false,
+          error: { code: "VALIDATION_ERROR", message: "Invalid environment", docsUrl },
+        }),
+        { status: 422, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const result = await secrets(["set", "DB_PASSWORD", "--value", "hunter2"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toBe(`Invalid environment (VALIDATION_ERROR)\nSee ${docsUrl}`);
+    expect(result.stderr).not.toContain("hunter2");
+  });
+
   it("surfaces a member's missing admin role", async () => {
     fetchSpy
       .mockResolvedValueOnce(ok([]))

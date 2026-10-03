@@ -14,6 +14,7 @@ import {
   type DeployAppParams,
 } from "@cosmoner/sdk";
 
+import { describeApiError } from "../api-error";
 import { readChoice, readValue, rejectUnknownFlags, UsageError, type ParsedArgs } from "../args";
 import { makeClient } from "../credentials";
 
@@ -116,7 +117,7 @@ export async function runDeploy(args: ParsedArgs, env: NodeJS.ProcessEnv): Promi
     console.error(explainFailure(app, finished));
     return 1;
   } catch (err) {
-    console.error(err instanceof CosmonerError ? `${err.message} (${err.code})` : messageOf(err));
+    console.error(err instanceof CosmonerError ? describeApiError(err) : messageOf(err));
     return 1;
   }
 }

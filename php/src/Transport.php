@@ -165,15 +165,23 @@ final class Transport
         $code = is_string($error['code'] ?? null) ? $error['code'] : 'UNKNOWN';
         $message = is_string($error['message'] ?? null) ? $error['message'] : 'Unknown error';
         $details = $error['details'] ?? null;
+        $docsUrl = is_string($error['docsUrl'] ?? null) ? $error['docsUrl'] : null;
         $requestId = $response->headers['x-request-id'] ?? null;
         $status = $response->status;
 
         return match (true) {
-            $status === 400, $status === 422 => new ValidationError($status, $code, $message, $details, $requestId),
-            $status === 401 => new AuthenticationError($status, $code, $message, $details, $requestId),
-            $status === 403 => new InsufficientScopeError($status, $code, $message, $details, $requestId),
-            $status === 404 => new NotFoundError($status, $code, $message, $details, $requestId),
-            $status === 409 => new ConflictError($status, $code, $message, $details, $requestId),
+            $status === 400, $status === 422 => new ValidationError(
+                $status,
+                $code,
+                $message,
+                $details,
+                $requestId,
+                $docsUrl,
+            ),
+            $status === 401 => new AuthenticationError($status, $code, $message, $details, $requestId, $docsUrl),
+            $status === 403 => new InsufficientScopeError($status, $code, $message, $details, $requestId, $docsUrl),
+            $status === 404 => new NotFoundError($status, $code, $message, $details, $requestId, $docsUrl),
+            $status === 409 => new ConflictError($status, $code, $message, $details, $requestId, $docsUrl),
             $status === 429 => new RateLimitError(
                 $status,
                 $code,
@@ -181,9 +189,10 @@ final class Transport
                 $details,
                 $requestId,
                 Retry::parseRetryAfter($response->headers),
+                $docsUrl,
             ),
-            $status >= 500 => new ServerError($status, $code, $message, $details, $requestId),
-            default => new CosmonerError($status, $code, $message, $details, $requestId),
+            $status >= 500 => new ServerError($status, $code, $message, $details, $requestId, $docsUrl),
+            default => new CosmonerError($status, $code, $message, $details, $requestId, $docsUrl),
         };
     }
 }

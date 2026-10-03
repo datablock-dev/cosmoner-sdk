@@ -323,6 +323,32 @@ describe("upload", () => {
     expect(result.stderr).toContain('No hosting site named "other"');
   });
 
+  it("links the API's docs page when the key cannot read hosting", async () => {
+    local({ "index.html": "hi" });
+    const docsUrl = "https://cosmoner.com/docs#insufficient_scope";
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: "INSUFFICIENT_SCOPE",
+            message: "API key does not have hosting:read permission",
+            docsUrl,
+          },
+        }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const result = await upload(["my-site", "dist", "--format", "json"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toBe(
+      `API key does not have hosting:read permission (INSUFFICIENT_SCOPE)\nSee ${docsUrl}`
+    );
+  });
+
   it("exits 1 on a host key mismatch, saying what to do", async () => {
     local({ "index.html": "hi" });
     mockSite();
