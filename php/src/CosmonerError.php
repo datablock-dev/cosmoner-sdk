@@ -14,12 +14,18 @@ use RuntimeException;
  */
 class CosmonerError extends RuntimeException
 {
+    /**
+     * @param ?string $docsUrl Page explaining how to fix the error. The API links
+     *                         one only for errors the caller can fix, and older
+     *                         API versions never do, so it is often null.
+     */
     public function __construct(
         public readonly int $status,
         public readonly string $errorCode,
         string $message,
         public readonly mixed $details = null,
         public readonly ?string $requestId = null,
+        public readonly ?string $docsUrl = null,
     ) {
         parent::__construct($message, $status);
     }

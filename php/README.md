@@ -296,6 +296,7 @@ try {
     echo $e->errorCode;    // e.g. "INSUFFICIENT_SCOPE"
     echo $e->status;       // e.g. 403
     print_r($e->details);  // field-level validation errors, when present
+    echo $e->docsUrl;      // page explaining the fix, when the API links one
     echo $e->getMessage(); // Human-readable message
 }
 ```

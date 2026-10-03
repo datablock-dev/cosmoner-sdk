@@ -263,6 +263,7 @@ try {
     console.error(err.code);    // e.g. "INSUFFICIENT_SCOPE"
     console.error(err.status);  // e.g. 403
     console.error(err.details); // field-level validation errors, when present
+    console.error(err.docsUrl); // page explaining the fix, when the API links one
     console.error(err.message); // Human-readable message
   }
 }

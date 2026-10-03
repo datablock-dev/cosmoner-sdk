@@ -21,14 +21,20 @@ class CosmonerError(Exception):
         *,
         details: Any = None,
         request_id: str | None = None,
+        docs_url: str | None = None,
     ) -> None:
-        """Records the status, machine-readable code and message of a failed request."""
+        """Records the status, machine-readable code and message of a failed request.
+
+        ``docs_url`` links a page explaining how to fix the error. The API sends
+        one only for errors the caller can fix, and older versions never do.
+        """
         super().__init__(message)
         self.status = status
         self.code = code
         self.message = message
         self.details = details
         self.request_id = request_id
+        self.docs_url = docs_url
 
 
 class CosmonerConnectionError(CosmonerError):
@@ -78,10 +84,18 @@ class RateLimitError(CosmonerError):
         *,
         details: Any = None,
         request_id: str | None = None,
+        docs_url: str | None = None,
         retry_after: float | None = None,
     ) -> None:
         """Adds the parsed ``Retry-After`` delay, in seconds, when the API sends one."""
-        super().__init__(status, code, message, details=details, request_id=request_id)
+        super().__init__(
+            status,
+            code,
+            message,
+            details=details,
+            request_id=request_id,
+            docs_url=docs_url,
+        )
         self.retry_after = retry_after
 
 
@@ -121,7 +135,8 @@ def error_from_response(
 ) -> CosmonerError:
     """Maps an error response onto the most specific exception class available.
 
-    The API envelope is ``{"success": false, "error": {"code", "message", "details"?}}``
+    The API envelope is
+    ``{"success": false, "error": {"code", "message", "details"?, "docsUrl"?}}``
     but proxies and load balancers can return HTML or an empty body, so every
     field is read defensively.
     """
@@ -134,6 +149,8 @@ def error_from_response(
     code = error.get("code") or "UNKNOWN"
     message = error.get("message") or "Unknown error"
     details = error.get("details")
+    raw_docs_url = error.get("docsUrl")
+    docs_url = raw_docs_url if isinstance(raw_docs_url, str) else None
     request_id = (headers or {}).get("x-request-id")
 
     if status == 429:
@@ -143,8 +160,11 @@ def error_from_response(
             message,
             details=details,
             request_id=request_id,
+            docs_url=docs_url,
             retry_after=retry_after,
         )
 
     cls = _STATUS_MAP.get(status) or (ServerError if status >= 500 else CosmonerError)
-    return cls(status, code, message, details=details, request_id=request_id)
+    return cls(
+        status, code, message, details=details, request_id=request_id, docs_url=docs_url
+    )

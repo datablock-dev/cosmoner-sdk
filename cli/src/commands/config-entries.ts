@@ -11,6 +11,7 @@ import { resolve } from "node:path";
 
 import { CosmonerError, type ProjectEnvironment } from "@cosmoner/sdk";
 
+import { describeApiError } from "../api-error";
 import { readValue, UsageError, type ParsedArgs } from "../args";
 import { readStdin, stdinIsTty } from "../stdin";
 
@@ -132,8 +133,8 @@ export function day(timestamp: string): string {
   return timestamp.slice(0, 10);
 }
 
-/** Turns a failure into the one line a terminal should see. */
+/** Turns a failure into what a terminal should see: one line, or two with a docs link. */
 export function explain(err: unknown): string {
-  if (err instanceof CosmonerError) return `${err.message} (${err.code})`;
+  if (err instanceof CosmonerError) return describeApiError(err);
   return err instanceof Error ? err.message : String(err);
 }
