@@ -58,8 +58,8 @@ Environment
   COSMONER_API_URL     API base URL. Defaults to https://api.cosmoner.com.
 
 Writing also needs the key's owner to be an owner or admin of the project; the
-scope alone is not enough. Creating is rate-limited to 10 secrets per 10
-minutes.
+scope alone is not enough. Creating is rate-limited to 100 secrets per project
+every 10 minutes.
 
 Exit code is 0 when the change was made, 1 when the API refused it, and 2 when
 the command itself was wrong.`;

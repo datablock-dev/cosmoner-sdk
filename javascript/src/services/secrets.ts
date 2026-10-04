@@ -167,9 +167,9 @@ export class SecretsService {
   /**
    * Stores a new secret, and returns its plaintext value once.
    *
-   * Creation is rate-limited to 10 requests per 10 minutes, so a loop that
-   * imports many secrets will meet a `RateLimitError`. A project at its limit
-   * answers 402 — see `usage()`.
+   * Creation is rate-limited to 100 per project every 10 minutes, shared by
+   * every key and machine working on the project; past it, a `RateLimitError`.
+   * A project at its secret limit answers 402 — see `usage()`.
    */
   async create(params: CreateSecretParams): Promise<SetSecretResponse> {
     requireEntryName(params.name);
