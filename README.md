@@ -10,6 +10,12 @@ command line tool.
 | PHP        | `cosmoner/sdk`  | `composer require cosmoner/sdk` |
 | CLI        | `@cosmoner/cli` | `npx @cosmoner/cli`             |
 
+The Terraform provider lives in its own repository,
+[`datablock-dev/terraform-provider-cosmoner`](https://github.com/datablock-dev/terraform-provider-cosmoner),
+because the Terraform Registry only publishes providers from a repository with
+that name. It uses the same API keys and `COSMONER_*` environment variables as
+the CLI.
+
 ## Usage
 
 Each SDK provides a `Cosmoner` client with service namespaces. Currently supports
