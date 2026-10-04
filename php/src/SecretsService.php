@@ -75,8 +75,9 @@ class SecretsService
      * The response carries `value` and `maskedValue`; a later read gives
      * metadata only, so store the value now rather than expect to recover it.
      *
-     * Creation is rate-limited to 10 requests per 10 minutes, and a project at
-     * its secret limit answers 402 — see `usage()`.
+     * Creation is rate-limited to 100 per project every 10 minutes, shared by
+     * every key and machine working on the project, and a project at its
+     * secret limit answers 402 — see `usage()`.
      *
      * @return array{success: true, data: array<string, mixed>}
      *

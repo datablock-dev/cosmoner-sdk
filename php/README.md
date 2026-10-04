@@ -207,8 +207,9 @@ Two API behaviours are worth knowing before you debug them:
 - **Writes need an owner or admin.** The API checks the member's role
   independently of the key's scopes, so a plain member's key is refused with a
   403 even when it carries `secrets:write`.
-- **Creating is rate-limited** to 10 requests per 10 minutes, and a project at
-  its secret limit answers 402.
+- **Creating is rate-limited** to 100 per project every 10 minutes, shared by
+  every key and machine working on the project, and a project at its secret
+  limit answers 402.
 
 ## Variables
 

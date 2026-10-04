@@ -298,8 +298,9 @@ Two API behaviours will otherwise look like bugs:
 - **Writing needs the key's owner to be an owner or admin** of the project. The
   scope alone is not enough, so a member's key with `secrets:write` still gets
   a 403.
-- **Creating is rate-limited** to 10 secrets per 10 minutes, so a loop that
-  imports many of them will meet a 429.
+- **Creating is rate-limited** to 100 secrets per project every 10 minutes,
+  shared by every key and machine working on the project. Past that, creating
+  meets a 429 until the window resets.
 
 Exit codes: `0` the change was made, `1` the API refused it or the name was not
 found, `2` the command itself was wrong.
