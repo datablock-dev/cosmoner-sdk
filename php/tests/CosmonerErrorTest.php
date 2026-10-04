@@ -31,4 +31,19 @@ class CosmonerErrorTest extends TestCase
 
         $this->assertSame(503, $err->getCode());
     }
+
+    public function testDocsUrlDefaultsToNull(): void
+    {
+        $err = new CosmonerError(500, 'INTERNAL', 'fail');
+
+        $this->assertNull($err->docsUrl);
+    }
+
+    public function testStoresDocsUrl(): void
+    {
+        $url = 'https://cosmoner.com/docs#validation_error';
+        $err = new CosmonerError(422, 'VALIDATION_ERROR', 'Invalid input', null, null, $url);
+
+        $this->assertSame($url, $err->docsUrl);
+    }
 }

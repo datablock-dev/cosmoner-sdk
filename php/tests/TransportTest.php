@@ -20,6 +20,8 @@ use PHPUnit\Framework\TestCase;
 
 class TransportTest extends TestCase
 {
+    private const DOCS_URL = 'https://cosmoner.com/docs#insufficient_scope';
+
     private FakeHttpClient $http;
 
     protected function setUp(): void
@@ -208,6 +210,53 @@ class TransportTest extends TestCase
         }
     }
 
+    public function testSurfacesTheDocsUrl(): void
+    {
+        $this->http->queueJson(403, self::scopeEnvelope(['docsUrl' => self::DOCS_URL]));
+
+        $err = $this->catchError();
+
+        $this->assertInstanceOf(InsufficientScopeError::class, $err);
+        $this->assertSame(self::DOCS_URL, $err->docsUrl);
+        $this->assertSame('API key does not have apps:write permission', $err->getMessage());
+    }
+
+    public function testDocsUrlIsNullWhenAbsent(): void
+    {
+        $this->http->queueJson(403, self::scopeEnvelope());
+
+        $this->assertNull($this->catchError()->docsUrl);
+    }
+
+    #[DataProvider('nonStringDocsUrlProvider')]
+    public function testIgnoresANonStringDocsUrl(mixed $value): void
+    {
+        $this->http->queueJson(403, self::scopeEnvelope(['docsUrl' => $value]));
+
+        $this->assertNull($this->catchError()->docsUrl);
+    }
+
+    /** @return list<array{mixed}> */
+    public static function nonStringDocsUrlProvider(): array
+    {
+        return [[42], [null], [['href' => self::DOCS_URL]], [true]];
+    }
+
+    public function testCarriesTheDocsUrlOntoARateLimitError(): void
+    {
+        $this->http->queueJson(
+            429,
+            self::scopeEnvelope(['code' => 'RATE_LIMITED', 'docsUrl' => self::DOCS_URL]),
+            ['retry-after' => '7'],
+        );
+
+        $err = $this->catchError();
+
+        $this->assertInstanceOf(RateLimitError::class, $err);
+        $this->assertSame(self::DOCS_URL, $err->docsUrl);
+        $this->assertSame(7.0, $err->retryAfter);
+    }
+
     /** @param class-string<\Throwable> $expected */
     #[DataProvider('statusProvider')]
     public function testMapsStatusToErrorClass(int $status, string $expected): void
@@ -233,5 +282,36 @@ class TransportTest extends TestCase
             [500, ServerError::class],
             [503, ServerError::class],
         ];
+    }
+
+    /**
+     * An error envelope as the API sends it, with `$extra` merged into `error`.
+     *
+     * @param array<string, mixed> $extra
+     *
+     * @return array<string, mixed>
+     */
+    private static function scopeEnvelope(array $extra = []): array
+    {
+        return [
+            'success' => false,
+            'error' => [
+                'code' => 'INSUFFICIENT_SCOPE',
+                'message' => 'API key does not have apps:write permission',
+                ...$extra,
+            ],
+        ];
+    }
+
+    /** Sends a request that is expected to fail and returns what it threw. */
+    private function catchError(): CosmonerError
+    {
+        try {
+            $this->send($this->client());
+        } catch (CosmonerError $err) {
+            return $err;
+        }
+
+        $this->fail('Should have thrown');
     }
 }

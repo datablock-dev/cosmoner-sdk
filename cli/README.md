@@ -4,10 +4,10 @@ Command line tools for `.cosmoner/deployment.yaml`, the file you commit to
 describe how a repository deploys on Cosmoner, for deploying image apps, and
 for uploading to web hosting sites.
 
-The file commands — `validate`, `fmt`, `init` and `schema` — work offline.
-There is no account, no API key and no network call: a check that reaches the
-network is a check that fails when the network does, which is not what you want
-guarding a push. `deploy`, `upload`, `secrets` and `variables` talk to the API
+The file commands — `validate`, `fmt`, `init`, `schema` and `agents` — work
+offline. There is no account, no API key and no network call: a check that
+reaches the network is a check that fails when the network does, which is not
+what you want guarding a push. `deploy`, `upload`, `secrets` and `variables` talk to the API
 by nature, and only they read a credential — from `cosmoner login` on your own
 machine, or `COSMONER_API_KEY` in CI.
 
@@ -95,7 +95,33 @@ comments covering the fields you are most likely to set.
 | --- | --- |
 | `--name <name>` | Service name. Defaults to `web`. |
 | `--type service\|static` | Defaults to `service`. |
-| `--force` | Overwrite an existing file. |
+| `--agents` | Also write the Cosmoner section into `AGENTS.md`, as `cosmoner agents` does. |
+| `--force` | Overwrite an existing deployment file. `AGENTS.md` is never overwritten, only the section in it. |
+
+`init` writes everything it was asked to or nothing: an existing deployment
+file without `--force` is refused before `AGENTS.md` is touched. On a project
+that already has a deployment file, run `cosmoner agents` instead.
+
+### `cosmoner agents [file]`
+
+Writes a short "Deploying to Cosmoner" section into `AGENTS.md`, the file
+coding agents such as Codex and Cursor read for a repository's instructions, so
+an agent working in the repository validates the deployment file, deploys and
+handles secrets the way this CLI expects instead of guessing. It names the
+deployment file the platform would read, the `validate`, `fmt`, `deploy` and
+`upload` invocations with `--format json`, the exit codes, where credentials
+come from, that secrets are write-only, and where the docs, `llms.txt` and the
+docs MCP server are.
+
+The section sits between `<!-- cosmoner:start -->` and `<!-- cosmoner:end -->`.
+Running the command again replaces only what is between the markers, so it is
+safe to re-run after upgrading the CLI; the rest of the file is never touched.
+A file without the markers gets the section appended, and a missing file is
+created. Markers that do not pair up are refused with exit code `1` and the
+file is left as it was.
+
+Claude Code reads `CLAUDE.md` rather than `AGENTS.md`: add a line `@AGENTS.md`
+to `CLAUDE.md` to import it, or pass `CLAUDE.md` as the file.
 
 ### `cosmoner schema`
 

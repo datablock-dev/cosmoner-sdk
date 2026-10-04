@@ -11,6 +11,7 @@ import { join, resolve } from "node:path";
 
 import { CosmonerError, type Cosmoner, type HostingSite } from "@cosmoner/sdk";
 
+import { describeApiError } from "../api-error";
 import { readChoice, readValue, rejectUnknownFlags, UsageError, type ParsedArgs } from "../args";
 import { makeClient } from "../credentials";
 import { connectSftp, HostKeyMismatchError, type RemoteFs, type SftpTarget } from "../sftp";
@@ -302,7 +303,7 @@ function formatBytes(bytes: number): string {
 
 /** A readable message from anything thrown. */
 function explain(err: unknown): string {
-  if (err instanceof CosmonerError) return `${err.message} (${err.code})`;
+  if (err instanceof CosmonerError) return describeApiError(err);
   if (err instanceof HostKeyMismatchError) {
     return `${err.message}. If the gateway's key was rotated, update COSMONER_SFTP_HOST_KEY; otherwise do not upload.`;
   }

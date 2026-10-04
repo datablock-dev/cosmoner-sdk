@@ -287,6 +287,7 @@ except CosmonerError as e:
     print(e.code)     # e.g. "INSUFFICIENT_SCOPE"
     print(e.status)   # e.g. 403
     print(e.details)  # field-level validation errors, when present
+    print(e.docs_url) # page explaining the fix, when the API links one
     print(str(e))     # Human-readable message
 ```
 

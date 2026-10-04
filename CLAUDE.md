@@ -11,6 +11,12 @@ step with each other.
 drift, and the drift is invisible until someone switches languages. The same
 goes for a new method on an existing namespace.
 
+The Terraform provider is the one client outside this repo, in
+`datablock-dev/terraform-provider-cosmoner`. It is not bound by the rule above —
+it manages resources, not endpoints — but a change to an API it already wraps
+(a secret, variable, webhook endpoint, SSH key or resource group) may need a
+matching change there.
+
 Only wrap endpoints that carry an API-key scope. An endpoint with no scope is
 dashboard-only and stays out of the SDKs; `API_KEY_RESOURCES` in the platform
 repo is the list.

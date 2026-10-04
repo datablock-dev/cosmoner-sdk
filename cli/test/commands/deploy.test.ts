@@ -185,7 +185,47 @@ describe("deploy", () => {
     const result = await deploy(["web"]);
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain("Invalid API key (INVALID_API_KEY)");
+    expect(result.stderr).toBe("Invalid API key (INVALID_API_KEY)");
+  });
+
+  describe("an API error with a docs link", () => {
+    const DOCS_URL = "https://cosmoner.com/docs#insufficient_scope";
+
+    /** A 403 for a key without apps:write, linking the page that explains it. */
+    function insufficientScope(): Response {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: "INSUFFICIENT_SCOPE",
+            message: "API key does not have apps:write permission",
+            docsUrl: DOCS_URL,
+          },
+        }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    it("prints the link on its own line after the message", async () => {
+      fetchSpy.mockResolvedValueOnce(ok([IMAGE_APP])).mockResolvedValueOnce(insufficientScope());
+
+      const result = await deploy(["web"]);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toBe(
+        `API key does not have apps:write permission (INSUFFICIENT_SCOPE)\nSee ${DOCS_URL}`
+      );
+    });
+
+    it("prints the link with --format json too, keeping stdout free of it", async () => {
+      fetchSpy.mockResolvedValueOnce(ok([IMAGE_APP])).mockResolvedValueOnce(insufficientScope());
+
+      const result = await deploy(["web", "--format", "json"]);
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain(`See ${DOCS_URL}`);
+    });
   });
 
   describe("usage", () => {

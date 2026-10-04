@@ -4,6 +4,8 @@
 export interface CosmonerErrorOptions {
   details?: unknown;
   requestId?: string;
+  /** Page explaining how to fix the error, when the API links one. */
+  docsUrl?: string;
 }
 
 /**
@@ -18,6 +20,12 @@ export class CosmonerError extends Error {
   public readonly status: number;
   public readonly details?: unknown;
   public readonly requestId?: string;
+  /**
+   * Page explaining how to fix the error. The API links one only for errors
+   * the caller can fix (a missing scope, a rate limit, a failed validation),
+   * and older API versions never do, so it is often undefined.
+   */
+  public readonly docsUrl?: string;
 
   constructor(
     status: number,
@@ -31,6 +39,7 @@ export class CosmonerError extends Error {
     this.status = status;
     this.details = options.details;
     this.requestId = options.requestId;
+    this.docsUrl = options.docsUrl;
   }
 }
 
@@ -131,7 +140,7 @@ export class WebhookSignatureError extends CosmonerError {
 /** Shape of the API's error envelope. */
 interface ErrorEnvelope {
   success?: false;
-  error?: { code?: string; message?: string; details?: unknown };
+  error?: { code?: string; message?: string; details?: unknown; docsUrl?: unknown };
 }
 
 /**
@@ -152,6 +161,7 @@ export function errorFromResponse(
   const options: CosmonerErrorOptions = {
     details: envelope.error?.details,
     requestId: headers?.get("x-request-id") ?? undefined,
+    docsUrl: typeof envelope.error?.docsUrl === "string" ? envelope.error.docsUrl : undefined,
   };
 
   switch (status) {
