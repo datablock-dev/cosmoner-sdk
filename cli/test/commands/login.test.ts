@@ -152,7 +152,7 @@ afterEach(() => {
 });
 
 describe("cosmoner login", () => {
-  it("asks for a session with the CLI's scopes and saves it privately", async () => {
+  it("asks for a session, with no scopes, and saves it privately", async () => {
     fetchSpy
       .mockResolvedValueOnce(ok(STARTED, 201))
       .mockResolvedValueOnce(ok({ status: "pending" }, 202))
@@ -169,7 +169,7 @@ describe("cosmoner login", () => {
     const [startUrl, startInit] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(startUrl).toBe(`${BASE}/v1/cli/login`);
     const startBody = JSON.parse(startInit.body as string);
-    expect(startBody.permissions).toMatchObject({ apps: ["read", "write"] });
+    expect(startBody).not.toHaveProperty("permissions");
     expect(startBody.credential).toBe("cli_session");
 
     expect(saved().version).toBe(2);

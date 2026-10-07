@@ -23,10 +23,9 @@ page where you check the code and approve. The CLI is then signed in to your
 account and reaches every project you are a member of. Pick one per command
 with --project, or set a default with cosmoner use <project>.
 
-The login can deploy apps, upload to web hosting, and manage secrets and
-variables, in every project, and never beyond your role in each one. It stays
-signed in while you use it, and ends after 7 days unused or 30 days after
-approval. Each machine is listed under Account → Security, where you can sign
+The login acts as you: it can do what your role allows in each project.
+Members, API keys and billing stay in the control panel. It stays signed in
+while you use it, and ends after 7 days unused or 30 days after approval. Each machine is listed under Account → Security, where you can sign
 it out.
 
 Options
@@ -40,20 +39,6 @@ COSMONER_API_KEY, when set, is used instead of the saved login, so CI keeps
 using the key it was given.`;
 
 const FLAGS = ["no-browser", "help"];
-
-/**
- * The scopes a login asks for: what `deploy`, `upload`, `secrets` and
- * `variables` need, and `projects:read` for `use`. Shown on the approval page
- * before anything is issued, and they cap the session in every project. A
- * command that needs more has to add it here.
- */
-export const LOGIN_PERMISSIONS: Record<string, string[]> = {
-  projects: ["read"],
-  apps: ["read", "write"],
-  hosting: ["read"],
-  secrets: ["read", "write"],
-  variables: ["read", "write"],
-};
 
 /** Added to the interval each time the API says the CLI is polling too fast (RFC 8628 §3.5). */
 const SLOW_DOWN_STEP_SECONDS = 5;
@@ -100,7 +85,6 @@ export async function runLogin(args: ParsedArgs, env: NodeJS.ProcessEnv): Promis
 
   const started = await post<StartedLogin>(`${base}/v1/cli/login`, {
     clientName: hostname().slice(0, 60) || "cosmoner-cli",
-    permissions: LOGIN_PERMISSIONS,
     credential: "cli_session",
   });
   if (started.status !== 201 || !started.data) {
