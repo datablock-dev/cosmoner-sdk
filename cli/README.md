@@ -492,6 +492,11 @@ command up. There is no notice, and no lookup, in CI, when stderr is not a
 terminal, for the offline file commands, or when `COSMONER_NO_UPDATE_CHECK`
 is set.
 
+Under the same rules, and also at most once a day, the CLI says when the
+Cosmoner section of `AGENTS.md` in the current directory is not what it would
+write now — after an upgrade, usually. Coding agents read that file rather
+than `--help`, so run `cosmoner agents` to refresh it.
+
 ## Same answer as the SDKs
 
 The rules live in the SDK, not here. `@cosmoner/sdk`, `cosmoner-sdk` (Python)

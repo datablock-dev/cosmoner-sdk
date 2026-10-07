@@ -29,7 +29,7 @@ import { APP_LOGS_HELP, APP_LOGS_VALUE_FLAGS, runAppLogs } from "./read/app-logs
 import { OVERVIEW_HELP, runOverview } from "./read/overview";
 import { PRODUCTS } from "./read/products";
 import { productHelp, productValueFlags, READ_VALUE_FLAGS, runProduct } from "./read/resource";
-import { checkForUpdate } from "./update-check";
+import { checkAgentsFile, checkForUpdate } from "./update-check";
 
 /** The top-level help. Exported so a test can hold it to every command that exists. */
 export const HELP = `cosmoner — the Cosmoner command line
@@ -264,6 +264,8 @@ if (typeof require !== "undefined" && require.main === module) {
     }
     const notice = await update;
     if (notice !== null) console.error(`\n${notice}`);
+    const agents = checkAgentsFile({ env: process.env, command: argv[0], cwd: process.cwd(), stderrIsTty: process.stderr.isTTY === true });
+    if (agents !== null) console.error(`\n${agents}`);
   })();
 }
 /* c8 ignore stop */
