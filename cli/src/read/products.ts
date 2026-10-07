@@ -18,6 +18,7 @@ import {
   REGISTRY_ORDER_ACTIONS,
   SERVER_ORDER_ACTIONS,
 } from "../write/create";
+import { EMAIL_CREDENTIAL_ACTIONS, IAM_CREDENTIAL_ACTIONS, SSH_KEY_GENERATE_ACTIONS } from "../write/credentials";
 import type { ReadableResource } from "./resource";
 
 /** True when `ref` is any of the given identifiers, compared exactly. */
@@ -125,7 +126,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     remove: (client, row) => client.sshKeys.delete(row.id),
     removeWarning: "Servers it was already installed on keep accepting it.",
     writeScope: "servers:write",
-    actions: SSH_KEY_ACTIONS,
+    actions: { ...SSH_KEY_ACTIONS, ...SSH_KEY_GENERATE_ACTIONS },
   },
 
   databases: {
@@ -263,6 +264,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     notes: "Lists sending domains. SMTP passwords are never returned.",
     remove: (client, row) => client.email.deleteDomain(row.id),
     removeWarning: "Sending from it stops. The domain itself stays in the project.",
+    actions: EMAIL_CREDENTIAL_ACTIONS,
   },
 
   iam: {
@@ -283,6 +285,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     notes: "Lists storage and registry access credentials. Key material is never printed.",
     remove: (client, row) => client.iam.delete(row.iamUserName),
     removeWarning: "Anything using its access keys stops working.",
+    actions: IAM_CREDENTIAL_ACTIONS,
   },
 
   members: {
