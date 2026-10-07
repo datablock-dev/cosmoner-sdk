@@ -174,3 +174,42 @@ describe("DatabasesService writes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("DatabasesService paid creates", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("previewDedicated prices a size", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" }, 200));
+
+    const result = await client.databases.previewDedicated({ size: "db-small" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/databases/dedicated/preview?slug=db-small`, body: undefined });
+    expect(result).toEqual({ success: true, data: { subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" } });
+  });
+
+  it("createDedicated defaults the engine and renames the size", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ deployed: true }, 200));
+
+    const result = await client.databases.createDedicated({ name: "main", size: "db-small", version: "17", region: "se-sto" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/databases/dedicated`, body: { name: "main", engine: "POSTGRESQL", version: "17", slug: "db-small", region: "se-sto" } });
+    expect(result).toEqual({ success: true, data: { deployed: true } });
+  });
+
+  it("requires a name, size, version and region before any request", async () => {
+    await expect(client.databases.createDedicated({ name: "main", size: "db-small", version: "", region: "se-sto" })).rejects.toThrow("is required");
+    await expect(client.databases.previewDedicated({ size: "" })).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

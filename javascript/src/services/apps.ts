@@ -6,6 +6,7 @@
 /** Apps service namespace — finding apps and rolling image apps onto a new image. */
 
 import { resolveProjectId, type ResolvedConfig } from "../config";
+import type { CheckoutPreview, PlanChangePreview } from "./preview";
 import type { Transport } from "../transport";
 
 /** Lifecycle state of an app as a whole. */
@@ -150,6 +151,64 @@ export interface UpdateAppParams extends ProjectScopedParams {
 export type UpdateAppResponse = Envelope<App>;
 export type DeleteAppResponse = Envelope<Record<string, never>>;
 
+/** Arguments accepted by `client.apps.createDraft()`. Pass a repository or an image. */
+export interface CreateAppDraftParams extends ProjectScopedParams {
+  name: string;
+  /** A size slug from `client.catalog.appSizes()`. */
+  size: string;
+  /** A region slug from `client.catalog.appRegions()`. */
+  region: string;
+  appType?: "service" | "static";
+  gitProvider?: "github" | "gitlab" | "bitbucket";
+  /** `owner/repo`. */
+  gitRepo?: string;
+  gitBranch?: string;
+  sourceDir?: string;
+  buildStrategy?: "nixpacks" | "docker";
+  buildCommand?: string;
+  runCommand?: string;
+  outputDir?: string;
+  publicPort?: number;
+  internalPort?: number;
+  autoDeploy?: boolean;
+  containerRegistry?: "dockerhub" | "ghcr" | "cosmoner";
+  containerImage?: string;
+  /** The image's listening port, as a string. */
+  containerPublicPort?: string;
+  imageDeployPolicy?: ImageDeployPolicy;
+  instances?: number;
+}
+
+/** Arguments accepted by `client.apps.create()`. */
+export interface CreateAppParams extends ProjectScopedParams {
+  draftId: string;
+  /** The size to bill; pass the draft's. */
+  size: string;
+}
+
+/** An app's sizes, and whether it can be resized at all. */
+export interface AppSizes {
+  currentSize: string;
+  resizable: boolean;
+  sizes: Array<{
+    slug: string;
+    name: string;
+    tierSlug: string;
+    cpuType: string;
+    cpus: number;
+    memoryMb: number;
+    bandwidthGib: number;
+    priceMonthly: number;
+  }>;
+}
+
+export type PreviewAppResponse = Envelope<CheckoutPreview>;
+export type CreateAppDraftResponse = Envelope<{ draftId: string }>;
+export type CreateAppResponse = Envelope<{ deployed: true; appId: string }>;
+export type GetAppSizesResponse = Envelope<AppSizes>;
+export type PreviewAppResizeResponse = Envelope<PlanChangePreview>;
+export type ResizeAppResponse = Envelope<{ instanceSize: string }>;
+
 /** App lookup and image deploy operations for a project. */
 export class AppsService {
   constructor(
@@ -281,5 +340,69 @@ export class AppsService {
   async delete(appId: string, params: ProjectScopedParams = {}): Promise<DeleteAppResponse> {
     if (!appId) throw new Error("appId is required");
     return this.transport.request<DeleteAppResponse>("DELETE", `${this.basePath(params.projectId)}/${appId}`);
+  }
+
+  /** Prices an app of a size before ordering it. `monthly` is exact; `dueToday` is an estimate once the project has a subscription. */
+  async preview(params: { size: string } & ProjectScopedParams): Promise<PreviewAppResponse> {
+    if (!params?.size) throw new Error("size is required");
+    return this.transport.request<PreviewAppResponse>("GET", `${this.basePath(params.projectId)}/preview`, {
+      query: { size: params.size },
+    });
+  }
+
+  /**
+   * Saves what an app should be, without creating or billing anything. The
+   * draft expires after 24 hours; `create()` turns it into an app. The app
+   * gets a Cosmoner subdomain.
+   */
+  async createDraft(params: CreateAppDraftParams): Promise<CreateAppDraftResponse> {
+    if (!params?.name) throw new Error("name is required");
+    if (!params.size) throw new Error("size is required");
+    if (!params.region) throw new Error("region is required");
+    const { projectId, ...fields } = params;
+    return this.transport.request<CreateAppDraftResponse>("POST", `${this.basePath(projectId)}/draft`, {
+      body: { ...fields, domainType: "cosmoner" },
+    });
+  }
+
+  /**
+   * Creates and deploys the app a draft describes. It starts `DEPLOYING`.
+   *
+   * Charges the project's saved card immediately, with a prorated invoice. It
+   * is refused with 402 before anything is created when the project cannot be
+   * billed.
+   */
+  async create(params: CreateAppParams): Promise<CreateAppResponse> {
+    if (!params?.draftId) throw new Error("draftId is required");
+    if (!params.size) throw new Error("size is required");
+    return this.transport.request<CreateAppResponse>("POST", this.basePath(params.projectId), {
+      body: { draftId: params.draftId, size: params.size },
+    });
+  }
+
+  /** Lists the sizes an app can move to, and whether it can be resized at all. */
+  async sizes(appId: string, params: ProjectScopedParams = {}): Promise<GetAppSizesResponse> {
+    if (!appId) throw new Error("appId is required");
+    return this.transport.request<GetAppSizesResponse>("GET", `${this.basePath(params.projectId)}/${appId}/sizes`);
+  }
+
+  /** Prices moving an app to another size. */
+  async resizePreview(appId: string, params: { size: string } & ProjectScopedParams): Promise<PreviewAppResizeResponse> {
+    if (!appId) throw new Error("appId is required");
+    if (!params?.size) throw new Error("size is required");
+    return this.transport.request<PreviewAppResizeResponse>(
+      "GET",
+      `${this.basePath(params.projectId)}/${appId}/resize-preview`,
+      { query: { size: params.size } }
+    );
+  }
+
+  /** Moves an app to another size. Charges the difference to the saved card immediately. */
+  async resize(appId: string, params: { size: string } & ProjectScopedParams): Promise<ResizeAppResponse> {
+    if (!appId) throw new Error("appId is required");
+    if (!params?.size) throw new Error("size is required");
+    return this.transport.request<ResizeAppResponse>("PATCH", `${this.basePath(params.projectId)}/${appId}/size`, {
+      body: { size: params.size },
+    });
   }
 }

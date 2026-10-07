@@ -185,3 +185,51 @@ describe("HostingService writes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("HostingService paid creates", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("prices lists the plans", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply([{ tier: "STARTER", monthly: 500, currency: "usd" }], 200));
+
+    const result = await client.hosting.prices();
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/hosting/shared/prices`, body: undefined });
+    expect(result).toEqual({ success: true, data: [{ tier: "STARTER", monthly: 500, currency: "usd" }] });
+  });
+
+  it("preview prices a tier with no extra storage by default", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" }, 200));
+
+    const result = await client.hosting.preview({ tier: "GROWTH" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/hosting/shared/preview?tier=GROWTH&extraStorageGb=0`, body: undefined });
+    expect(result).toEqual({ success: true, data: { subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" } });
+  });
+
+  it("create nests the database name and sends only what it was given", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ tenantId: "site-1", status: "ACTIVE" }, 201));
+
+    const result = await client.hosting.create({ siteName: "blog", tier: "GROWTH", database: "wp" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/hosting/shared`, body: { siteName: "blog", tier: "GROWTH", database: { name: "wp" } } });
+    expect(result).toEqual({ success: true, data: { tenantId: "site-1", status: "ACTIVE" } });
+  });
+
+  it("requires a site name and tier before any request", async () => {
+    await expect(client.hosting.create({ siteName: "" })).rejects.toThrow("is required");
+    await expect(client.hosting.preview({ tier: "" as never })).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

@@ -6,6 +6,7 @@
 /** Redis service namespace — a project's managed Redis and Valkey databases. */
 
 import { resolveProjectId, type ResolvedConfig } from "../config";
+import type { CheckoutPreview } from "./preview";
 import type { Transport } from "../transport";
 
 /** A Redis database as the API lists it. The API returns more; the rest are present at runtime. */
@@ -54,6 +55,33 @@ export type GetRedisDatabaseResponse = Envelope<RedisDatabaseDetail>;
 
 export type DeleteRedisDatabaseResponse = Envelope<Record<string, never>>;
 
+/** How a Redis database keeps its data across restarts. */
+export type RedisPersistence =
+  | "NONE"
+  | "AOF_EVERY_WRITE"
+  | "AOF_EVERY_1_SECOND"
+  | "SNAPSHOT_EVERY_1_HOUR"
+  | "SNAPSHOT_EVERY_6_HOURS"
+  | "SNAPSHOT_EVERY_12_HOURS";
+
+/** Arguments accepted by `client.redis.preview()`. */
+export interface PreviewRedisParams extends ProjectScopedParams {
+  /** A plan slug from `client.catalog.redisPlans()`. */
+  plan: string;
+}
+
+/** Arguments accepted by `client.redis.create()`. */
+export interface CreateRedisParams extends PreviewRedisParams {
+  name: string;
+  /** A region slug from `client.catalog.redisRegions()`. */
+  region: string;
+  /** Defaults to `NONE` server-side. */
+  persistence?: RedisPersistence;
+}
+
+export type PreviewRedisResponse = Envelope<CheckoutPreview>;
+export type CreateRedisResponse = Envelope<{ deployed: true }>;
+
 /** Read operations on a project's Redis databases. */
 export class RedisService {
   constructor(
@@ -81,5 +109,30 @@ export class RedisService {
   async delete(redisId: string, params: ProjectScopedParams = {}): Promise<DeleteRedisDatabaseResponse> {
     if (!redisId) throw new Error("redisId is required");
     return this.transport.request<DeleteRedisDatabaseResponse>("DELETE", `${this.basePath(params.projectId)}/${redisId}`);
+  }
+
+  /** Prices a Redis database before ordering it. `monthly` is exact; `dueToday` is an estimate once the project has a subscription. */
+  async preview(params: PreviewRedisParams): Promise<PreviewRedisResponse> {
+    if (!params?.plan) throw new Error("plan is required");
+    return this.transport.request<PreviewRedisResponse>("GET", `${this.basePath(params.projectId)}/preview`, {
+      query: { planSlug: params.plan },
+    });
+  }
+
+  /**
+   * Orders a Redis database. It starts `CREATING`; the response carries no
+   * id, so list and match the name to follow it.
+   *
+   * Charges the project's saved card immediately, with a prorated invoice. It
+   * is refused with 402 before anything is created when the project cannot be
+   * billed.
+   */
+  async create(params: CreateRedisParams): Promise<CreateRedisResponse> {
+    if (!params?.name) throw new Error("name is required");
+    if (!params.plan) throw new Error("plan is required");
+    if (!params.region) throw new Error("region is required");
+    return this.transport.request<CreateRedisResponse>("POST", this.basePath(params.projectId), {
+      body: { name: params.name, planSlug: params.plan, region: params.region, dataPersistence: params.persistence },
+    });
   }
 }

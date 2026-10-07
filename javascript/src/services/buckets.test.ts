@@ -106,3 +106,41 @@ describe("BucketsService writes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("BucketsService paid creates", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("preview prices the starter tier by default", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" }, 200));
+
+    const result = await client.buckets.preview();
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/storage/object-storage/preview?provider=AWS_S3&tier=STARTER`, body: undefined });
+    expect(result).toEqual({ success: true, data: { subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" } });
+  });
+
+  it("create always orders from AWS_S3", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ deployed: true }, 200));
+
+    const result = await client.buckets.create({ name: "assets", region: "eu-north-1", tier: "GROWTH", publicAccess: true });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/storage/object-storage`, body: { name: "assets", provider: "AWS_S3", region: "eu-north-1", tier: "GROWTH", publicAccess: true } });
+    expect(result).toEqual({ success: true, data: { deployed: true } });
+  });
+
+  it("requires a name and region before any request", async () => {
+    await expect(client.buckets.create({ name: "assets", region: "" })).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

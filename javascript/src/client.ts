@@ -3,6 +3,7 @@
 import { resolveConfig, type CosmonerConfig, type ResolvedConfig } from "./config";
 import { AppsService } from "./services/apps";
 import { BucketsService } from "./services/buckets";
+import { CatalogService } from "./services/catalog";
 import { DatabasesService } from "./services/databases";
 import { DomainsService } from "./services/domains";
 import { EmailService } from "./services/email";
@@ -51,6 +52,8 @@ export class Cosmoner {
   readonly members: MembersService;
   /** Account-level: never uses the client's default project. */
   readonly projects: ProjectsService;
+  /** Sizes, plans and regions to order with. Account-level. */
+  readonly catalog: CatalogService;
   readonly redis: RedisService;
   readonly registries: RegistriesService;
   readonly secrets: SecretsService;
@@ -78,6 +81,7 @@ export class Cosmoner {
     this.iam = new IamService(this.transport, this.config);
     this.members = new MembersService(this.transport, this.config);
     this.projects = new ProjectsService(this.transport);
+    this.catalog = new CatalogService(this.transport);
     this.redis = new RedisService(this.transport, this.config);
     this.registries = new RegistriesService(this.transport, this.config);
     this.secrets = new SecretsService(this.transport, this.config);

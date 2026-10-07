@@ -111,3 +111,50 @@ describe("RegistriesService writes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("RegistriesService paid creates", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("preview prices the base fee", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" }, 200));
+
+    const result = await client.registries.preview();
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/storage/container-registry/preview`, body: undefined });
+    expect(result).toEqual({ success: true, data: { subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" } });
+  });
+
+  it("providers lists providers and regions", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply([{ value: "AWS_ECR", label: "AWS", description: "", regions: [] }], 200));
+
+    const result = await client.registries.providers();
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/storage/container-registry/providers`, body: undefined });
+    expect(result).toEqual({ success: true, data: [{ value: "AWS_ECR", label: "AWS", description: "", regions: [] }] });
+  });
+
+  it("create sends the name, region and provider", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ deployed: true, id: "reg-1" }, 200));
+
+    const result = await client.registries.create({ name: "main", region: "eu-north-1", provider: "AWS_ECR" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/storage/container-registry`, body: { name: "main", region: "eu-north-1", provider: "AWS_ECR" } });
+    expect(result).toEqual({ success: true, data: { deployed: true, id: "reg-1" } });
+  });
+
+  it("requires a name and region before any request", async () => {
+    await expect(client.registries.create({ name: "", region: "eu-north-1" })).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
