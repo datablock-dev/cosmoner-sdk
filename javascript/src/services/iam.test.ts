@@ -117,3 +117,46 @@ describe("IamService writes", () => {
     expect(writeSent(fetchSpy).url).toBe(`${P}/iam/a%20b`);
   });
 });
+
+describe("IamService credentials", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("create sends only the halves it was given", async () => {
+    const created = { iamUserName: "dbd-iam-o-ci", label: "ci", accessKeyId: "AKIA1", secretAccessKey: "s3cr3t" };
+    fetchSpy.mockResolvedValueOnce(writeReply(created, 201));
+
+    const result = await client.iam.create({ label: "ci", storage: { access: "read", bucketIds: ["b-1"] } });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/iam`, body: { label: "ci", storage: { access: "read", bucketIds: ["b-1"] } } });
+    expect(result.data.secretAccessKey).toBe("s3cr3t");
+  });
+
+  it("create honours a per-call project and grants both halves", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({}, 201));
+
+    await client.iam.create({ label: "deploy", registry: { access: "push" }, storage: { access: "write" }, projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "POST",
+      url: "https://api.test.dev/v1/projects/proj-2/iam",
+      body: { label: "deploy", storage: { access: "write" }, registry: { access: "push" } },
+    });
+  });
+
+  it("create needs a label and a grant, before any request", async () => {
+    await expect(client.iam.create({ label: "", storage: { access: "read" } })).rejects.toThrow("label is required");
+    await expect(client.iam.create({ label: "ci" })).rejects.toThrow("storage or registry is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

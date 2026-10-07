@@ -129,10 +129,13 @@ export {
 } from "./services/domains";
 export {
   EmailService,
+  type CreateSmtpCredentialParams,
+  type CreateSmtpCredentialResponse,
   type EmailDomain,
   type EmailDomainDetail,
   type GetEmailDomainResponse,
   type ListEmailDomainsResponse,
+  type NewSmtpCredential,
   type SendEmailParams,
   type SendEmailResponse,
 } from "./services/email";
@@ -158,10 +161,15 @@ export {
 } from "./services/hosting";
 export {
   IamService,
+  type CreateIamCredentialParams,
+  type CreateIamCredentialResponse,
   type GetIamCredentialResponse,
   type IamCredential,
   type IamCredentialList,
+  type IamRegistryGrant,
+  type IamStorageGrant,
   type ListIamCredentialsResponse,
+  type NewIamCredential,
 } from "./services/iam";
 export { MembersService, type ListMembersResponse, type ProjectMember, type ProjectMembers } from "./services/members";
 export type { CheckoutPreview, PlanChangePreview } from "./services/preview";
@@ -210,6 +218,8 @@ export {
   type CreateSshKeyParams,
   type CreateSshKeyResponse,
   type DeleteSshKeyResponse,
+  type GenerateSshKeyResponse,
+  type GeneratedSshKey,
   type ListSshKeysResponse,
   type SshKey,
 } from "./services/ssh-keys";

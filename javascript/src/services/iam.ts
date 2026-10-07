@@ -52,6 +52,47 @@ export type ListIamCredentialsResponse = Envelope<IamCredentialList>;
 export type GetIamCredentialResponse = Envelope<IamCredential>;
 
 
+/** What a new credential may do in object storage. */
+export interface IamStorageGrant {
+  access: "read" | "write";
+  /** Buckets it reaches, by id. Omitted or empty: every bucket, including ones created later. */
+  bucketIds?: string[];
+}
+
+/** What a new credential may do in the container registry. */
+export interface IamRegistryGrant {
+  access: "pull" | "push";
+  /** Repositories it reaches, by id. Omitted or empty: every repository, including ones created later. */
+  repositoryIds?: string[];
+}
+
+/** Arguments accepted by `client.iam.create()`. At least one of `storage` and `registry` is required. */
+export interface CreateIamCredentialParams extends ProjectScopedParams {
+  /** 1–20 characters; it becomes part of the IAM user name. */
+  label: string;
+  storage?: IamStorageGrant;
+  registry?: IamRegistryGrant;
+}
+
+/** A new credential, with its secret key — returned this once. */
+export interface NewIamCredential {
+  iamUserName: string;
+  label: string;
+  accessKeyId: string;
+  /** Store it now: the API keeps no copy, and no later read returns it. */
+  secretAccessKey: string;
+  createdAt: string;
+  origin: "project";
+  storage: { access: "read" | "write"; allBuckets: boolean; buckets: Array<{ bucketId: string; bucketName: string }> } | null;
+  registry: {
+    access: "pull" | "push";
+    allRepositories: boolean;
+    repositories: Array<{ repositoryId: string; repositoryName: string; registryId: string }>;
+  } | null;
+}
+
+export type CreateIamCredentialResponse = Envelope<NewIamCredential>;
+
 /** Read operations on a project's access credentials. */
 export class IamService {
   constructor(
@@ -85,5 +126,18 @@ export class IamService {
   async delete(iamUserName: string, params: ProjectScopedParams = {}): Promise<void> {
     if (!iamUserName) throw new Error("iamUserName is required");
     await this.transport.request<void>("DELETE", `${this.basePath(params.projectId)}/${encodeURIComponent(iamUserName)}`);
+  }
+
+  /**
+   * Creates an access key for object storage, the container registry, or both.
+   * The response holds `secretAccessKey` this once: the API keeps no copy, and
+   * no later read returns it.
+   */
+  async create(params: CreateIamCredentialParams): Promise<CreateIamCredentialResponse> {
+    if (!params?.label) throw new Error("label is required");
+    if (!params.storage && !params.registry) throw new Error("storage or registry is required");
+    return this.transport.request<CreateIamCredentialResponse>("POST", this.basePath(params.projectId), {
+      body: { label: params.label, storage: params.storage, registry: params.registry },
+    });
   }
 }

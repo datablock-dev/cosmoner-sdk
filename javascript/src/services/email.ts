@@ -65,6 +65,30 @@ export interface GetEmailDomainResponse {
 }
 
 
+/** Arguments accepted by `client.email.createCredential()`. */
+export interface CreateSmtpCredentialParams extends ProjectScopedParams {
+  label: string;
+  /** The address it sends as; it must be on the sending domain. */
+  fromAddress: string;
+}
+
+/** A new SMTP credential, with its password — returned this once. */
+export interface NewSmtpCredential {
+  id: string;
+  label: string;
+  fromAddress: string;
+  smtpUsername: string;
+  /** Store it now: the API keeps only a hash, and no later read returns it. */
+  smtpPassword: string;
+  sentCount: number;
+  createdAt: string;
+}
+
+export interface CreateSmtpCredentialResponse {
+  success: true;
+  data: NewSmtpCredential;
+}
+
 /** Email operations for a project. */
 export class EmailService {
   constructor(
@@ -131,6 +155,35 @@ export class EmailService {
     await this.transport.request<void>(
       "DELETE",
       `/v1/projects/${resolveProjectId(this.config, params.projectId)}/email/${emailDomainId}`
+    );
+  }
+
+  /**
+   * Creates an SMTP credential for a sending domain. The response holds
+   * `smtpPassword` this once: the API keeps only a hash.
+   */
+  // eslint-disable-next-line require-await -- `async` makes the validation below reject rather than throw synchronously.
+  async createCredential(emailDomainId: string, params: CreateSmtpCredentialParams): Promise<CreateSmtpCredentialResponse> {
+    if (!emailDomainId) throw new Error("emailDomainId is required");
+    if (!params?.label) throw new Error("label is required");
+    if (!params.fromAddress) throw new Error("fromAddress is required");
+    return this.transport.request<CreateSmtpCredentialResponse>(
+      "POST",
+      `/v1/projects/${resolveProjectId(this.config, params.projectId)}/email/${emailDomainId}/credentials`,
+      { body: { label: params.label, fromAddress: params.fromAddress } }
+    );
+  }
+
+  /**
+   * Deletes an SMTP credential; anything sending with it stops working. The
+   * API answers 204, so there is nothing to return.
+   */
+  async deleteCredential(emailDomainId: string, credentialId: string, params: ProjectScopedParams = {}): Promise<void> {
+    if (!emailDomainId) throw new Error("emailDomainId is required");
+    if (!credentialId) throw new Error("credentialId is required");
+    await this.transport.request<void>(
+      "DELETE",
+      `/v1/projects/${resolveProjectId(this.config, params.projectId)}/email/${emailDomainId}/credentials/${credentialId}`
     );
   }
 }
