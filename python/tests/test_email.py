@@ -338,3 +338,72 @@ class TestAsyncEmailDomains:
         ) as client:
             with pytest.raises(ValueError, match="email_domain_id is required"):
                 await client.email.get_domain("")
+
+
+class TestEmailDomainDelete:
+    """Tests for deleting a sending domain via mocked HTTP."""
+
+    def test_deletes_sending_domain_tolerating_the_empty_204(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{DOMAINS}/ed-1", status_code=204)
+
+        assert client.email.delete_domain("ed-1") is None
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/ed-1", status_code=204
+        )
+
+        client.email.delete_domain("ed-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_requires_email_domain_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="email_domain_id is required"):
+            client.email.delete_domain("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncEmailDomainDelete:
+    """Tests for deleting a sending domain through the async client."""
+
+    async def test_deletes_sending_domain_tolerating_the_empty_204(self, httpx_mock):
+        httpx_mock.add_response(url=f"{DOMAINS}/ed-1", status_code=204)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.email.delete_domain("ed-1") is None
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_targets_another_project_per_call(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/ed-1", status_code=204
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.email.delete_domain("ed-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_requires_email_domain_id_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="email_domain_id is required"):
+                await client.email.delete_domain("")
+
+        assert httpx_mock.get_requests() == []

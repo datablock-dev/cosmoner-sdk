@@ -110,6 +110,7 @@ Set `max_retries=0` to disable retries entirely.
 | --- | --- |
 | `list_domains(*, project_id=None)` | Every sending domain with its SMTP credentials and DNS records |
 | `get_domain(email_domain_id, *, project_id=None)` | One sending domain; adds `sending` (`identity`, `billingRequired`) |
+| `delete_domain(email_domain_id, *, project_id=None)` | Permanently removes a sending domain; the API answers 204, so it returns `None` |
 
 ## Apps
 
@@ -132,10 +133,17 @@ if deployment["phase"] != "ACTIVE":
 | --- | --- |
 | `list(*, project_id=None)` | Every app in the project, newest first |
 | `get(app_id, *, project_id=None)` | One app by id |
+| `update(app_id, *, name=…, build_command=…, run_command=…, output_dir=…, public_port=…, internal_port=…, auto_deploy=…, image_deploy_policy=…, instances=…, project_id=None)` | Changes the settings given and returns the app |
+| `delete(app_id, *, project_id=None)` | Permanently deletes an app |
 | `logs(app_id, *, type, project_id=None)` | Recent log lines; `type` is `"BUILD"` or `"RUN"`, anything else raises `ValueError` |
 | `deploy(app_id, *, tag=None, digest=None, project_id=None)` | Starts a deployment and returns it without waiting |
 | `get_deployment(app_id, deployment_id, *, project_id=None)` | One deployment's current phase |
 | `wait_for_deployment(app_id, deployment_id, *, interval=3.0, timeout=600.0, on_poll=None, project_id=None)` | Polls until the deployment finishes |
+
+`update` sends only the arguments you pass, under their camelCase API names, and
+raises `ValueError` when you pass none. `image_deploy_policy` is `"TAG"`,
+`"NEWEST"` or `"MANUAL"`. Pass `None` to `build_command`, `run_command`,
+`output_dir`, `public_port` or `internal_port` to clear it.
 
 Pass `tag` or `digest` (`sha256:` plus 64 hex characters) to deploy that image
 from the repository the app already pulls from, or neither to re-resolve the
@@ -157,33 +165,43 @@ API key with `hosting:read`.
 | `list(*, project_id=None)` | Every site in the project that has not been deprovisioned |
 | `get(site_id, *, credentials=False, project_id=None)` | One site; `credentials=True` adds `sftpPassword` |
 | `access(site_id, *, project_id=None)` | `username`, `host`, `sftp.port` and `ssh.port`/`ssh.enabled` |
+| `delete(site_id, *, project_id=None)` | Permanently deletes a site |
 
 The password needs no scope beyond `hosting:read`, so guard the key accordingly.
 
-## Read-only namespaces
+## Other namespaces
 
-Each of these reads one kind of resource and returns the API envelope. Every
-method takes `project_id=` to override the client default, except `projects`,
-which reads across the account and never uses the default project. A method
-taking an id raises `ValueError` on an empty one before sending anything.
+Each of these manages one kind of resource and returns the API envelope, or
+`None` where the API answers 204. Every method takes `project_id=` to override
+the client default, except `projects`, which reads across the account and never
+uses the default project. A method taking an id raises `ValueError` on an empty
+one before sending anything. Every `delete` is permanent.
 
 | Namespace | Methods |
 | --- | --- |
 | `projects` | `list()`, `get(project)` — by id or slug |
-| `servers` | `list()`, `get(server_id)` — adds the installed `sshKeys` |
-| `ssh_keys` | `list()` |
-| `databases` | `list()` (every kind), `list_dedicated()`, `get_dedicated(database_id)`, `list_shared()`, `get_shared(tenant_id)` |
-| `redis` | `list()`, `get(redis_id)` |
-| `domains` | `list()`, `get(domain)` — by id or name, such as `example.com` |
-| `buckets` | `list()` — there is no single-bucket read |
-| `registries` | `list()`, `get(registry_id)` |
-| `iam` | `list()`, `get(iam_user_name)` — the list holds `credentials` plus partial-failure `errors` |
+| `servers` | `list()`, `get(server_id)` — adds the installed `sshKeys`; `delete(server_id)` |
+| `ssh_keys` | `list()`, `create(*, name, public_key)`, `delete(ssh_key_id)` — see below |
+| `databases` | `list()` (every kind), `list_dedicated()`, `get_dedicated(database_id)`, `delete_dedicated(database_id)`, `list_shared()`, `get_shared(tenant_id)`, `delete_shared(tenant_id)` |
+| `redis` | `list()`, `get(redis_id)`, `delete(redis_id)` |
+| `domains` | `list()`, `get(domain)`, `create(name)`, `verify(domain)`, `delete(domain)` — by id or name, such as `example.com` |
+| `buckets` | `list()` — there is no single-bucket read; `delete(bucket_id)` also deletes every object in it and its access credentials |
+| `registries` | `list()`, `get(registry_id)`, `delete(registry_id)` — also deletes every repository and image in it |
+| `iam` | `list()`, `get(iam_user_name)` — the list holds `credentials` plus partial-failure `errors`; `delete(iam_user_name)` returns `None` |
 | `members` | `list()` — members and pending invitations |
 
 Two of these return a credential, and each needs only the namespace's read
 scope, so guard keys that carry it: `databases.get_dedicated` always includes
 `connectionUri`, a full connection URI with the password, and `redis.get`
 always includes the plaintext `password`.
+
+`domains.create` adds a domain you already own; buying one is not available
+through the SDK. Its response carries `verificationRecord`, the TXT record to
+publish before calling `domains.verify`. `domains.delete` answers 409 while an
+app or email domain still uses the domain.
+
+`ssh_keys.delete` removes the key from the project, not from servers it was
+already installed on: `stillAuthorisedOn` in the response counts them.
 
 ## Secrets
 

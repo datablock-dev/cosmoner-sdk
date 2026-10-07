@@ -44,6 +44,8 @@ interface Envelope<T> {
 export type ListRegistriesResponse = Envelope<Registry[]>;
 export type GetRegistryResponse = Envelope<Registry>;
 
+export type DeleteRegistryResponse = Envelope<Record<string, never>>;
+
 /** Read operations on a project's container registries. */
 export class RegistriesService {
   constructor(
@@ -65,5 +67,11 @@ export class RegistriesService {
   async get(registryId: string, params: ProjectScopedParams = {}): Promise<GetRegistryResponse> {
     if (!registryId) throw new Error("registryId is required");
     return this.transport.request<GetRegistryResponse>("GET", `${this.basePath(params.projectId)}/${registryId}`);
+  }
+
+  /** Permanently deletes a registry with every repository and image in it, and stops its billing. */
+  async delete(registryId: string, params: ProjectScopedParams = {}): Promise<DeleteRegistryResponse> {
+    if (!registryId) throw new Error("registryId is required");
+    return this.transport.request<DeleteRegistryResponse>("DELETE", `${this.basePath(params.projectId)}/${registryId}`);
   }
 }

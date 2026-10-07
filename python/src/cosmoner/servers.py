@@ -15,7 +15,7 @@ def _require_server_id(server_id: str) -> None:
 
 
 class ServersService:
-    """Synchronous read operations on a project's servers."""
+    """Synchronous operations on a project's servers."""
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
         """Binds the namespace to the client's transport and resolved configuration."""
@@ -39,6 +39,15 @@ class ServersService:
 
         result: dict[str, Any] = self._transport.request(
             "GET", f"{self._base_path(project_id)}/{server_id}"
+        )
+        return result
+
+    def delete(self, server_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Permanently deletes a server. This cannot be undone."""
+        _require_server_id(server_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{server_id}"
         )
         return result
 
@@ -70,5 +79,16 @@ class AsyncServersService:
 
         result: dict[str, Any] = await self._transport.request(
             "GET", f"{self._base_path(project_id)}/{server_id}"
+        )
+        return result
+
+    async def delete(
+        self, server_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes a server. This cannot be undone."""
+        _require_server_id(server_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{server_id}"
         )
         return result

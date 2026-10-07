@@ -64,6 +64,7 @@ export interface GetEmailDomainResponse {
   data: EmailDomainDetail;
 }
 
+
 /** Email operations for a project. */
 export class EmailService {
   constructor(
@@ -117,6 +118,18 @@ export class EmailService {
     if (!emailDomainId) throw new Error("emailDomainId is required");
     return this.transport.request<GetEmailDomainResponse>(
       "GET",
+      `/v1/projects/${resolveProjectId(this.config, params.projectId)}/email/${emailDomainId}`
+    );
+  }
+
+  /**
+   * Stops sending from a domain and removes it from email. The domain itself
+   * stays in the project. The API answers 204, so there is nothing to return.
+   */
+  async deleteDomain(emailDomainId: string, params: ProjectScopedParams = {}): Promise<void> {
+    if (!emailDomainId) throw new Error("emailDomainId is required");
+    await this.transport.request<void>(
+      "DELETE",
       `/v1/projects/${resolveProjectId(this.config, params.projectId)}/email/${emailDomainId}`
     );
   }

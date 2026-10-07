@@ -86,8 +86,16 @@ else — including the CLI, where they live in `cli/test/`, not beside the sourc
   so every type is written by hand.
 - **Secrets are write-only.** The API returns a secret's plaintext exactly once,
   by the call that sets it, and no route decrypts one afterwards. The CLI must
-  never print a plaintext value, in any format — the caller already has it, and
-  printing it writes it into a CI log.
+  never print a value the caller set, in any format — the caller already has
+  it, and printing it writes it into a CI log.
+- **A credential the API generates is printed once, by the command that
+  creates it** — a webhook's signing secret, say. That response is the only
+  copy, so hiding it would lose it. Every other command, reads included, keeps
+  it `[hidden]` (`cli/src/read/redact.ts`).
+- **Paid or irreversible changes ask first.** `confirm()` in
+  `cli/src/write/confirm.ts` prompts in a terminal, `--yes` answers for
+  scripts, and with neither it exits 2 having changed nothing. Route every
+  delete and every billed change through it.
 - **Writes to secrets and variables need an owner or admin**, checked
   independently of the key's scopes. A 403 on a key that plainly carries
   `secrets:write` is this, not a bug.

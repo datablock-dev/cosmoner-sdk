@@ -8,6 +8,7 @@
  * reads.
  */
 
+import { APP_ACTIONS, DOMAIN_ACTIONS, SSH_KEY_ACTIONS, WEBHOOK_ACTIONS } from "../write/actions";
 import type { ReadableResource } from "./resource";
 
 /** True when `ref` is any of the given identifiers, compared exactly. */
@@ -71,6 +72,9 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     ],
     notes:
       "Environment variables marked secret show masked. cosmoner apps logs <app> reads an app's log.",
+    remove: (client, row) => client.apps.delete(row.id),
+    removeWarning: "Its runtime, routing, custom domain and deployments go with it.",
+    actions: APP_ACTIONS,
   },
 
   servers: {
@@ -90,6 +94,8 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "REGION", value: (row) => row.region },
       { header: "SIZE", value: (row) => row.instanceType },
     ],
+    remove: (client, row) => client.servers.delete(row.id),
+    removeWarning: "Its disk and everything on it go with it, and its billing stops.",
   },
 
   "ssh-keys": {
@@ -106,6 +112,10 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "CREATED", value: (row) => day(row.createdAt) },
     ],
     notes: "Only public keys are stored.",
+    remove: (client, row) => client.sshKeys.delete(row.id),
+    removeWarning: "Servers it was already installed on keep accepting it.",
+    writeScope: "servers:write",
+    actions: SSH_KEY_ACTIONS,
   },
 
   databases: {
@@ -130,6 +140,9 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "REGION", value: (row) => row.region },
     ],
     notes: "A dedicated database's connection URI is hidden; it carries the password.",
+    remove: (client, row) =>
+      row.kind === "DEDICATED" ? client.databases.deleteDedicated(row.id) : client.databases.deleteShared(row.id),
+    removeWarning: "Its data goes with it, and its billing stops.",
   },
 
   redis: {
@@ -150,6 +163,8 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "HOST", value: (row) => row.host },
     ],
     notes: "The password is hidden.",
+    remove: (client, row) => client.redis.delete(row.id),
+    removeWarning: "Its data goes with it, and its billing stops.",
   },
 
   domains: {
@@ -169,6 +184,9 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "AUTO-RENEW", value: (row) => (row.autoRenew ? "yes" : "no") },
       { header: "RECORDS", value: (row) => (Array.isArray(row.dnsRecords) ? row.dnsRecords.length : "-") },
     ],
+    remove: (client, row) => client.domains.delete(row.id),
+    removeWarning: "Its DNS records go with it. Refused while an app or email domain uses it.",
+    actions: DOMAIN_ACTIONS,
   },
 
   buckets: {
@@ -188,6 +206,9 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "CDN", value: (row) => (row.cdnEnabled ? row.cdnDomain ?? "yes" : "no") },
     ],
     notes: "Access keys are never listed.",
+    remove: (client, row) => client.buckets.delete(row.id),
+    removeWarning: "Every object in it and its access keys go with it, and its billing stops.",
+    writeScope: "object-storage:write",
   },
 
   registries: {
@@ -206,6 +227,8 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "REPOSITORIES", value: (row) => (Array.isArray(row.repositories) ? row.repositories.length : "-") },
       { header: "CREATED", value: (row) => day(row.createdAt) },
     ],
+    remove: (client, row) => client.registries.delete(row.id),
+    removeWarning: "Every repository and image in it goes with it, and its billing stops.",
   },
 
   email: {
@@ -224,6 +247,8 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "VERIFIED", value: (row) => day(row.verifiedAt) },
     ],
     notes: "Lists sending domains. SMTP passwords are never returned.",
+    remove: (client, row) => client.email.deleteDomain(row.id),
+    removeWarning: "Sending from it stops. The domain itself stays in the project.",
   },
 
   iam: {
@@ -242,6 +267,8 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "CREATED", value: (row) => day(row.createdAt) },
     ],
     notes: "Lists storage and registry access credentials. Key material is never printed.",
+    remove: (client, row) => client.iam.delete(row.iamUserName),
+    removeWarning: "Anything using its access keys stops working.",
   },
 
   members: {
@@ -277,6 +304,8 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "TIER", value: (row) => row.tier },
     ],
     notes: "cosmoner upload <site> <dir> uploads to a site.",
+    remove: (client, row) => client.hosting.delete(row.id),
+    removeWarning: "Its files, databases and domains go with it, and its billing stops.",
   },
 
   webhooks: {
@@ -296,5 +325,8 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "FAILURES", value: (row) => row.consecutiveFailures },
     ],
     notes: "The signing secret is never printed.",
+    remove: (client, row) => client.webhooks.delete(row.id),
+    removeWarning: "Its delivery history goes with it.",
+    actions: WEBHOOK_ACTIONS,
   },
 };

@@ -140,3 +140,94 @@ class TestIamPathEncoding:
         client.iam.get("ci/deploy")
 
         assert str(httpx_mock.get_request().url) == f"{BASE}/ci%2Fdeploy"
+
+
+class TestIamCredentialDelete:
+    """Tests for deleting an IAM credential via mocked HTTP."""
+
+    def test_deletes_iam_credential_tolerating_the_empty_204(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/cosmoner-proj-1-ci", status_code=204)
+
+        assert client.iam.delete("cosmoner-proj-1-ci") is None
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/iam/cosmoner-proj-1-ci",
+            status_code=204,
+        )
+
+        client.iam.delete("cosmoner-proj-1-ci", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_requires_iam_user_name_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="iam_user_name is required"):
+            client.iam.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+    def test_encodes_the_iam_user_name(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/ci%2Fdeploy", status_code=204)
+
+        client.iam.delete("ci/deploy")
+
+        assert str(httpx_mock.get_request().url) == f"{BASE}/ci%2Fdeploy"
+
+
+class TestAsyncIamCredentialDelete:
+    """Tests for deleting an IAM credential through the async client."""
+
+    async def test_deletes_iam_credential_tolerating_the_empty_204(self, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/cosmoner-proj-1-ci", status_code=204)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.iam.delete("cosmoner-proj-1-ci") is None
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_targets_another_project_per_call(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/iam/cosmoner-proj-1-ci",
+            status_code=204,
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.iam.delete("cosmoner-proj-1-ci", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_requires_iam_user_name_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="iam_user_name is required"):
+                await client.iam.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+    async def test_encodes_the_iam_user_name(self, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/ci%2Fdeploy", status_code=204)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.iam.delete("ci/deploy")
+
+        assert str(httpx_mock.get_request().url) == f"{BASE}/ci%2Fdeploy"

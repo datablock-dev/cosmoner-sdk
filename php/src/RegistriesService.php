@@ -7,7 +7,7 @@ namespace Cosmoner\Sdk;
 use InvalidArgumentException;
 
 /**
- * Read operations on a project's container registries.
+ * Reads and deletes a project's container registries.
  *
  * The API returns more fields than the shapes below declare.
  *
@@ -65,17 +65,39 @@ class RegistriesService
      */
     public function get(string $registryId, ?string $projectId = null): array
     {
-        if ($registryId === '') {
-            throw new InvalidArgumentException('registryId is required');
-        }
+        self::requireRegistryId($registryId);
 
         /** @var array{success: true, data: Registry} */
         return $this->transport->request('GET', $this->basePath($projectId) . "/{$registryId}");
+    }
+
+    /**
+     * Permanently deletes a container registry with every repository and image in it.
+     *
+     * @return array{success: true, data: array{}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function delete(string $registryId, ?string $projectId = null): array
+    {
+        self::requireRegistryId($registryId);
+
+        /** @var array{success: true, data: array{}} */
+        return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$registryId}");
     }
 
     /** Builds the collection route for the resolved project. */
     private function basePath(?string $projectId): string
     {
         return '/v1/projects/' . $this->config->resolveProjectId($projectId) . '/storage/container-registry';
+    }
+
+    /** Rejects an empty registry id before it becomes a malformed route. */
+    private static function requireRegistryId(string $registryId): void
+    {
+        if ($registryId === '') {
+            throw new InvalidArgumentException('registryId is required');
+        }
     }
 }

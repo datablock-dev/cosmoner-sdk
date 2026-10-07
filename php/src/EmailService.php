@@ -143,13 +143,34 @@ class EmailService
      */
     public function getDomain(string $emailDomainId, ?string $projectId = null): array
     {
-        if ($emailDomainId === '') {
-            throw new InvalidArgumentException('emailDomainId is required');
-        }
+        self::requireEmailDomainId($emailDomainId);
 
         $project = $this->config->resolveProjectId($projectId);
 
         /** @var array{success: true, data: EmailDomainDetail} */
         return $this->transport->request('GET', "/v1/projects/{$project}/email/{$emailDomainId}");
+    }
+
+    /**
+     * Permanently deletes an email domain. The API answers 204, so there is nothing to return.
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function deleteDomain(string $emailDomainId, ?string $projectId = null): void
+    {
+        self::requireEmailDomainId($emailDomainId);
+
+        $project = $this->config->resolveProjectId($projectId);
+
+        $this->transport->request('DELETE', "/v1/projects/{$project}/email/{$emailDomainId}");
+    }
+
+    /** Rejects an empty email domain id before it becomes a malformed route. */
+    private static function requireEmailDomainId(string $emailDomainId): void
+    {
+        if ($emailDomainId === '') {
+            throw new InvalidArgumentException('emailDomainId is required');
+        }
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmoner\Sdk\Tests;
 
 use Cosmoner\Sdk\Cosmoner;
+use Cosmoner\Sdk\HttpResponse;
 use Cosmoner\Sdk\NotFoundError;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
@@ -215,5 +216,37 @@ class EmailServiceTest extends TestCase
         $this->expectException(NotFoundError::class);
 
         $this->client->email->getDomain('ed-missing');
+    }
+
+    public function testThrowsWhenEmailDomainIdIsEmptyOnDeleteDomain(): void
+    {
+        try {
+            $this->client->email->deleteDomain('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('emailDomainId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesAnEmailDomainToleratingTheEmpty204(): void
+    {
+        $this->http->queue(new HttpResponse(204, ''));
+
+        $this->client->email->deleteDomain('ed-1');
+
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame('https://api.test.dev/v1/projects/proj-1/email/ed-1', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesAnEmailDomainInAnotherProject(): void
+    {
+        $this->http->queue(new HttpResponse(204, ''));
+
+        $this->client->email->deleteDomain('ed-1', 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/email/ed-1', $this->http->requests[0]['url']);
     }
 }

@@ -15,7 +15,7 @@ def _require_registry_id(registry_id: str) -> None:
 
 
 class RegistriesService:
-    """Synchronous read operations on a project's container registries."""
+    """Synchronous operations on a project's container registries."""
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
         """Binds the namespace to the client's transport and resolved configuration."""
@@ -40,6 +40,20 @@ class RegistriesService:
 
         result: dict[str, Any] = self._transport.request(
             "GET", f"{self._base_path(project_id)}/{registry_id}"
+        )
+        return result
+
+    def delete(
+        self, registry_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes a registry.
+
+        Every repository and image in it goes too.
+        """
+        _require_registry_id(registry_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{registry_id}"
         )
         return result
 
@@ -72,5 +86,19 @@ class AsyncRegistriesService:
 
         result: dict[str, Any] = await self._transport.request(
             "GET", f"{self._base_path(project_id)}/{registry_id}"
+        )
+        return result
+
+    async def delete(
+        self, registry_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes a registry.
+
+        Every repository and image in it goes too.
+        """
+        _require_registry_id(registry_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{registry_id}"
         )
         return result

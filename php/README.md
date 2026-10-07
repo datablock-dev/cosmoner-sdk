@@ -180,7 +180,7 @@ $access = $client->hosting->access($sites[0]['id'])['data'];
 `sftpPassword`. It needs no scope beyond `hosting:read`, so guard the key
 accordingly.
 
-## Read-only namespaces
+## Reading resources
 
 Each of these reads one kind of resource and returns the API envelope. Every
 method takes an optional trailing `$projectId` to override the client default,
@@ -207,6 +207,42 @@ Two of these return a credential, and each needs only the namespace's read
 scope, so guard keys that carry it: `databases->getDedicated` always includes
 `connectionUri`, a full connection URI with the password, and `redis->get`
 always includes the plaintext `password`.
+
+## Changing and deleting resources
+
+These take the same optional trailing `$projectId`, and throw
+`InvalidArgumentException` on an empty id or name before sending anything.
+Every delete is permanent.
+
+| Namespace | Methods |
+| --- | --- |
+| `apps` | `update($appId, $changes)`, `delete($appId)` |
+| `sshKeys` | `create($name, $publicKey)`, `delete($sshKeyId)` |
+| `domains` | `create($name)`, `verify($domain)`, `delete($domain)` — by id or name |
+| `redis` | `delete($redisId)` |
+| `databases` | `deleteDedicated($databaseId)`, `deleteShared($tenantId)` |
+| `servers` | `delete($serverId)` |
+| `buckets` | `delete($bucketId)` — with every object in it and its access credentials |
+| `registries` | `delete($registryId)` — with every repository and image in it |
+| `hosting` | `delete($siteId)` |
+| `email` | `deleteDomain($emailDomainId)` — returns nothing |
+| `iam` | `delete($iamUserName)` — returns nothing |
+
+`apps->update()` sends only the keys in `$changes`, under the API's camelCase
+names: `name`, `buildCommand`, `runCommand`, `outputDir`, `publicPort`,
+`internalPort`, `autoDeploy`, `imageDeployPolicy` (`TAG`, `NEWEST` or
+`MANUAL`) and `instances`. A key set to `null` clears that setting.
+
+```php
+$client->apps->update('app-id', ['instances' => 2, 'outputDir' => null]);
+```
+
+`domains->create()` adds a domain you already own as `EXTERNAL`; publish the
+returned `verificationRecord` as a TXT record, then call `verify()`. Deleting a
+domain an app or email domain still uses fails with `ConflictError`.
+
+`sshKeys->delete()` does not remove the key from servers it was already
+installed on; `stillAuthorisedOn` in the response counts them.
 
 ## Secrets
 

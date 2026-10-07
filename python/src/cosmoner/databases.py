@@ -21,7 +21,7 @@ def _require_tenant_id(tenant_id: str) -> None:
 
 
 class DatabasesService:
-    """Synchronous read operations on a project's databases."""
+    """Synchronous operations on a project's databases."""
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
         """Binds the namespace to the client's transport and resolved configuration."""
@@ -80,6 +80,28 @@ class DatabasesService:
 
         result: dict[str, Any] = self._transport.request(
             "GET", f"{self._base_path(project_id)}/shared/{tenant_id}"
+        )
+        return result
+
+    def delete_dedicated(
+        self, database_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes a dedicated database cluster. This cannot be undone."""
+        _require_database_id(database_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/dedicated/{database_id}"
+        )
+        return result
+
+    def delete_shared(
+        self, tenant_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes a shared database tenant. This cannot be undone."""
+        _require_tenant_id(tenant_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/shared/{tenant_id}"
         )
         return result
 
@@ -144,5 +166,27 @@ class AsyncDatabasesService:
 
         result: dict[str, Any] = await self._transport.request(
             "GET", f"{self._base_path(project_id)}/shared/{tenant_id}"
+        )
+        return result
+
+    async def delete_dedicated(
+        self, database_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes a dedicated database cluster. This cannot be undone."""
+        _require_database_id(database_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/dedicated/{database_id}"
+        )
+        return result
+
+    async def delete_shared(
+        self, tenant_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes a shared database tenant. This cannot be undone."""
+        _require_tenant_id(tenant_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/shared/{tenant_id}"
         )
         return result

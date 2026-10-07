@@ -46,7 +46,8 @@ export function parseArgs(argv: string[], valueFlags: readonly string[] = []): P
     }
     if (valueFlags.includes(name)) {
       const value = argv[i + 1];
-      if (value === undefined || value.startsWith("-")) {
+      // A lone "-" is a value — stdin, by convention — not a flag.
+      if (value === undefined || (value.startsWith("-") && value !== "-")) {
         throw new UsageError(`--${name} needs a value`);
       }
       flags.set(name, value);

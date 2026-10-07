@@ -59,3 +59,55 @@ describe("RegistriesService", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+/** A reply for the write tests below: the API's envelope, or an empty 204. */
+function writeReply(data: unknown, status = 200): Response {
+  if (status === 204) return new Response(null, { status });
+  return new Response(JSON.stringify({ success: true, data }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/** The one request a write test sent: its method, URL and parsed JSON body. */
+function writeSent(spy: ReturnType<typeof vi.spyOn>): { method: string; url: string; body: unknown } {
+  const [url, init] = spy.mock.calls[0] as [string, RequestInit];
+  return { method: init.method ?? "GET", url, body: init.body === undefined ? undefined : JSON.parse(String(init.body)) };
+}
+
+describe("RegistriesService writes", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("delete sends DELETE and returns the envelope", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({}));
+
+    const result = await client.registries.delete("reg-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "DELETE", url: `${P}/storage/container-registry/reg-1`, body: undefined });
+    expect(result).toEqual({ success: true, data: {} });
+  });
+
+  it("delete honours a per-call project", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({}, 200));
+
+    await client.registries.delete("reg-1", { projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy).url).toBe(`https://api.test.dev/v1/projects/proj-2/storage/container-registry/reg-1`);
+  });
+
+  it("delete requires an id before any request", async () => {
+    await expect(client.registries.delete("")).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

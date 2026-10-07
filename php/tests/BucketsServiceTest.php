@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmoner\Sdk\Tests;
 
 use Cosmoner\Sdk\Cosmoner;
+use Cosmoner\Sdk\HttpResponse;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
@@ -78,6 +79,45 @@ class BucketsServiceTest extends TestCase
 
         $this->assertSame(
             'https://api.test.dev/v1/projects/proj-2/storage/object-storage',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testThrowsWhenBucketIdIsEmptyOnDelete(): void
+    {
+        try {
+            $this->client->buckets->delete('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('bucketId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesABucket(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $result = $this->client->buckets->delete('bucket-1');
+
+        $this->assertSame(['success' => true, 'data' => []], $result);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/storage/object-storage/bucket-1',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesABucketInAnotherProject(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $this->client->buckets->delete('bucket-1', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/storage/object-storage/bucket-1',
             $this->http->requests[0]['url'],
         );
     }

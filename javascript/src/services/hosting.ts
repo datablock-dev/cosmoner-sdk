@@ -78,6 +78,8 @@ export type GetHostingSiteResponse = Envelope<HostingSite & { ready: boolean }>;
 export type GetHostingSiteWithCredentialsResponse = Envelope<HostingSiteWithCredentials>;
 export type GetHostingAccessResponse = Envelope<HostingAccess>;
 
+export type DeleteHostingSiteResponse = Envelope<Record<string, never>>;
+
 /** Read operations on a project's shared hosting sites. */
 export class HostingService {
   constructor(
@@ -122,5 +124,11 @@ export class HostingService {
       "GET",
       `${this.basePath(params.projectId)}/${siteId}/access`
     );
+  }
+
+  /** Permanently deletes a hosting site with its files, databases and domains, and stops its billing. */
+  async delete(siteId: string, params: ProjectScopedParams = {}): Promise<DeleteHostingSiteResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    return this.transport.request<DeleteHostingSiteResponse>("DELETE", `${this.basePath(params.projectId)}/${siteId}`);
   }
 }

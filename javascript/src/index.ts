@@ -51,6 +51,7 @@ export {
   type AppLogsParams,
   type AppLogsResponse,
   type AppStatus,
+  type DeleteAppResponse,
   type DeployAppParams,
   type DeployAppResponse,
   type DeploymentPhase,
@@ -58,14 +59,17 @@ export {
   type GetDeploymentResponse,
   type ImageDeployPolicy,
   type ListAppsResponse,
+  type UpdateAppParams,
+  type UpdateAppResponse,
   type WaitForDeploymentParams,
 } from "./services/apps";
-export { BucketsService, type Bucket, type ListBucketsResponse } from "./services/buckets";
+export { BucketsService, type Bucket, type DeleteBucketResponse, type ListBucketsResponse } from "./services/buckets";
 export {
   DatabasesService,
   type DatabaseSummary,
   type DedicatedDatabase,
   type DedicatedDatabaseDetail,
+  type DeleteDatabaseResponse,
   type GetDedicatedDatabaseResponse,
   type GetSharedDatabaseResponse,
   type ListDatabasesResponse,
@@ -75,10 +79,14 @@ export {
 } from "./services/databases";
 export {
   DomainsService,
+  type CreateDomainResponse,
+  type DeleteDomainResponse,
   type DnsRecord,
   type Domain,
   type GetDomainResponse,
   type ListDomainsResponse,
+  type VerificationRecord,
+  type VerifyDomainResponse,
 } from "./services/domains";
 export {
   EmailService,
@@ -91,6 +99,7 @@ export {
 } from "./services/email";
 export {
   HostingService,
+  type DeleteHostingSiteResponse,
   type GetHostingAccessResponse,
   type GetHostingSiteParams,
   type GetHostingSiteResponse,
@@ -112,6 +121,7 @@ export { MembersService, type ListMembersResponse, type ProjectMember, type Proj
 export { ProjectsService, type GetProjectResponse, type ListProjectsResponse, type Project } from "./services/projects";
 export {
   RedisService,
+  type DeleteRedisDatabaseResponse,
   type GetRedisDatabaseResponse,
   type ListRedisDatabasesResponse,
   type RedisDatabase,
@@ -119,6 +129,7 @@ export {
 } from "./services/redis";
 export {
   RegistriesService,
+  type DeleteRegistryResponse,
   type GetRegistryResponse,
   type ListRegistriesResponse,
   type Registry,
@@ -126,13 +137,21 @@ export {
 } from "./services/registries";
 export {
   ServersService,
+  type DeleteServerResponse,
   type GetServerResponse,
   type ListServersResponse,
   type Server,
   type ServerDetail,
   type ServerStatus,
 } from "./services/servers";
-export { SshKeysService, type ListSshKeysResponse, type SshKey } from "./services/ssh-keys";
+export {
+  SshKeysService,
+  type CreateSshKeyParams,
+  type CreateSshKeyResponse,
+  type DeleteSshKeyResponse,
+  type ListSshKeysResponse,
+  type SshKey,
+} from "./services/ssh-keys";
 export {
   PROJECT_ENVIRONMENTS,
   type Actor,

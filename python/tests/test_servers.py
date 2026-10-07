@@ -137,3 +137,74 @@ class TestAsyncServers:
         ) as client:
             with pytest.raises(ValueError, match="server_id is required"):
                 await client.servers.get("")
+
+
+class TestServerDelete:
+    """Tests for deleting a server via mocked HTTP."""
+
+    def test_deletes_server_returning_the_envelope(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/srv-1", json={"success": True, "data": {}})
+
+        assert client.servers.delete("srv-1") == {"success": True, "data": {}}
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/servers/srv-1",
+            json={"success": True, "data": {}},
+        )
+
+        client.servers.delete("srv-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_requires_server_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="server_id is required"):
+            client.servers.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncServerDelete:
+    """Tests for deleting a server through the async client."""
+
+    async def test_deletes_server_returning_the_envelope(self, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/srv-1", json={"success": True, "data": {}})
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.servers.delete("srv-1") == {"success": True, "data": {}}
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_targets_another_project_per_call(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/servers/srv-1",
+            json={"success": True, "data": {}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.servers.delete("srv-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_requires_server_id_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="server_id is required"):
+                await client.servers.delete("")
+
+        assert httpx_mock.get_requests() == []

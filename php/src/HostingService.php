@@ -6,7 +6,7 @@ namespace Cosmoner\Sdk;
 
 use InvalidArgumentException;
 
-/** Read operations on a project's shared hosting sites. */
+/** Reads and deletes a project's shared hosting sites. */
 class HostingService
 {
     /** Binds the namespace to the client's transport and resolved configuration. */
@@ -69,6 +69,22 @@ class HostingService
 
         /** @var array{success: true, data: array<string, mixed>} */
         return $this->transport->request('GET', $this->basePath($projectId) . "/{$siteId}/access");
+    }
+
+    /**
+     * Permanently deletes a hosting site.
+     *
+     * @return array{success: true, data: array{}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function delete(string $siteId, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+
+        /** @var array{success: true, data: array{}} */
+        return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$siteId}");
     }
 
     /** Builds the collection route for the resolved project. */

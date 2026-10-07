@@ -7,7 +7,7 @@ namespace Cosmoner\Sdk;
 use InvalidArgumentException;
 
 /**
- * Read operations on a project's databases: dedicated clusters and shared tenants.
+ * Reads and deletes a project's databases: dedicated clusters and shared tenants.
  *
  * The API returns more fields than the shapes below declare.
  *
@@ -136,9 +136,7 @@ class DatabasesService
      */
     public function getDedicated(string $databaseId, ?string $projectId = null): array
     {
-        if ($databaseId === '') {
-            throw new InvalidArgumentException('databaseId is required');
-        }
+        self::requireDatabaseId($databaseId);
 
         /** @var array{success: true, data: DedicatedDatabaseDetail} */
         return $this->transport->request(
@@ -170,9 +168,7 @@ class DatabasesService
      */
     public function getShared(string $tenantId, ?string $projectId = null): array
     {
-        if ($tenantId === '') {
-            throw new InvalidArgumentException('tenantId is required');
-        }
+        self::requireTenantId($tenantId);
 
         /** @var array{success: true, data: SharedDatabase} */
         return $this->transport->request(
@@ -181,9 +177,63 @@ class DatabasesService
         );
     }
 
+    /**
+     * Permanently deletes a dedicated database cluster.
+     *
+     * @return array{success: true, data: array{}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function deleteDedicated(string $databaseId, ?string $projectId = null): array
+    {
+        self::requireDatabaseId($databaseId);
+
+        /** @var array{success: true, data: array{}} */
+        return $this->transport->request(
+            'DELETE',
+            $this->basePath($projectId) . "/dedicated/{$databaseId}",
+        );
+    }
+
+    /**
+     * Permanently deletes a shared database tenant.
+     *
+     * @return array{success: true, data: array{}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function deleteShared(string $tenantId, ?string $projectId = null): array
+    {
+        self::requireTenantId($tenantId);
+
+        /** @var array{success: true, data: array{}} */
+        return $this->transport->request(
+            'DELETE',
+            $this->basePath($projectId) . "/shared/{$tenantId}",
+        );
+    }
+
     /** Builds the collection route for the resolved project. */
     private function basePath(?string $projectId): string
     {
         return '/v1/projects/' . $this->config->resolveProjectId($projectId) . '/databases';
+    }
+
+    /** Rejects an empty dedicated database id before it becomes a malformed route. */
+    private static function requireDatabaseId(string $databaseId): void
+    {
+        if ($databaseId === '') {
+            throw new InvalidArgumentException('databaseId is required');
+        }
+    }
+
+    /** Rejects an empty shared tenant id before it becomes a malformed route. */
+    private static function requireTenantId(string $tenantId): void
+    {
+        if ($tenantId === '') {
+            throw new InvalidArgumentException('tenantId is required');
+        }
     }
 }

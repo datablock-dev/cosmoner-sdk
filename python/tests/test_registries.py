@@ -128,3 +128,77 @@ class TestAsyncRegistries:
         ) as client:
             with pytest.raises(ValueError, match="registry_id is required"):
                 await client.registries.get("")
+
+
+class TestRegistryDelete:
+    """Tests for deleting a registry via mocked HTTP."""
+
+    def test_deletes_registry_returning_the_envelope(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/reg-1", json={"success": True, "data": {}})
+
+        assert client.registries.delete("reg-1") == {"success": True, "data": {}}
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/storage/container-registry/reg-1",
+            json={"success": True, "data": {}},
+        )
+
+        client.registries.delete("reg-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_requires_registry_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="registry_id is required"):
+            client.registries.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncRegistryDelete:
+    """Tests for deleting a registry through the async client."""
+
+    async def test_deletes_registry_returning_the_envelope(self, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/reg-1", json={"success": True, "data": {}})
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.registries.delete("reg-1") == {
+                "success": True,
+                "data": {},
+            }
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_targets_another_project_per_call(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/storage/container-registry/reg-1",
+            json={"success": True, "data": {}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.registries.delete("reg-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_requires_registry_id_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="registry_id is required"):
+                await client.registries.delete("")
+
+        assert httpx_mock.get_requests() == []

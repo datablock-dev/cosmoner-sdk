@@ -407,3 +407,214 @@ class TestAsyncApps:
 
         assert result["phase"] == "SUPERSEDED"
         assert sleeps == [3.0]
+
+
+class TestAppWrites:
+    """Tests for changing and deleting apps via mocked HTTP."""
+
+    def test_updates_only_the_fields_given_in_camel_case(self, client, httpx_mock):
+        updated = {**APP, "name": "web-2", "imageDeployPolicy": "NEWEST"}
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1", json={"success": True, "data": updated}
+        )
+
+        result = client.apps.update(
+            "app-1",
+            name="web-2",
+            build_command="npm run build",
+            internal_port=8080,
+            auto_deploy=False,
+            image_deploy_policy="NEWEST",
+            instances=3,
+        )
+
+        assert result == {"success": True, "data": updated}
+        request = httpx_mock.get_request()
+        assert request.method == "PATCH"
+        assert json.loads(request.content) == {
+            "name": "web-2",
+            "buildCommand": "npm run build",
+            "internalPort": 8080,
+            "autoDeploy": False,
+            "imageDeployPolicy": "NEWEST",
+            "instances": 3,
+        }
+
+    def test_sends_every_field_under_its_api_name(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/app-1", json={"success": True, "data": APP})
+
+        client.apps.update(
+            "app-1",
+            name="web",
+            build_command="make",
+            run_command="./serve",
+            output_dir="dist",
+            public_port=443,
+            internal_port=3000,
+            auto_deploy=True,
+            image_deploy_policy="TAG",
+            instances=2,
+        )
+
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "web",
+            "buildCommand": "make",
+            "runCommand": "./serve",
+            "outputDir": "dist",
+            "publicPort": 443,
+            "internalPort": 3000,
+            "autoDeploy": True,
+            "imageDeployPolicy": "TAG",
+            "instances": 2,
+        }
+
+    def test_sends_an_explicit_null_to_clear_a_setting(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/app-1", json={"success": True, "data": APP})
+
+        client.apps.update(
+            "app-1",
+            build_command=None,
+            run_command=None,
+            output_dir=None,
+            public_port=None,
+            internal_port=None,
+        )
+
+        assert json.loads(httpx_mock.get_request().content) == {
+            "buildCommand": None,
+            "runCommand": None,
+            "outputDir": None,
+            "publicPort": None,
+            "internalPort": None,
+        }
+
+    def test_updates_an_app_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/apps/app-1",
+            json={"success": True, "data": APP},
+        )
+
+        client.apps.update("app-1", instances=1, project_id="proj-2")
+
+        request = httpx_mock.get_request()
+        assert request.method == "PATCH"
+        assert json.loads(request.content) == {"instances": 1}
+
+    def test_rejects_an_update_with_no_changes_before_any_request(
+        self, client, httpx_mock
+    ):
+        with pytest.raises(ValueError, match="at least one change is required"):
+            client.apps.update("app-1")
+
+        assert httpx_mock.get_requests() == []
+
+    def test_does_not_count_the_project_override_as_a_change(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="at least one change is required"):
+            client.apps.update("app-1", project_id="proj-2")
+
+        assert httpx_mock.get_requests() == []
+
+    def test_requires_an_app_id_on_update_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="app_id is required"):
+            client.apps.update("", name="web")
+
+        assert httpx_mock.get_requests() == []
+
+    def test_deletes_an_app(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/app-1", json={"success": True, "data": {}})
+
+        result = client.apps.delete("app-1")
+
+        assert result == {"success": True, "data": {}}
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_deletes_an_app_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/apps/app-1",
+            json={"success": True, "data": {}},
+        )
+
+        client.apps.delete("app-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_requires_an_app_id_on_delete_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="app_id is required"):
+            client.apps.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncAppWrites:
+    """Tests for changing and deleting apps through the async client."""
+
+    async def test_updates_only_the_fields_given_in_camel_case(self, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/app-1", json={"success": True, "data": APP})
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.apps.update(
+                "app-1", run_command="./serve", public_port=None, auto_deploy=True
+            )
+
+        assert result == {"success": True, "data": APP}
+        request = httpx_mock.get_request()
+        assert request.method == "PATCH"
+        assert json.loads(request.content) == {
+            "runCommand": "./serve",
+            "publicPort": None,
+            "autoDeploy": True,
+        }
+
+    async def test_updates_an_app_in_another_project(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/apps/app-1",
+            json={"success": True, "data": APP},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.apps.update("app-1", output_dir="out", project_id="proj-2")
+
+        assert json.loads(httpx_mock.get_request().content) == {"outputDir": "out"}
+
+    async def test_deletes_an_app_in_another_project(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/apps/app-1",
+            json={"success": True, "data": {}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.apps.delete("app-1", project_id="proj-2")
+
+        assert result == {"success": True, "data": {}}
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_rejects_bad_arguments_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="at least one change is required"):
+                await client.apps.update("app-1")
+            with pytest.raises(ValueError, match="app_id is required"):
+                await client.apps.update("", name="web")
+            with pytest.raises(ValueError, match="app_id is required"):
+                await client.apps.delete("")
+
+        assert httpx_mock.get_requests() == []

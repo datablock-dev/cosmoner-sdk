@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmoner\Sdk\Tests;
 
 use Cosmoner\Sdk\Cosmoner;
+use Cosmoner\Sdk\HttpResponse;
 use Cosmoner\Sdk\NotFoundError;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
@@ -163,5 +164,44 @@ class HostingServiceTest extends TestCase
         $this->expectException(NotFoundError::class);
 
         $this->client->hosting->get('site-missing');
+    }
+
+    public function testThrowsWhenSiteIdIsEmptyOnDelete(): void
+    {
+        try {
+            $this->client->hosting->delete('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('siteId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesASite(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $result = $this->client->hosting->delete('site-1');
+
+        $this->assertSame(['success' => true, 'data' => []], $result);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/hosting/shared/site-1',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesASiteInAnotherProject(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $this->client->hosting->delete('site-1', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/hosting/shared/site-1',
+            $this->http->requests[0]['url'],
+        );
     }
 }

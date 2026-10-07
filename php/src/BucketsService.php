@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Cosmoner\Sdk;
 
+use InvalidArgumentException;
+
 /**
- * Read operations on a project's object storage buckets.
+ * Lists and deletes a project's object storage buckets.
  *
  * There is no single-bucket read; filter the list instead.
  * The API returns more fields than the shape below declares.
@@ -46,9 +48,31 @@ class BucketsService
      */
     public function list(?string $projectId = null): array
     {
-        $project = $this->config->resolveProjectId($projectId);
-
         /** @var array{success: true, data: list<Bucket>} */
-        return $this->transport->request('GET', "/v1/projects/{$project}/storage/object-storage");
+        return $this->transport->request('GET', $this->basePath($projectId));
+    }
+
+    /**
+     * Permanently deletes a bucket, every object in it and its access credentials.
+     *
+     * @return array{success: true, data: array{}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function delete(string $bucketId, ?string $projectId = null): array
+    {
+        if ($bucketId === '') {
+            throw new InvalidArgumentException('bucketId is required');
+        }
+
+        /** @var array{success: true, data: array{}} */
+        return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$bucketId}");
+    }
+
+    /** Builds the collection route for the resolved project. */
+    private function basePath(?string $projectId): string
+    {
+        return '/v1/projects/' . $this->config->resolveProjectId($projectId) . '/storage/object-storage';
     }
 }

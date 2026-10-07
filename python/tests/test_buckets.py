@@ -98,3 +98,74 @@ class TestAsyncBuckets:
             await client.buckets.list(project_id="proj-2")
 
         assert "proj-2" in str(httpx_mock.get_request().url)
+
+
+class TestBucketDelete:
+    """Tests for deleting a bucket via mocked HTTP."""
+
+    def test_deletes_bucket_returning_the_envelope(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/bkt-1", json={"success": True, "data": {}})
+
+        assert client.buckets.delete("bkt-1") == {"success": True, "data": {}}
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/storage/object-storage/bkt-1",
+            json={"success": True, "data": {}},
+        )
+
+        client.buckets.delete("bkt-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_requires_bucket_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="bucket_id is required"):
+            client.buckets.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncBucketDelete:
+    """Tests for deleting a bucket through the async client."""
+
+    async def test_deletes_bucket_returning_the_envelope(self, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/bkt-1", json={"success": True, "data": {}})
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.buckets.delete("bkt-1") == {"success": True, "data": {}}
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_targets_another_project_per_call(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/storage/object-storage/bkt-1",
+            json={"success": True, "data": {}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.buckets.delete("bkt-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_requires_bucket_id_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="bucket_id is required"):
+                await client.buckets.delete("")
+
+        assert httpx_mock.get_requests() == []

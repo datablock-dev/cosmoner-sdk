@@ -20,7 +20,7 @@ def _credentials_params(credentials: bool) -> dict[str, str] | None:
 
 
 class HostingService:
-    """Synchronous read operations on a project's shared hosting sites."""
+    """Synchronous operations on a project's shared hosting sites."""
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
         """Binds the namespace to the client's transport and resolved configuration."""
@@ -62,6 +62,15 @@ class HostingService:
 
         result: dict[str, Any] = self._transport.request(
             "GET", f"{self._base_path(project_id)}/{site_id}/access"
+        )
+        return result
+
+    def delete(self, site_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Permanently deletes a hosting site. This cannot be undone."""
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{site_id}"
         )
         return result
 
@@ -111,5 +120,16 @@ class AsyncHostingService:
 
         result: dict[str, Any] = await self._transport.request(
             "GET", f"{self._base_path(project_id)}/{site_id}/access"
+        )
+        return result
+
+    async def delete(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes a hosting site. This cannot be undone."""
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{site_id}"
         )
         return result

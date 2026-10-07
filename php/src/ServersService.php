@@ -7,7 +7,7 @@ namespace Cosmoner\Sdk;
 use InvalidArgumentException;
 
 /**
- * Read operations on a project's servers.
+ * Reads and deletes a project's servers.
  *
  * The API returns more fields than the shapes below declare.
  *
@@ -88,17 +88,39 @@ class ServersService
      */
     public function get(string $serverId, ?string $projectId = null): array
     {
-        if ($serverId === '') {
-            throw new InvalidArgumentException('serverId is required');
-        }
+        self::requireServerId($serverId);
 
         /** @var array{success: true, data: ServerDetail} */
         return $this->transport->request('GET', $this->basePath($projectId) . "/{$serverId}");
+    }
+
+    /**
+     * Permanently deletes a server.
+     *
+     * @return array{success: true, data: array{}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function delete(string $serverId, ?string $projectId = null): array
+    {
+        self::requireServerId($serverId);
+
+        /** @var array{success: true, data: array{}} */
+        return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$serverId}");
     }
 
     /** Builds the collection route for the resolved project. */
     private function basePath(?string $projectId): string
     {
         return '/v1/projects/' . $this->config->resolveProjectId($projectId) . '/servers';
+    }
+
+    /** Rejects an empty server id before it becomes a malformed route. */
+    private static function requireServerId(string $serverId): void
+    {
+        if ($serverId === '') {
+            throw new InvalidArgumentException('serverId is required');
+        }
     }
 }

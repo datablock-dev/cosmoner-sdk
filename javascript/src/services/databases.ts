@@ -90,6 +90,8 @@ export type GetDedicatedDatabaseResponse = Envelope<DedicatedDatabaseDetail>;
 export type ListSharedDatabasesResponse = Envelope<SharedDatabase[]>;
 export type GetSharedDatabaseResponse = Envelope<SharedDatabase>;
 
+export type DeleteDatabaseResponse = Envelope<Record<string, never>>;
+
 /** Read operations on a project's databases. */
 export class DatabasesService {
   constructor(
@@ -133,5 +135,23 @@ export class DatabasesService {
   async getShared(tenantId: string, params: ProjectScopedParams = {}): Promise<GetSharedDatabaseResponse> {
     if (!tenantId) throw new Error("tenantId is required");
     return this.transport.request<GetSharedDatabaseResponse>("GET", `${this.basePath(params.projectId)}/shared/${tenantId}`);
+  }
+
+  /** Permanently deletes a dedicated database cluster and its data, and stops its billing. */
+  async deleteDedicated(databaseId: string, params: ProjectScopedParams = {}): Promise<DeleteDatabaseResponse> {
+    if (!databaseId) throw new Error("databaseId is required");
+    return this.transport.request<DeleteDatabaseResponse>(
+      "DELETE",
+      `${this.basePath(params.projectId)}/dedicated/${databaseId}`
+    );
+  }
+
+  /** Permanently deletes a shared database and its data, and stops its billing. */
+  async deleteShared(tenantId: string, params: ProjectScopedParams = {}): Promise<DeleteDatabaseResponse> {
+    if (!tenantId) throw new Error("tenantId is required");
+    return this.transport.request<DeleteDatabaseResponse>(
+      "DELETE",
+      `${this.basePath(params.projectId)}/shared/${tenantId}`
+    );
   }
 }
