@@ -18,6 +18,7 @@ import { describeApiError } from "../api-error";
 import { readChoice, rejectUnknownFlags, UsageError, type ParsedArgs } from "../args";
 import { renderTable } from "../commands/config-entries";
 import { makeClient } from "../credentials";
+import { confirm, refusal } from "../write/confirm";
 import { redact } from "./redact";
 
 /** One column of a listing. */
@@ -52,17 +53,86 @@ export interface ReadableResource<T> {
   columns: Column<T>[];
   /** Extra lines under the help text: what the product's fields mean. */
   notes?: string;
+  /**
+   * Deletes the item a reference resolved to. Absent when the product cannot
+   * be deleted from the CLI.
+   */
+  remove?: (client: Cosmoner, row: T) => Promise<unknown>;
+  /** What a delete takes with it, said in the confirmation. */
+  removeWarning?: string;
+  /** The scope writes need, named when the credential is missing. */
+  writeScope?: string;
+  /** Verbs beyond get, list and delete — create, update, verify — keyed by verb. */
+  actions?: Record<string, ProductAction>;
+}
+
+/** A product-specific verb, such as `cosmoner ssh-keys create`. */
+export interface ProductAction {
+  /** The usage line after `cosmoner <product> `: `create <name> --public-key <file>`. */
+  usage: string;
+  /** Its help text, under the usage line. */
+  help: string;
+  /** Flags that take a value, for the argument parser. */
+  valueFlags: readonly string[];
+  /** Flags that take no value. `help` is always accepted. */
+  switches?: readonly string[];
+  run: (args: ParsedArgs, env: NodeJS.ProcessEnv) => Promise<number>;
 }
 
 /** Flags every read command takes. */
 export const READ_VALUE_FLAGS = ["project", "format"];
 const READ_FLAGS = [...READ_VALUE_FLAGS, "help"];
+const DELETE_FLAGS = [...READ_VALUE_FLAGS, "yes", "help"];
 
 const FORMATS = ["text", "json"] as const;
 type ReadFormat = (typeof FORMATS)[number];
 
 /** Verbs a read command understands. `list` is `get` without a reference. */
 const VERBS = ["get", "list"] as const;
+
+/** `rm` is accepted for delete, as `cosmoner secrets rm` already is. */
+const DELETE_VERBS = ["delete", "rm"] as const;
+
+/** Every flag that takes a value anywhere in a product's commands, for the argument parser. */
+export function productValueFlags<T>(resource: ReadableResource<T>): string[] {
+  const actions = Object.values(resource.actions ?? {});
+  return [...new Set([...READ_VALUE_FLAGS, ...actions.flatMap((action) => action.valueFlags)])];
+}
+
+/** Runs `cosmoner <product> <verb> …`, returning the exit code. */
+export async function runProduct<T>(resource: ReadableResource<T>, args: ParsedArgs, env: NodeJS.ProcessEnv): Promise<number> {
+  const verb = args.positional[0];
+  if (verb !== undefined && (DELETE_VERBS as readonly string[]).includes(verb) && resource.remove) {
+    return runDelete(resource, args, env);
+  }
+  const action = verb === undefined ? undefined : resource.actions?.[verb];
+  if (action) {
+    rejectUnknownFlags(args, [...action.valueFlags, ...(action.switches ?? []), "help"]);
+    return action.run(args, env);
+  }
+  return runRead(resource, args, env);
+}
+
+/** The help text for a product's read command, followed by its write verbs. */
+export function productHelp<T>(resource: ReadableResource<T>): string {
+  const sections = [readHelp(resource)];
+  if (resource.remove) sections.push(deleteHelp(resource));
+  for (const action of Object.values(resource.actions ?? {})) {
+    sections.push(`cosmoner ${resource.command} ${action.usage}\n\n${action.help}`);
+  }
+  return sections.join("\n\n");
+}
+
+/** The help text for `cosmoner <product> delete`. */
+function deleteHelp<T>(resource: ReadableResource<T>): string {
+  return `cosmoner ${resource.command} delete <${resource.noun}> [--yes]
+
+Deletes a ${resource.noun}, named by its ${resource.refHelp}. \`rm\` is the same.${resource.removeWarning ? ` ${resource.removeWarning}` : ""}
+Asks first in a terminal; --yes skips the question. Without a terminal and
+without --yes it changes nothing and exits 2.
+
+Needs ${resource.writeScope ?? resource.scope.replace(/:read$/, ":write")}.`;
+}
 
 /** The help text for a product's read command. */
 export function readHelp<T>(resource: ReadableResource<T>): string {
@@ -119,6 +189,39 @@ export async function runRead<T>(resource: ReadableResource<T>, args: ParsedArgs
 
     const detail = resource.fetch ? await resource.fetch(client, row) : row;
     printOne(detail, format);
+    return 0;
+  } catch (err) {
+    console.error(err instanceof CosmonerError ? describeApiError(err) : err instanceof Error ? err.message : String(err));
+    return 1;
+  }
+}
+
+/** Runs `cosmoner <product> delete <ref>`, returning the exit code. */
+async function runDelete<T>(resource: ReadableResource<T>, args: ParsedArgs, env: NodeJS.ProcessEnv): Promise<number> {
+  rejectUnknownFlags(args, DELETE_FLAGS);
+  const [verb, ref, ...extra] = args.positional;
+  if (ref === undefined) throw new UsageError(`Name the ${resource.noun}: cosmoner ${resource.command} ${verb} <${resource.noun}>`);
+  if (extra.length > 0) throw new UsageError(`Unexpected argument "${extra[0]}"`);
+  const format = readChoice<ReadFormat>(args, "format", FORMATS, "text");
+  const remove = resource.remove as NonNullable<ReadableResource<T>["remove"]>;
+
+  const scope = resource.writeScope ?? resource.scope.replace(/:read$/, ":write");
+  const client = await makeClient(args, env, scope, { requireProject: resource.projectScoped });
+
+  try {
+    const row = (await resource.list(client)).find((candidate) => resource.matches(candidate, ref));
+    if (!row) {
+      console.error(`No ${resource.noun} "${ref}"${resource.projectScoped ? " in this project" : ""}.`);
+      return 1;
+    }
+
+    const summary = `This deletes ${resource.noun} "${ref}".${resource.removeWarning ? ` ${resource.removeWarning}` : ""} It cannot be undone.`;
+    const refused = refusal(await confirm(args, summary, `Delete ${resource.noun} "${ref}"?`));
+    if (refused !== null) return refused;
+
+    await remove(client, row);
+    if (format === "json") console.log(JSON.stringify({ deleted: redact(row) }, null, 2));
+    else console.log(`Deleted ${resource.noun} "${ref}".`);
     return 0;
   } catch (err) {
     console.error(err instanceof CosmonerError ? describeApiError(err) : err instanceof Error ? err.message : String(err));

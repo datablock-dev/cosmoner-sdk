@@ -16,3 +16,19 @@ export function readStdin(): string {
 export function stdinIsTty(): boolean {
   return process.stdin.isTTY === true;
 }
+
+/**
+ * Asks a yes/no question on the terminal and resolves true only for "y" or
+ * "yes". The question goes to stderr so a `--format json` reply on stdout
+ * stays parseable.
+ */
+export async function askYesNo(question: string): Promise<boolean> {
+  const { createInterface } = await import("node:readline/promises");
+  const prompt = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    const answer = await prompt.question(`${question} [y/N] `);
+    return /^y(es)?$/i.test(answer.trim());
+  } finally {
+    prompt.close();
+  }
+}

@@ -28,7 +28,7 @@ import { runWhoami, WHOAMI_HELP } from "./commands/whoami";
 import { APP_LOGS_HELP, APP_LOGS_VALUE_FLAGS, runAppLogs } from "./read/app-logs";
 import { OVERVIEW_HELP, runOverview } from "./read/overview";
 import { PRODUCTS } from "./read/products";
-import { READ_VALUE_FLAGS, readHelp, runRead } from "./read/resource";
+import { productHelp, productValueFlags, READ_VALUE_FLAGS, runProduct } from "./read/resource";
 
 const HELP = `cosmoner — tools for .cosmoner/deployment.yaml
 
@@ -82,7 +82,10 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   whoami: [],
   get: READ_VALUE_FLAGS,
   ...Object.fromEntries(
-    Object.keys(PRODUCTS).map((name) => [name, name === "apps" ? APP_LOGS_VALUE_FLAGS : READ_VALUE_FLAGS])
+    Object.entries(PRODUCTS).map(([name, product]) => [
+      name,
+      name === "apps" ? [...new Set([...productValueFlags(product), ...APP_LOGS_VALUE_FLAGS])] : productValueFlags(product),
+    ])
   ),
 };
 
@@ -108,7 +111,7 @@ export const COMMAND_HELP: Record<string, string> = {
   ...Object.fromEntries(
     Object.entries(PRODUCTS).map(([name, product]) => [
       name,
-      name === "apps" ? `${readHelp(product)}\n\n${APP_LOGS_HELP}` : readHelp(product),
+      name === "apps" ? `${productHelp(product)}\n\n${APP_LOGS_HELP}` : productHelp(product),
     ])
   ),
 };
@@ -190,7 +193,7 @@ export function run(
         if (command === "apps" && args.positional[0] === "logs") {
           return runAppLogs(args, env).catch((err: unknown) => reportUsage(err, command));
         }
-        return runRead(product, args, env).catch((err: unknown) => reportUsage(err, command));
+        return runProduct(product, args, env).catch((err: unknown) => reportUsage(err, command));
       }
     }
   } catch (err) {
