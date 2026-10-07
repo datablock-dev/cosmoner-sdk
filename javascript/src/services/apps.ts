@@ -100,7 +100,23 @@ interface Envelope<T> {
   data: T;
 }
 
+/** Which log stream `logs()` reads: the image build, or the running app. */
+export type AppLogType = "BUILD" | "RUN";
+
+/** Arguments accepted by `client.apps.logs()`. */
+export interface AppLogsParams extends ProjectScopedParams {
+  type: AppLogType;
+}
+
+/** One line of an app's log. */
+export interface AppLogLine {
+  message: string;
+  timestamp: string;
+}
+
 export type ListAppsResponse = Envelope<App[]>;
+export type GetAppResponse = Envelope<App>;
+export type AppLogsResponse = Envelope<{ lines: AppLogLine[] }>;
 export type DeployAppResponse = Envelope<AppDeployment>;
 export type GetDeploymentResponse = Envelope<AppDeployment>;
 
@@ -127,6 +143,26 @@ export class AppsService {
   /** Lists every app in the project, newest first. */
   async list(params: ProjectScopedParams = {}): Promise<ListAppsResponse> {
     return this.transport.request<ListAppsResponse>("GET", this.basePath(params.projectId));
+  }
+
+  /**
+   * Fetches one app by id, with its full configuration.
+   *
+   * Environment variables marked secret come back masked; any other
+   * variable's value is returned as stored.
+   */
+  async get(appId: string, params: ProjectScopedParams = {}): Promise<GetAppResponse> {
+    if (!appId) throw new Error("appId is required");
+    return this.transport.request<GetAppResponse>("GET", `${this.basePath(params.projectId)}/${appId}`);
+  }
+
+  /** Fetches the most recent lines of an app's build or runtime log. */
+  async logs(appId: string, params: AppLogsParams): Promise<AppLogsResponse> {
+    if (!appId) throw new Error("appId is required");
+    if (params?.type !== "BUILD" && params?.type !== "RUN") throw new Error('type must be "BUILD" or "RUN"');
+    return this.transport.request<AppLogsResponse>("GET", `${this.basePath(params.projectId)}/${appId}/logs`, {
+      query: { type: params.type },
+    });
   }
 
   /**
