@@ -51,6 +51,7 @@ interface Envelope<T> {
 export type ListIamCredentialsResponse = Envelope<IamCredentialList>;
 export type GetIamCredentialResponse = Envelope<IamCredential>;
 
+
 /** Read operations on a project's access credentials. */
 export class IamService {
   constructor(
@@ -75,5 +76,14 @@ export class IamService {
       "GET",
       `${this.basePath(params.projectId)}/${encodeURIComponent(iamUserName)}`
     );
+  }
+
+  /**
+   * Deletes an IAM user and its access keys, by user name. Anything using the
+   * keys stops working. The API answers 204, so there is nothing to return.
+   */
+  async delete(iamUserName: string, params: ProjectScopedParams = {}): Promise<void> {
+    if (!iamUserName) throw new Error("iamUserName is required");
+    await this.transport.request<void>("DELETE", `${this.basePath(params.projectId)}/${encodeURIComponent(iamUserName)}`);
   }
 }

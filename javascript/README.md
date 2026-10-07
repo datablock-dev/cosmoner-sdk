@@ -139,32 +139,39 @@ const { data: access } = await client.hosting.access(sites[0].id);
 `sftpPassword`. It needs no scope beyond `hosting:read`, so guard the key
 accordingly.
 
-## Read-only namespaces
+## Resource namespaces
 
-Each of these reads one kind of resource and returns the API envelope. Every
-method takes `{ projectId }` to override the client default, except
+Each of these works on one kind of resource and returns the API envelope.
+Every method takes `{ projectId }` to override the client default, except
 `projects`, which reads across the account and never uses the default project.
 A method taking an id rejects an empty one before sending anything.
 
-| Namespace | Methods |
-| --- | --- |
-| `projects` | `list()`, `get(project)` — by id or slug |
-| `apps` | `get(appId)`, `logs(appId, { type: "BUILD" \| "RUN" })`, alongside `list()` and the deploy methods |
-| `servers` | `list()`, `get(serverId)` — adds the installed `sshKeys` |
-| `sshKeys` | `list()` |
-| `databases` | `list()` (every kind), `listDedicated()`, `getDedicated(databaseId)`, `listShared()`, `getShared(tenantId)` |
-| `redis` | `list()`, `get(redisId)` |
-| `domains` | `list()`, `get(domain)` — by id or name, such as `example.com` |
-| `buckets` | `list()` — there is no single-bucket read |
-| `registries` | `list()`, `get(registryId)` |
-| `iam` | `list()`, `get(iamUserName)` — the list holds `credentials` plus partial-failure `errors` |
-| `members` | `list()` — members and pending invitations |
-| `email` | `listDomains()`, `getDomain(emailDomainId)`, alongside `send()` |
+| Namespace | Read | Change |
+| --- | --- | --- |
+| `projects` | `list()`, `get(project)` — by id or slug | |
+| `apps` | `get(appId)`, `logs(appId, { type: "BUILD" \| "RUN" })`, alongside `list()` and the deploy methods | `update(appId, changes)`, `delete(appId)` |
+| `servers` | `list()`, `get(serverId)` — adds the installed `sshKeys` | `delete(serverId)` |
+| `sshKeys` | `list()` | `create({ name, publicKey })`, `delete(sshKeyId)` |
+| `databases` | `list()` (every kind), `listDedicated()`, `getDedicated(databaseId)`, `listShared()`, `getShared(tenantId)` | `deleteDedicated(databaseId)`, `deleteShared(tenantId)` |
+| `redis` | `list()`, `get(redisId)` | `delete(redisId)` |
+| `domains` | `list()`, `get(domain)` — by id or name, such as `example.com` | `create(name)`, `verify(domain)`, `delete(domain)` |
+| `buckets` | `list()` — there is no single-bucket read | `delete(bucketId)` |
+| `registries` | `list()`, `get(registryId)` | `delete(registryId)` |
+| `iam` | `list()`, `get(iamUserName)` — the list holds `credentials` plus partial-failure `errors` | `delete(iamUserName)` |
+| `members` | `list()` — members and pending invitations | |
+| `email` | `listDomains()`, `getDomain(emailDomainId)`, alongside `send()` | `deleteDomain(emailDomainId)` |
 
 Two of these return a credential, and each needs only the namespace's read
 scope, so guard keys that carry it: `databases.getDedicated` always includes
 `connectionUri`, a full connection URI with the password, and `redis.get`
 always includes the plaintext `password`.
+
+Deletes are permanent, and a delete of a billed resource stops its billing.
+`apps.update` changes settings only, for free; it leaves environment variables
+to the deployment file. `domains.create` adds a domain you already own: publish
+the returned `verificationRecord`, then call `verify`. Deleting an SSH key
+leaves it on servers it was already installed on — `stillAuthorisedOn` counts
+them.
 
 ## Secrets
 

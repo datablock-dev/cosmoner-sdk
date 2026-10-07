@@ -31,7 +31,20 @@ interface Envelope<T> {
 
 export type ListSshKeysResponse = Envelope<SshKey[]>;
 
-/** Read operations on a project's SSH keys. */
+/** Arguments accepted by `client.sshKeys.create()`. */
+export interface CreateSshKeyParams extends ProjectScopedParams {
+  name: string;
+  /** One OpenSSH public key line, e.g. the contents of `~/.ssh/id_ed25519.pub`. DSA keys are refused. */
+  publicKey: string;
+}
+
+export type CreateSshKeyResponse = Envelope<SshKey>;
+export type DeleteSshKeyResponse = Envelope<{
+  /** Servers the key was already installed on, where it still works: deleting does not revoke it there. */
+  stillAuthorisedOn: number;
+}>;
+
+/** A project's SSH keys. */
 export class SshKeysService {
   constructor(
     private readonly transport: Transport,
@@ -40,9 +53,29 @@ export class SshKeysService {
 
   /** Lists every SSH key in the project. */
   async list(params: ProjectScopedParams = {}): Promise<ListSshKeysResponse> {
-    return this.transport.request<ListSshKeysResponse>(
-      "GET",
-      `/v1/projects/${resolveProjectId(this.config, params.projectId)}/ssh-keys`
-    );
+    return this.transport.request<ListSshKeysResponse>("GET", this.basePath(params.projectId));
+  }
+
+  /** Adds a public key to the project, for installing on servers created later. */
+  async create(params: CreateSshKeyParams): Promise<CreateSshKeyResponse> {
+    if (!params?.name) throw new Error("name is required");
+    if (!params.publicKey) throw new Error("publicKey is required");
+    return this.transport.request<CreateSshKeyResponse>("POST", this.basePath(params.projectId), {
+      body: { name: params.name, publicKey: params.publicKey },
+    });
+  }
+
+  /**
+   * Removes a key from the project. Servers it was already installed on keep
+   * accepting it; `stillAuthorisedOn` says how many.
+   */
+  async delete(sshKeyId: string, params: ProjectScopedParams = {}): Promise<DeleteSshKeyResponse> {
+    if (!sshKeyId) throw new Error("sshKeyId is required");
+    return this.transport.request<DeleteSshKeyResponse>("DELETE", `${this.basePath(params.projectId)}/${sshKeyId}`);
+  }
+
+  /** Builds the collection route for the resolved project. */
+  private basePath(projectId?: string): string {
+    return `/v1/projects/${resolveProjectId(this.config, projectId)}/ssh-keys`;
   }
 }

@@ -284,3 +284,53 @@ describe("EmailService domain reads", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+/** A reply for the write tests below: the API's envelope, or an empty 204. */
+function writeReply(data: unknown, status = 200): Response {
+  if (status === 204) return new Response(null, { status });
+  return new Response(JSON.stringify({ success: true, data }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/** The one request a write test sent: its method, URL and parsed JSON body. */
+function writeSent(spy: ReturnType<typeof vi.spyOn>): { method: string; url: string; body: unknown } {
+  const [url, init] = spy.mock.calls[0] as [string, RequestInit];
+  return { method: init.method ?? "GET", url, body: init.body === undefined ? undefined : JSON.parse(String(init.body)) };
+}
+
+describe("EmailService writes", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("deleteDomain sends DELETE and returns nothing for the 204", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply(null, 204));
+
+    await expect(client.email.deleteDomain("ed-1")).resolves.toBeUndefined();
+    expect(writeSent(fetchSpy)).toEqual({ method: "DELETE", url: `${P}/email/ed-1`, body: undefined });
+  });
+
+  it("deleteDomain honours a per-call project", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply(null, 204));
+
+    await client.email.deleteDomain("ed-1", { projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy).url).toBe(`https://api.test.dev/v1/projects/proj-2/email/ed-1`);
+  });
+
+  it("deleteDomain requires an id before any request", async () => {
+    await expect(client.email.deleteDomain("")).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

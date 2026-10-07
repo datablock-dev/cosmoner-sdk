@@ -50,6 +50,8 @@ interface Envelope<T> {
 export type ListServersResponse = Envelope<Server[]>;
 export type GetServerResponse = Envelope<ServerDetail>;
 
+export type DeleteServerResponse = Envelope<Record<string, never>>;
+
 /** Read operations on a project's servers. */
 export class ServersService {
   constructor(
@@ -71,5 +73,11 @@ export class ServersService {
   async get(serverId: string, params: ProjectScopedParams = {}): Promise<GetServerResponse> {
     if (!serverId) throw new Error("serverId is required");
     return this.transport.request<GetServerResponse>("GET", `${this.basePath(params.projectId)}/${serverId}`);
+  }
+
+  /** Permanently deletes a server and its disk, and stops its billing. */
+  async delete(serverId: string, params: ProjectScopedParams = {}): Promise<DeleteServerResponse> {
+    if (!serverId) throw new Error("serverId is required");
+    return this.transport.request<DeleteServerResponse>("DELETE", `${this.basePath(params.projectId)}/${serverId}`);
   }
 }

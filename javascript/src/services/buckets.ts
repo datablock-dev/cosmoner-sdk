@@ -37,6 +37,8 @@ interface Envelope<T> {
 
 export type ListBucketsResponse = Envelope<Bucket[]>;
 
+export type DeleteBucketResponse = Envelope<Record<string, never>>;
+
 /** Read operations on a project's buckets. The API has no single-bucket read. */
 export class BucketsService {
   constructor(
@@ -46,9 +48,20 @@ export class BucketsService {
 
   /** Lists every bucket in the project. */
   async list(params: ProjectScopedParams = {}): Promise<ListBucketsResponse> {
-    return this.transport.request<ListBucketsResponse>(
-      "GET",
-      `/v1/projects/${resolveProjectId(this.config, params.projectId)}/storage/object-storage`
-    );
+    return this.transport.request<ListBucketsResponse>("GET", this.basePath(params.projectId));
+  }
+
+  /**
+   * Permanently deletes a bucket with every object in it and the access
+   * credentials made for it, and stops its billing.
+   */
+  async delete(bucketId: string, params: ProjectScopedParams = {}): Promise<DeleteBucketResponse> {
+    if (!bucketId) throw new Error("bucketId is required");
+    return this.transport.request<DeleteBucketResponse>("DELETE", `${this.basePath(params.projectId)}/${bucketId}`);
+  }
+
+  /** Builds the collection route for the resolved project. */
+  private basePath(projectId?: string): string {
+    return `/v1/projects/${resolveProjectId(this.config, projectId)}/storage/object-storage`;
   }
 }

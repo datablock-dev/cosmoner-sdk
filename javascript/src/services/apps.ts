@@ -128,6 +128,28 @@ const DEFAULT_WAIT_TIMEOUT_MS = 10 * 60_000;
 const TAG_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
+/**
+ * The settings `client.apps.update()` can change. Every field is optional, but
+ * a call must change at least one. Environment variables are left out on
+ * purpose: they belong in the deployment file, and the API masks secret ones,
+ * so a read-modify-write of the list would be easy to get wrong.
+ */
+export interface UpdateAppParams extends ProjectScopedParams {
+  name?: string;
+  buildCommand?: string | null;
+  runCommand?: string | null;
+  outputDir?: string | null;
+  publicPort?: number | null;
+  internalPort?: number | null;
+  autoDeploy?: boolean;
+  imageDeployPolicy?: ImageDeployPolicy;
+  /** Refused for an app whose runtime cannot scale horizontally. */
+  instances?: number;
+}
+
+export type UpdateAppResponse = Envelope<App>;
+export type DeleteAppResponse = Envelope<Record<string, never>>;
+
 /** App lookup and image deploy operations for a project. */
 export class AppsService {
   constructor(
@@ -236,5 +258,28 @@ export class AppsService {
       }
       await new Promise((resolve) => setTimeout(resolve, Math.min(interval, remaining)));
     }
+  }
+
+  /**
+   * Changes an app's settings and applies them to the running app.
+   *
+   * Free: resizing, which is billed, is a separate call. The API answers 502
+   * when the settings were saved but the runtime refused them.
+   */
+  async update(appId: string, params: UpdateAppParams): Promise<UpdateAppResponse> {
+    if (!appId) throw new Error("appId is required");
+    const { projectId, ...changes } = params ?? {};
+    const body = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined));
+    if (Object.keys(body).length === 0) throw new Error("at least one change is required");
+    return this.transport.request<UpdateAppResponse>("PATCH", `${this.basePath(projectId)}/${appId}`, { body });
+  }
+
+  /**
+   * Permanently deletes an app: its runtime, routing, custom hostname and
+   * billing, then the app itself. Its deployments go with it.
+   */
+  async delete(appId: string, params: ProjectScopedParams = {}): Promise<DeleteAppResponse> {
+    if (!appId) throw new Error("appId is required");
+    return this.transport.request<DeleteAppResponse>("DELETE", `${this.basePath(params.projectId)}/${appId}`);
   }
 }

@@ -249,3 +249,87 @@ describe("AppsService reads", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+/** A reply for the write tests below: the API's envelope, or an empty 204. */
+function writeReply(data: unknown, status = 200): Response {
+  if (status === 204) return new Response(null, { status });
+  return new Response(JSON.stringify({ success: true, data }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/** The one request a write test sent: its method, URL and parsed JSON body. */
+function writeSent(spy: ReturnType<typeof vi.spyOn>): { method: string; url: string; body: unknown } {
+  const [url, init] = spy.mock.calls[0] as [string, RequestInit];
+  return { method: init.method ?? "GET", url, body: init.body === undefined ? undefined : JSON.parse(String(init.body)) };
+}
+
+describe("AppsService writes", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("delete sends DELETE and returns the envelope", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({}));
+
+    const result = await client.apps.delete("app-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "DELETE", url: `${P}/apps/app-1`, body: undefined });
+    expect(result).toEqual({ success: true, data: {} });
+  });
+
+  it("delete honours a per-call project", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({}, 200));
+
+    await client.apps.delete("app-1", { projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy).url).toBe(`https://api.test.dev/v1/projects/proj-2/apps/app-1`);
+  });
+
+  it("delete requires an id before any request", async () => {
+    await expect(client.apps.delete("")).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("update sends only the given changes", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ id: "app-1", name: "web" }));
+
+    const result = await client.apps.update("app-1", { name: "web", instances: 2, buildCommand: null, runCommand: undefined });
+
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "PATCH",
+      url: `${P}/apps/app-1`,
+      body: { name: "web", instances: 2, buildCommand: null },
+    });
+    expect(result).toEqual({ success: true, data: { id: "app-1", name: "web" } });
+  });
+
+  it("update honours a per-call project and keeps it out of the body", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ id: "app-1" }));
+
+    await client.apps.update("app-1", { autoDeploy: false, projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "PATCH",
+      url: "https://api.test.dev/v1/projects/proj-2/apps/app-1",
+      body: { autoDeploy: false },
+    });
+  });
+
+  it("update refuses a call that changes nothing, before any request", async () => {
+    await expect(client.apps.update("app-1", {})).rejects.toThrow("at least one change is required");
+    await expect(client.apps.update("app-1", { projectId: "proj-2" })).rejects.toThrow("at least one change is required");
+    await expect(client.apps.update("", { name: "web" })).rejects.toThrow("appId is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

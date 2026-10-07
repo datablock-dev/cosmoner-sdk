@@ -52,6 +52,8 @@ interface Envelope<T> {
 export type ListRedisDatabasesResponse = Envelope<RedisDatabase[]>;
 export type GetRedisDatabaseResponse = Envelope<RedisDatabaseDetail>;
 
+export type DeleteRedisDatabaseResponse = Envelope<Record<string, never>>;
+
 /** Read operations on a project's Redis databases. */
 export class RedisService {
   constructor(
@@ -73,5 +75,11 @@ export class RedisService {
   async get(redisId: string, params: ProjectScopedParams = {}): Promise<GetRedisDatabaseResponse> {
     if (!redisId) throw new Error("redisId is required");
     return this.transport.request<GetRedisDatabaseResponse>("GET", `${this.basePath(params.projectId)}/${redisId}`);
+  }
+
+  /** Permanently deletes a Redis database and its data, and stops its billing. */
+  async delete(redisId: string, params: ProjectScopedParams = {}): Promise<DeleteRedisDatabaseResponse> {
+    if (!redisId) throw new Error("redisId is required");
+    return this.transport.request<DeleteRedisDatabaseResponse>("DELETE", `${this.basePath(params.projectId)}/${redisId}`);
   }
 }

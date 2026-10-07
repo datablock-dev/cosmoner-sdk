@@ -47,6 +47,23 @@ interface Envelope<T> {
 export type ListDomainsResponse = Envelope<Domain[]>;
 export type GetDomainResponse = Envelope<Domain>;
 
+/** The TXT record that proves you control a domain you added. */
+export interface VerificationRecord {
+  type: "TXT";
+  name: string;
+  value: string;
+}
+
+export type CreateDomainResponse = Envelope<Domain & { verificationRecord: VerificationRecord }>;
+export type VerifyDomainResponse = Envelope<{
+  status: "ACTIVE" | "PENDING";
+  verified: boolean;
+  record: VerificationRecord;
+  /** Why the lookup failed, when it did. */
+  error?: string;
+}>;
+export type DeleteDomainResponse = Envelope<{ id: string }>;
+
 /** Read operations on a project's domains. */
 export class DomainsService {
   constructor(
@@ -69,6 +86,39 @@ export class DomainsService {
     if (!domain) throw new Error("domain is required");
     return this.transport.request<GetDomainResponse>(
       "GET",
+      `${this.basePath(params.projectId)}/${encodeURIComponent(domain)}`
+    );
+  }
+
+  /**
+   * Adds a domain you already own, e.g. `example.com`. Free. Publish the
+   * returned `verificationRecord`, then call `verify()`. Buying a domain is not
+   * part of the SDK.
+   */
+  async create(name: string, params: ProjectScopedParams = {}): Promise<CreateDomainResponse> {
+    if (!name) throw new Error("name is required");
+    return this.transport.request<CreateDomainResponse>("POST", this.basePath(params.projectId), {
+      body: { name, type: "EXTERNAL" },
+    });
+  }
+
+  /** Checks a domain's verification record, by domain id or name. */
+  async verify(domain: string, params: ProjectScopedParams = {}): Promise<VerifyDomainResponse> {
+    if (!domain) throw new Error("domain is required");
+    return this.transport.request<VerifyDomainResponse>(
+      "POST",
+      `${this.basePath(params.projectId)}/${encodeURIComponent(domain)}/verify`
+    );
+  }
+
+  /**
+   * Removes a domain and its DNS records, by id or name. Refused with 409
+   * while an app or an email domain uses it.
+   */
+  async delete(domain: string, params: ProjectScopedParams = {}): Promise<DeleteDomainResponse> {
+    if (!domain) throw new Error("domain is required");
+    return this.transport.request<DeleteDomainResponse>(
+      "DELETE",
       `${this.basePath(params.projectId)}/${encodeURIComponent(domain)}`
     );
   }
