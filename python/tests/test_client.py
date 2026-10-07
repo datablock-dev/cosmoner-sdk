@@ -45,6 +45,25 @@ class TestCosmoner:
         assert hasattr(client, "email")
         assert callable(client.email.send)
 
+    @pytest.mark.parametrize(
+        "namespace",
+        [
+            "buckets",
+            "databases",
+            "domains",
+            "iam",
+            "members",
+            "projects",
+            "redis",
+            "registries",
+            "servers",
+            "ssh_keys",
+        ],
+    )
+    def test_exposes_read_namespaces(self, namespace):
+        client = Cosmoner(api_key="key-123", project_id="proj-1")
+        assert callable(getattr(client, namespace).list)
+
     def test_applies_default_timeout_and_retries(self):
         client = Cosmoner(api_key="key-123", project_id="proj-1")
         assert client.timeout == 30.0
@@ -82,6 +101,25 @@ class TestAsyncCosmoner:
     def test_exposes_email_service(self):
         client = AsyncCosmoner(api_key="key-123", project_id="proj-1")
         assert callable(client.email.send)
+
+    @pytest.mark.parametrize(
+        "namespace",
+        [
+            "buckets",
+            "databases",
+            "domains",
+            "iam",
+            "members",
+            "projects",
+            "redis",
+            "registries",
+            "servers",
+            "ssh_keys",
+        ],
+    )
+    def test_exposes_read_namespaces(self, namespace):
+        client = AsyncCosmoner(api_key="key-123", project_id="proj-1")
+        assert callable(getattr(client, namespace).list)
 
     def test_raises_when_api_key_is_empty(self):
         with pytest.raises(ValueError, match="api_key is required"):

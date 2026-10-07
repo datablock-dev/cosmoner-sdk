@@ -104,6 +104,13 @@ Set `max_retries=0` to disable retries entirely.
 
 \* At least one of `html` or `text` must be provided.
 
+### Sending domains
+
+| Method | Description |
+| --- | --- |
+| `list_domains(*, project_id=None)` | Every sending domain with its SMTP credentials and DNS records |
+| `get_domain(email_domain_id, *, project_id=None)` | One sending domain; adds `sending` (`identity`, `billingRequired`) |
+
 ## Apps
 
 Rolls an image app onto a new image and waits for the result. Only image apps
@@ -124,6 +131,8 @@ if deployment["phase"] != "ACTIVE":
 | Method | Description |
 | --- | --- |
 | `list(*, project_id=None)` | Every app in the project, newest first |
+| `get(app_id, *, project_id=None)` | One app by id |
+| `logs(app_id, *, type, project_id=None)` | Recent log lines; `type` is `"BUILD"` or `"RUN"`, anything else raises `ValueError` |
 | `deploy(app_id, *, tag=None, digest=None, project_id=None)` | Starts a deployment and returns it without waiting |
 | `get_deployment(app_id, deployment_id, *, project_id=None)` | One deployment's current phase |
 | `wait_for_deployment(app_id, deployment_id, *, interval=3.0, timeout=600.0, on_poll=None, project_id=None)` | Polls until the deployment finishes |
@@ -150,6 +159,31 @@ API key with `hosting:read`.
 | `access(site_id, *, project_id=None)` | `username`, `host`, `sftp.port` and `ssh.port`/`ssh.enabled` |
 
 The password needs no scope beyond `hosting:read`, so guard the key accordingly.
+
+## Read-only namespaces
+
+Each of these reads one kind of resource and returns the API envelope. Every
+method takes `project_id=` to override the client default, except `projects`,
+which reads across the account and never uses the default project. A method
+taking an id raises `ValueError` on an empty one before sending anything.
+
+| Namespace | Methods |
+| --- | --- |
+| `projects` | `list()`, `get(project)` — by id or slug |
+| `servers` | `list()`, `get(server_id)` — adds the installed `sshKeys` |
+| `ssh_keys` | `list()` |
+| `databases` | `list()` (every kind), `list_dedicated()`, `get_dedicated(database_id)`, `list_shared()`, `get_shared(tenant_id)` |
+| `redis` | `list()`, `get(redis_id)` |
+| `domains` | `list()`, `get(domain)` — by id or name, such as `example.com` |
+| `buckets` | `list()` — there is no single-bucket read |
+| `registries` | `list()`, `get(registry_id)` |
+| `iam` | `list()`, `get(iam_user_name)` — the list holds `credentials` plus partial-failure `errors` |
+| `members` | `list()` — members and pending invitations |
+
+Two of these return a credential, and each needs only the namespace's read
+scope, so guard keys that carry it: `databases.get_dedicated` always includes
+`connectionUri`, a full connection URI with the password, and `redis.get`
+always includes the plaintext `password`.
 
 ## Secrets
 
