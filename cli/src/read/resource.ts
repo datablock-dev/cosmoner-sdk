@@ -100,7 +100,7 @@ export function productValueFlags<T>(resource: ReadableResource<T>): string[] {
 }
 
 /** Runs `cosmoner <product> <verb> …`, returning the exit code. */
-export async function runProduct<T>(resource: ReadableResource<T>, args: ParsedArgs, env: NodeJS.ProcessEnv): Promise<number> {
+export function runProduct<T>(resource: ReadableResource<T>, args: ParsedArgs, env: NodeJS.ProcessEnv): Promise<number> {
   const verb = args.positional[0];
   if (verb !== undefined && (DELETE_VERBS as readonly string[]).includes(verb) && resource.remove) {
     return runDelete(resource, args, env);
