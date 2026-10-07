@@ -1,4 +1,4 @@
-"""Apps service namespace — reading apps and their logs, and rolling out new images."""
+"""Apps service namespace — reading, changing and deleting apps, and deploying images."""
 
 from __future__ import annotations
 
@@ -25,6 +25,13 @@ DEFAULT_WAIT_TIMEOUT = 600.0
 _TAG_PATTERN = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
 _DIGEST_PATTERN = re.compile(r"^sha256:[a-f0-9]{64}$")
 
+#: Sentinel distinguishing "leave unchanged" from an explicit ``None``.
+_UNSET: Any = object()
+
+#: How an image app picks up a new image: the tag it names, the newest push, or
+#: only when told to.
+ImageDeployPolicy = Literal["TAG", "NEWEST", "MANUAL"]
+
 
 def _deploy_payload(app_id: str, tag: str | None, digest: str | None) -> dict[str, Any]:
     """Validates deploy arguments and shapes them into the API request body."""
@@ -41,6 +48,42 @@ def _deploy_payload(app_id: str, tag: str | None, digest: str | None) -> dict[st
         payload["tag"] = tag
     if digest is not None:
         payload["digest"] = digest
+
+    return payload
+
+
+def _update_payload(
+    name: str | None,
+    build_command: Any,
+    run_command: Any,
+    output_dir: Any,
+    public_port: Any,
+    internal_port: Any,
+    auto_deploy: bool | None,
+    image_deploy_policy: str | None,
+    instances: int | None,
+) -> dict[str, Any]:
+    """Shapes update arguments into camelCase JSON, sending only what was given.
+
+    The commands, output directory and ports use a sentinel rather than ``None``
+    because clearing one means sending an explicit null.
+    """
+    candidates: dict[str, Any] = {
+        "name": _UNSET if name is None else name,
+        "buildCommand": build_command,
+        "runCommand": run_command,
+        "outputDir": output_dir,
+        "publicPort": public_port,
+        "internalPort": internal_port,
+        "autoDeploy": _UNSET if auto_deploy is None else auto_deploy,
+        "imageDeployPolicy": (
+            _UNSET if image_deploy_policy is None else image_deploy_policy
+        ),
+        "instances": _UNSET if instances is None else instances,
+    }
+    payload = {key: value for key, value in candidates.items() if value is not _UNSET}
+    if not payload:
+        raise ValueError("at least one change is required")
 
     return payload
 
@@ -80,7 +123,7 @@ def _timeout_error(deployment_id: str, phase: str, timeout: float) -> TimeoutErr
 
 
 class AppsService:
-    """Synchronous app lookup and image deploy operations for a project."""
+    """Synchronous app reads, changes, deletes and image deploys for a project."""
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
         """Binds the namespace to the client's transport and resolved configuration."""
@@ -104,6 +147,55 @@ class AppsService:
 
         result: dict[str, Any] = self._transport.request(
             "GET", f"{self._base_path(project_id)}/{app_id}"
+        )
+        return result
+
+    def update(
+        self,
+        app_id: str,
+        *,
+        name: str | None = None,
+        build_command: str | None = _UNSET,
+        run_command: str | None = _UNSET,
+        output_dir: str | None = _UNSET,
+        public_port: int | None = _UNSET,
+        internal_port: int | None = _UNSET,
+        auto_deploy: bool | None = None,
+        image_deploy_policy: ImageDeployPolicy | None = None,
+        instances: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Changes an app's settings and returns the updated app.
+
+        Only the fields given are sent, as their camelCase API names. Pass
+        ``None`` to ``build_command``, ``run_command``, ``output_dir``,
+        ``public_port`` or ``internal_port`` to clear it. A call that changes
+        nothing raises ``ValueError`` before any request.
+        """
+        _require_app_id(app_id)
+        payload = _update_payload(
+            name,
+            build_command,
+            run_command,
+            output_dir,
+            public_port,
+            internal_port,
+            auto_deploy,
+            image_deploy_policy,
+            instances,
+        )
+
+        result: dict[str, Any] = self._transport.request(
+            "PATCH", f"{self._base_path(project_id)}/{app_id}", json=payload
+        )
+        return result
+
+    def delete(self, app_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Permanently deletes an app. This cannot be undone."""
+        _require_app_id(app_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{app_id}"
         )
         return result
 
@@ -223,6 +315,57 @@ class AsyncAppsService:
 
         result: dict[str, Any] = await self._transport.request(
             "GET", f"{self._base_path(project_id)}/{app_id}"
+        )
+        return result
+
+    async def update(
+        self,
+        app_id: str,
+        *,
+        name: str | None = None,
+        build_command: str | None = _UNSET,
+        run_command: str | None = _UNSET,
+        output_dir: str | None = _UNSET,
+        public_port: int | None = _UNSET,
+        internal_port: int | None = _UNSET,
+        auto_deploy: bool | None = None,
+        image_deploy_policy: ImageDeployPolicy | None = None,
+        instances: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Changes an app's settings and returns the updated app.
+
+        Only the fields given are sent, as their camelCase API names. Pass
+        ``None`` to ``build_command``, ``run_command``, ``output_dir``,
+        ``public_port`` or ``internal_port`` to clear it. A call that changes
+        nothing raises ``ValueError`` before any request.
+        """
+        _require_app_id(app_id)
+        payload = _update_payload(
+            name,
+            build_command,
+            run_command,
+            output_dir,
+            public_port,
+            internal_port,
+            auto_deploy,
+            image_deploy_policy,
+            instances,
+        )
+
+        result: dict[str, Any] = await self._transport.request(
+            "PATCH", f"{self._base_path(project_id)}/{app_id}", json=payload
+        )
+        return result
+
+    async def delete(
+        self, app_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes an app. This cannot be undone."""
+        _require_app_id(app_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{app_id}"
         )
         return result
 

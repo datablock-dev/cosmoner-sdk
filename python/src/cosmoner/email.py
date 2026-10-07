@@ -96,6 +96,19 @@ class EmailService:
         )
         return result
 
+    def delete_domain(
+        self, email_domain_id: str, *, project_id: str | None = None
+    ) -> None:
+        """Permanently removes a sending domain. This cannot be undone.
+
+        The API answers 204, so nothing is returned.
+        """
+        _require_email_domain_id(email_domain_id)
+
+        self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{email_domain_id}"
+        )
+
 
 class AsyncEmailService:
     """Asynchronous counterpart to :class:`EmailService`."""
@@ -149,3 +162,16 @@ class AsyncEmailService:
             "GET", f"{self._base_path(project_id)}/{email_domain_id}"
         )
         return result
+
+    async def delete_domain(
+        self, email_domain_id: str, *, project_id: str | None = None
+    ) -> None:
+        """Permanently removes a sending domain. This cannot be undone.
+
+        The API answers 204, so nothing is returned.
+        """
+        _require_email_domain_id(email_domain_id)
+
+        await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{email_domain_id}"
+        )

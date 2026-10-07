@@ -16,7 +16,7 @@ def _require_iam_user_name(iam_user_name: str) -> None:
 
 
 class IamService:
-    """Synchronous read operations on a project's IAM credentials."""
+    """Synchronous operations on a project's IAM credentials."""
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
         """Binds the namespace to the client's transport and resolved configuration."""
@@ -46,6 +46,17 @@ class IamService:
             "GET", f"{self._base_path(project_id)}/{quote(iam_user_name, safe='')}"
         )
         return result
+
+    def delete(self, iam_user_name: str, *, project_id: str | None = None) -> None:
+        """Permanently deletes a credential. This cannot be undone.
+
+        The API answers 204, so nothing is returned.
+        """
+        _require_iam_user_name(iam_user_name)
+
+        self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{quote(iam_user_name, safe='')}"
+        )
 
 
 class AsyncIamService:
@@ -81,3 +92,14 @@ class AsyncIamService:
             "GET", f"{self._base_path(project_id)}/{quote(iam_user_name, safe='')}"
         )
         return result
+
+    async def delete(self, iam_user_name: str, *, project_id: str | None = None) -> None:
+        """Permanently deletes a credential. This cannot be undone.
+
+        The API answers 204, so nothing is returned.
+        """
+        _require_iam_user_name(iam_user_name)
+
+        await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{quote(iam_user_name, safe='')}"
+        )

@@ -15,8 +15,23 @@ def _require_domain(domain: str) -> None:
         raise ValueError("domain is required")
 
 
+def _domain_segment(domain: str) -> str:
+    """Validates a domain id or name and encodes it as a single path segment."""
+    _require_domain(domain)
+    # A name is a single path segment, so nothing in it may read as a separator.
+    return quote(domain, safe="")
+
+
+def _create_payload(name: str) -> dict[str, Any]:
+    """Validates a domain name and shapes it into the body that adds one you own."""
+    if not name:
+        raise ValueError("name is required")
+
+    return {"name": name, "type": "EXTERNAL"}
+
+
 class DomainsService:
-    """Synchronous read operations on a project's domains."""
+    """Synchronous operations on a project's domains."""
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
         """Binds the namespace to the client's transport and resolved configuration."""
@@ -36,12 +51,48 @@ class DomainsService:
 
     def get(self, domain: str, *, project_id: str | None = None) -> dict[str, Any]:
         """Fetches one domain by id or by name, such as ``example.com``."""
-        _require_domain(domain)
-        # A name is a single path segment, so nothing in it may read as a separator.
-        segment = quote(domain, safe="")
+        segment = _domain_segment(domain)
 
         result: dict[str, Any] = self._transport.request(
             "GET", f"{self._base_path(project_id)}/{segment}"
+        )
+        return result
+
+    def create(self, name: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Adds a domain you already own. Buying a domain is not available here.
+
+        The response carries ``verificationRecord`` (``type``, ``name``,
+        ``value``): the TXT record to publish before calling :meth:`verify`.
+        """
+        payload = _create_payload(name)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", self._base_path(project_id), json=payload
+        )
+        return result
+
+    def verify(self, domain: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Checks the verification TXT record of a domain, by id or by name.
+
+        ``status`` is ``ACTIVE`` once verified, or ``PENDING``, possibly with an
+        ``error`` saying why the record did not match.
+        """
+        segment = _domain_segment(domain)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", f"{self._base_path(project_id)}/{segment}/verify"
+        )
+        return result
+
+    def delete(self, domain: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Permanently removes a domain, by id or by name, from the project.
+
+        The API answers 409 while an app or an email domain still uses it.
+        """
+        segment = _domain_segment(domain)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{segment}"
         )
         return result
 
@@ -67,11 +118,51 @@ class AsyncDomainsService:
 
     async def get(self, domain: str, *, project_id: str | None = None) -> dict[str, Any]:
         """Fetches one domain by id or by name, such as ``example.com``."""
-        _require_domain(domain)
-        # A name is a single path segment, so nothing in it may read as a separator.
-        segment = quote(domain, safe="")
+        segment = _domain_segment(domain)
 
         result: dict[str, Any] = await self._transport.request(
             "GET", f"{self._base_path(project_id)}/{segment}"
+        )
+        return result
+
+    async def create(self, name: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Adds a domain you already own. Buying a domain is not available here.
+
+        The response carries ``verificationRecord`` (``type``, ``name``,
+        ``value``): the TXT record to publish before calling :meth:`verify`.
+        """
+        payload = _create_payload(name)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", self._base_path(project_id), json=payload
+        )
+        return result
+
+    async def verify(
+        self, domain: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Checks the verification TXT record of a domain, by id or by name.
+
+        ``status`` is ``ACTIVE`` once verified, or ``PENDING``, possibly with an
+        ``error`` saying why the record did not match.
+        """
+        segment = _domain_segment(domain)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", f"{self._base_path(project_id)}/{segment}/verify"
+        )
+        return result
+
+    async def delete(
+        self, domain: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently removes a domain, by id or by name, from the project.
+
+        The API answers 409 while an app or an email domain still uses it.
+        """
+        segment = _domain_segment(domain)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{segment}"
         )
         return result

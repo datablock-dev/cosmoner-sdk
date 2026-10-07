@@ -15,7 +15,7 @@ def _require_redis_id(redis_id: str) -> None:
 
 
 class RedisService:
-    """Synchronous read operations on a project's Redis databases."""
+    """Synchronous operations on a project's Redis databases."""
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
         """Binds the namespace to the client's transport and resolved configuration."""
@@ -43,6 +43,15 @@ class RedisService:
 
         result: dict[str, Any] = self._transport.request(
             "GET", f"{self._base_path(project_id)}/{redis_id}"
+        )
+        return result
+
+    def delete(self, redis_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Permanently deletes a Redis database. This cannot be undone."""
+        _require_redis_id(redis_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{redis_id}"
         )
         return result
 
@@ -78,5 +87,16 @@ class AsyncRedisService:
 
         result: dict[str, Any] = await self._transport.request(
             "GET", f"{self._base_path(project_id)}/{redis_id}"
+        )
+        return result
+
+    async def delete(
+        self, redis_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Permanently deletes a Redis database. This cannot be undone."""
+        _require_redis_id(redis_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{redis_id}"
         )
         return result

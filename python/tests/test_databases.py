@@ -228,3 +228,163 @@ class TestAsyncDatabases:
                 await client.databases.get_dedicated("")
             with pytest.raises(ValueError, match="tenant_id is required"):
                 await client.databases.get_shared("")
+
+
+class TestDedicatedDatabaseDelete:
+    """Tests for deleting a dedicated database via mocked HTTP."""
+
+    def test_deletes_dedicated_database_returning_the_envelope(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/dedicated/db-1", json={"success": True, "data": {}}
+        )
+
+        assert client.databases.delete_dedicated("db-1") == {"success": True, "data": {}}
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/databases/dedicated/db-1",
+            json={"success": True, "data": {}},
+        )
+
+        client.databases.delete_dedicated("db-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_requires_database_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="database_id is required"):
+            client.databases.delete_dedicated("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncDedicatedDatabaseDelete:
+    """Tests for deleting a dedicated database through the async client."""
+
+    async def test_deletes_dedicated_database_returning_the_envelope(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/dedicated/db-1", json={"success": True, "data": {}}
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.databases.delete_dedicated("db-1") == {
+                "success": True,
+                "data": {},
+            }
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_targets_another_project_per_call(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/databases/dedicated/db-1",
+            json={"success": True, "data": {}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.databases.delete_dedicated("db-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_requires_database_id_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="database_id is required"):
+                await client.databases.delete_dedicated("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestSharedDatabaseDelete:
+    """Tests for deleting a shared database tenant via mocked HTTP."""
+
+    def test_deletes_shared_database_tenant_returning_the_envelope(
+        self, client, httpx_mock
+    ):
+        httpx_mock.add_response(
+            url=f"{BASE}/shared/tenant-1", json={"success": True, "data": {}}
+        )
+
+        assert client.databases.delete_shared("tenant-1") == {"success": True, "data": {}}
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/databases/shared/tenant-1",
+            json={"success": True, "data": {}},
+        )
+
+        client.databases.delete_shared("tenant-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_requires_tenant_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="tenant_id is required"):
+            client.databases.delete_shared("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncSharedDatabaseDelete:
+    """Tests for deleting a shared database tenant through the async client."""
+
+    async def test_deletes_shared_database_tenant_returning_the_envelope(
+        self, httpx_mock
+    ):
+        httpx_mock.add_response(
+            url=f"{BASE}/shared/tenant-1", json={"success": True, "data": {}}
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.databases.delete_shared("tenant-1") == {
+                "success": True,
+                "data": {},
+            }
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_targets_another_project_per_call(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/databases/shared/tenant-1",
+            json={"success": True, "data": {}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.databases.delete_shared("tenant-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_requires_tenant_id_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="tenant_id is required"):
+                await client.databases.delete_shared("")
+
+        assert httpx_mock.get_requests() == []

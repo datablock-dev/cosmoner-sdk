@@ -137,3 +137,74 @@ class TestAsyncRedis:
         ) as client:
             with pytest.raises(ValueError, match="redis_id is required"):
                 await client.redis.get("")
+
+
+class TestRedisDelete:
+    """Tests for deleting a Redis database via mocked HTTP."""
+
+    def test_deletes_redis_database_returning_the_envelope(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/red-1", json={"success": True, "data": {}})
+
+        assert client.redis.delete("red-1") == {"success": True, "data": {}}
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/redis/red-1",
+            json={"success": True, "data": {}},
+        )
+
+        client.redis.delete("red-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_requires_redis_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="redis_id is required"):
+            client.redis.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncRedisDelete:
+    """Tests for deleting a Redis database through the async client."""
+
+    async def test_deletes_redis_database_returning_the_envelope(self, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/red-1", json={"success": True, "data": {}})
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.redis.delete("red-1") == {"success": True, "data": {}}
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_targets_another_project_per_call(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/redis/red-1",
+            json={"success": True, "data": {}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.redis.delete("red-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_requires_redis_id_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="redis_id is required"):
+                await client.redis.delete("")
+
+        assert httpx_mock.get_requests() == []
