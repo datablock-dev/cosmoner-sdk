@@ -17,6 +17,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # The tip of main, not the pushed commit. Release runs queue (see the
+          # concurrency group in release.yml), so a queued run's own commit can be
+          # behind main by the version bump of the run before it; releasing from
+          # that commit re-bumps the same version line and the push conflicts.
+          ref: ${{ github.ref }}
           # Credentials are the default GITHUB_TOKEN; the version-bump step pushes with them.
           persist-credentials: true
 
@@ -44,6 +49,9 @@ jobs:
           prefix: javascript/
           patchAll: true
           noVersionBumpBehavior: patch
+          # A queued run can find the previous run already released everything
+          # since the last tag; that is nothing to do, not an error.
+          noNewCommitBehavior: silent
           maxTagsToFetch: 100
 
       # src/version.ts carries the version into the User-Agent, because the
