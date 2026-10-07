@@ -7,7 +7,7 @@ import { CosmonerError, type Cosmoner } from "@cosmoner/sdk";
 
 import { describeApiError } from "../api-error";
 import { readChoice, UsageError, type ParsedArgs } from "../args";
-import { makeClient } from "../credentials";
+import { makeClient, type CredentialOptions } from "../credentials";
 import { redact } from "../read/redact";
 
 const FORMATS = ["text", "json"] as const;
@@ -40,9 +40,10 @@ export async function runWrite(
   args: ParsedArgs,
   env: NodeJS.ProcessEnv,
   scope: string,
-  body: (client: Cosmoner) => Promise<number>
+  body: (client: Cosmoner) => Promise<number>,
+  options: CredentialOptions = {}
 ): Promise<number> {
-  const client = await makeClient(args, env, scope);
+  const client = await makeClient(args, env, scope, options);
   try {
     return await body(client);
   } catch (err) {

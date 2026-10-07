@@ -109,10 +109,20 @@ Set `max_retries=0` to disable retries entirely.
 | Method | Description |
 | --- | --- |
 | `list_domains(*, project_id=None)` | Every sending domain with its SMTP credentials and DNS records |
+| `create_domain(*, domain_id, project_id=None)` | Sets up email on a domain already in the project (`client.domains`); returns the sending domain with its `dnsRecords` |
+| `create_external_domain(*, domain_name, project_id=None)` | Sets up email on a domain whose DNS is managed elsewhere, adding it to the project as `PENDING` |
+| `verify_domain(email_domain_id, *, project_id=None)` | Checks the DNS records and returns each one's `verified` and `error`; the domain goes `ACTIVE` once all resolve |
+| `limits(*, project_id=None)` | The email `plan`, quotas and limits, what was sent this month, day and hour, and any pause or pending limit request |
 | `get_domain(email_domain_id, *, project_id=None)` | One sending domain; adds `sending` (`identity`, `billingRequired`) |
 | `delete_domain(email_domain_id, *, project_id=None)` | Permanently removes a sending domain; the API answers 204, so it returns `None` |
 | `create_credential(email_domain_id, *, label, from_address, project_id=None)` | Issues an SMTP credential; `from_address` must be on the domain. Returns `smtpPassword` once |
 | `delete_credential(email_domain_id, credential_id, *, project_id=None)` | Revokes an SMTP credential, so anything sending with it stops working; returns `None` |
+
+`create_domain` answers 409 when email is already set up on the domain, and
+`create_external_domain` when the project already has the domain — use
+`create_domain` for it. The first `verify_domain` that activates a domain puts
+the project's email plan on its subscription, so a project that cannot be billed
+is refused with 402.
 
 ## Apps
 
@@ -191,17 +201,17 @@ The password needs no scope beyond `hosting:read`, so guard the key accordingly.
 
 Each of these manages one kind of resource and returns the API envelope, or
 `None` where the API answers 204. Every method takes `project_id=` to override
-the client default, except `projects` and `catalog`, which read across the
+the client default, except `projects` and `catalog`, which work across the
 account and never use the default project. A method taking an id raises `ValueError` on an empty
 one before sending anything. Every `delete` is permanent.
 
 | Namespace | Methods |
 | --- | --- |
-| `projects` | `list()`, `get(project)` — by id or slug |
+| `projects` | `list()`, `get(project)`, `update(project, *, name)`, `delete(project)` — by id or slug; see below |
 | `catalog` | `server_sizes()`, `server_regions()`, `server_images()`, `redis_plans()`, `redis_regions()`, `databases()`, `app_sizes()`, `app_regions()` — what can be created; account-wide, so never uses the default project |
-| `servers` | `list()`, `get(server_id)` — adds the installed `sshKeys`; `preview(*, size, provider=None)`, `create(*, name, size, region, image=None, ssh_key_ids=None, provider=None)`, `delete(server_id)` |
+| `servers` | `list()`, `get(server_id)` — adds the installed `sshKeys`; `preview(*, size, provider=None)`, `create(*, name, size, region, image=None, ssh_key_ids=None, provider=None)`, `update(server_id, *, name)`, `power_on(server_id)`, `power_off(server_id)`, `reboot(server_id)` — see below; `delete(server_id)` |
 | `ssh_keys` | `list()`, `create(*, name, public_key)`, `generate(*, name)` — returns `privateKey` once; `delete(ssh_key_id)` — see below |
-| `databases` | `list()` (every kind), `list_dedicated()`, `get_dedicated(database_id)`, `preview_dedicated(*, size)`, `create_dedicated(*, name, size, version, region, engine=None)`, `delete_dedicated(database_id)`, `list_shared()`, `get_shared(tenant_id)`, `delete_shared(tenant_id)` |
+| `databases` | `list()` (every kind), `list_dedicated()`, `get_dedicated(database_id)`, `preview_dedicated(*, size)`, `create_dedicated(*, name, size, version, region, engine=None)`, `delete_dedicated(database_id)`, `list_shared()`, `get_shared(tenant_id)`, `rotate_shared_password(tenant_id)` — returns the new password once; `delete_shared(tenant_id)` |
 | `redis` | `list()`, `get(redis_id)`, `preview(*, plan)`, `create(*, name, plan, region, persistence=None)`, `delete(redis_id)` |
 | `domains` | `list()`, `get(domain)`, `create(name)`, `verify(domain)`, `delete(domain)` — by id or name, such as `example.com` |
 | `buckets` | `list()` — there is no single-bucket read; `preview(*, tier=None)`, `create(*, name, region, tier=None, public_access=None, versioning=None, cdn_enabled=None)`, `delete(bucket_id)` also deletes every object in it and its access credentials |
@@ -216,8 +226,10 @@ always includes the plaintext `password`.
 
 ### Credentials returned once
 
-`iam.create`, `email.create_credential` and `ssh_keys.generate` each return a
-credential exactly once — `secretAccessKey`, `smtpPassword` and `privateKey`.
+`iam.create`, `email.create_credential`, `ssh_keys.generate` and
+`databases.rotate_shared_password` each return a credential exactly once —
+`secretAccessKey`, `smtpPassword`, `privateKey` and `password` (also inside
+`connectionUri`). Rotating stops the old password working at once.
 The API keeps only a hash or nothing at all, so no later read returns it: store
 it from that response.
 
@@ -265,6 +277,22 @@ Server, Redis, dedicated database and bucket creates return `{"deployed": True}`
 with no id — list the namespace and match by name. Servers start
 `PROVISIONING`, Redis and databases `CREATING`. A registry create returns its
 `id`, and an app create its `appId`.
+
+### Servers and projects
+
+`servers.update` renames a server; the name is lowercase letters, digits and
+hyphens, 1–63 characters. `power_on`, `power_off` and `reboot` are
+asynchronous: each returns the server `PROVISIONING` while the action runs, so
+read it with `servers.get` to see where it settles. `power_off` is a hard power
+cut, like pulling the plug. Each answers 409 while the server is still being
+provisioned, or when it is already running (`power_on`) or not running
+(`power_off`, `reboot`).
+
+`projects.update` renames a project (1–100 characters) and needs an owner or
+admin; it answers 409 when you already have a project of that name.
+`projects.delete` needs the owner and is irreversible. It is refused with 409
+while the project still holds resources — servers, apps, databases and so on —
+so delete those first.
 
 `ssh_keys.delete` removes the key from the project, not from servers it was
 already installed on: `stillAuthorisedOn` in the response counts them.

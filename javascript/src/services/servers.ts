@@ -53,6 +53,16 @@ export type GetServerResponse = Envelope<ServerDetail>;
 
 export type DeleteServerResponse = Envelope<Record<string, never>>;
 
+/** Arguments accepted by `client.servers.update()`. */
+export interface UpdateServerParams extends ProjectScopedParams {
+  /** Lowercase letters, digits and hyphens, at most 63 characters. */
+  name: string;
+}
+
+export type UpdateServerResponse = Envelope<Server>;
+/** The server as the action left it: `PROVISIONING` until the action settles. */
+export type ServerActionResponse = Envelope<Server>;
+
 /** Arguments accepted by `client.servers.preview()`. */
 export interface PreviewServerParams extends ProjectScopedParams {
   /** A size slug from `client.catalog.serverSizes()`. */
@@ -99,6 +109,38 @@ export class ServersService {
     return this.transport.request<GetServerResponse>("GET", `${this.basePath(params.projectId)}/${serverId}`);
   }
 
+  /** Renames a server. */
+  async update(serverId: string, params: UpdateServerParams): Promise<UpdateServerResponse> {
+    if (!serverId) throw new Error("serverId is required");
+    if (!params?.name) throw new Error("name is required");
+    return this.transport.request<UpdateServerResponse>("PATCH", `${this.basePath(params.projectId)}/${serverId}`, {
+      body: { name: params.name },
+    });
+  }
+
+  /**
+   * Powers a stopped server on. Asynchronous: the server reads `PROVISIONING`
+   * until it settles, so read it again to see the outcome. Refused with 409
+   * while it is still being provisioned or is already running.
+   */
+  async powerOn(serverId: string, params: ProjectScopedParams = {}): Promise<ServerActionResponse> {
+    return this.action(serverId, "power_on", params);
+  }
+
+  /**
+   * Cuts a running server's power — a hard stop, like pulling the plug, not a
+   * shutdown its operating system sees coming. Asynchronous, like `powerOn`.
+   * A stopped server is still billed.
+   */
+  async powerOff(serverId: string, params: ProjectScopedParams = {}): Promise<ServerActionResponse> {
+    return this.action(serverId, "power_off", params);
+  }
+
+  /** Reboots a running server. Asynchronous, like `powerOn`. */
+  async reboot(serverId: string, params: ProjectScopedParams = {}): Promise<ServerActionResponse> {
+    return this.action(serverId, "reboot", params);
+  }
+
   /** Permanently deletes a server and its disk, and stops its billing. */
   async delete(serverId: string, params: ProjectScopedParams = {}): Promise<DeleteServerResponse> {
     if (!serverId) throw new Error("serverId is required");
@@ -134,6 +176,14 @@ export class ServersService {
         template: params.image,
         sshKeyIds: params.sshKeyIds,
       },
+    });
+  }
+
+  /** Runs one power action. */
+  private async action(serverId: string, action: "power_on" | "power_off" | "reboot", params: ProjectScopedParams): Promise<ServerActionResponse> {
+    if (!serverId) throw new Error("serverId is required");
+    return this.transport.request<ServerActionResponse>("POST", `${this.basePath(params.projectId)}/${serverId}/actions`, {
+      body: { action },
     });
   }
 }

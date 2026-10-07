@@ -26,11 +26,12 @@ const SMTP_SERVER = "smtp.cosmoner.com, port 587 with STARTTLS";
 
 /**
  * Prints a created credential: `lines` and the warning as text, or the API's
- * object as JSON with only `secretField` left unredacted.
+ * object as JSON with only `secretFields` left unredacted.
  */
-function printCredential(format: WriteFormat, data: Row, secretField: string, intro: string, lines: Array<[string, string]>, what: string): void {
+export function printCredential(format: WriteFormat, data: Row, secretFields: string[], intro: string, lines: Array<[string, string]>, what: string): void {
   if (format === "json") {
-    console.log(JSON.stringify({ ...redact(data), [secretField]: data[secretField] }, null, 2));
+    const secrets = Object.fromEntries(secretFields.map((field) => [field, data[field]]));
+    console.log(JSON.stringify({ ...redact(data), ...secrets }, null, 2));
     return;
   }
   const width = Math.max(...lines.map(([label]) => label.length)) + 2;
@@ -114,7 +115,7 @@ Needs iam:write, plus the storage and registry scopes it grants.`,
         printCredential(
           format,
           data,
-          "secretAccessKey",
+          ["secretAccessKey"],
           `Created credential "${data.label}" (${data.iamUserName}).`,
           [
             ["Access key ID", data.accessKeyId],
@@ -175,7 +176,7 @@ function createSmtpCredential(args: ParsedArgs, env: NodeJS.ProcessEnv, email: R
     printCredential(
       format,
       data,
-      "smtpPassword",
+      ["smtpPassword"],
       `Created SMTP credential "${data.label}", sending as ${data.fromAddress}.`,
       [
         ["Server", SMTP_SERVER],

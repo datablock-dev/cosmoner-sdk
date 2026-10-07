@@ -380,3 +380,184 @@ class TestAsyncServerCreate:
                 await client.servers.preview(size="")
 
         assert httpx_mock.get_requests() == []
+
+
+POWER_ACTIONS = [
+    ("power_on", "power_on"),
+    ("power_off", "power_off"),
+    ("reboot", "reboot"),
+]
+
+
+class TestServerUpdate:
+    """Tests for renaming a server via mocked HTTP."""
+
+    def test_renames_a_server_returning_the_envelope(self, client, httpx_mock):
+        envelope = {"success": True, "data": {**SERVER, "name": "web-2"}}
+        httpx_mock.add_response(url=f"{BASE}/srv-1", method="PATCH", json=envelope)
+
+        result = client.servers.update("srv-1", name="web-2")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "PATCH"
+        assert json.loads(request.content) == {"name": "web-2"}
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/servers/srv-1",
+            method="PATCH",
+            json={"success": True, "data": SERVER},
+        )
+
+        client.servers.update("srv-1", name="web-2", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "PATCH"
+
+    @pytest.mark.parametrize(
+        ("server_id", "name", "message"),
+        [
+            ("", "web-2", "server_id is required"),
+            ("srv-1", "", "name is required"),
+        ],
+    )
+    def test_rejects_an_empty_argument_before_any_request(
+        self, client, httpx_mock, server_id, name, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            client.servers.update(server_id, name=name)
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestServerPowerActions:
+    """Tests for powering a server on, off and rebooting it via mocked HTTP."""
+
+    @pytest.mark.parametrize(("method", "action"), POWER_ACTIONS)
+    def test_posts_the_action_returning_the_envelope(
+        self, client, httpx_mock, method, action
+    ):
+        envelope = {"success": True, "data": {**SERVER, "status": "PROVISIONING"}}
+        httpx_mock.add_response(url=f"{BASE}/srv-1/actions", method="POST", json=envelope)
+
+        result = getattr(client.servers, method)("srv-1")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"action": action}
+
+    @pytest.mark.parametrize(("method", "action"), POWER_ACTIONS)
+    def test_targets_another_project_per_call(self, client, httpx_mock, method, action):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/servers/srv-1/actions",
+            method="POST",
+            json={"success": True, "data": SERVER},
+        )
+
+        getattr(client.servers, method)("srv-1", project_id="proj-2")
+
+        assert json.loads(httpx_mock.get_request().content) == {"action": action}
+
+    @pytest.mark.parametrize(("method", "action"), POWER_ACTIONS)
+    def test_requires_server_id_before_any_request(
+        self, client, httpx_mock, method, action
+    ):
+        with pytest.raises(ValueError, match="server_id is required"):
+            getattr(client.servers, method)("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncServerLifecycle:
+    """Tests for renaming and power actions through the async client."""
+
+    async def test_renames_a_server(self, httpx_mock):
+        envelope = {"success": True, "data": {**SERVER, "name": "web-2"}}
+        httpx_mock.add_response(url=f"{BASE}/srv-1", method="PATCH", json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.servers.update("srv-1", name="web-2")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "PATCH"
+        assert json.loads(request.content) == {"name": "web-2"}
+
+    async def test_renames_in_another_project(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/servers/srv-1",
+            method="PATCH",
+            json={"success": True, "data": SERVER},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.servers.update("srv-1", name="web-2", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "PATCH"
+
+    @pytest.mark.parametrize(("method", "action"), POWER_ACTIONS)
+    async def test_posts_the_action_returning_the_envelope(
+        self, httpx_mock, method, action
+    ):
+        envelope = {"success": True, "data": {**SERVER, "status": "PROVISIONING"}}
+        httpx_mock.add_response(url=f"{BASE}/srv-1/actions", method="POST", json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await getattr(client.servers, method)("srv-1")
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {"action": action}
+
+    @pytest.mark.parametrize(("method", "action"), POWER_ACTIONS)
+    async def test_targets_another_project_per_call(self, httpx_mock, method, action):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/servers/srv-1/actions",
+            method="POST",
+            json={"success": True, "data": SERVER},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await getattr(client.servers, method)("srv-1", project_id="proj-2")
+
+        assert json.loads(httpx_mock.get_request().content) == {"action": action}
+
+    async def test_rejects_empty_arguments_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="server_id is required"):
+                await client.servers.update("", name="web-2")
+            with pytest.raises(ValueError, match="name is required"):
+                await client.servers.update("srv-1", name="")
+            with pytest.raises(ValueError, match="server_id is required"):
+                await client.servers.power_on("")
+            with pytest.raises(ValueError, match="server_id is required"):
+                await client.servers.power_off("")
+            with pytest.raises(ValueError, match="server_id is required"):
+                await client.servers.reboot("")
+
+        assert httpx_mock.get_requests() == []

@@ -148,18 +148,18 @@ A method taking an id rejects an empty one before sending anything.
 
 | Namespace | Read | Change |
 | --- | --- | --- |
-| `projects` | `list()`, `get(project)` — by id or slug | |
+| `projects` | `list()`, `get(project)` — by id or slug | `update(project, { name })`, `delete(project)` |
 | `apps` | `get(appId)`, `logs(appId, { type: "BUILD" \| "RUN" })`, alongside `list()` and the deploy methods | `update(appId, changes)`, `delete(appId)` |
-| `servers` | `list()`, `get(serverId)` — adds the installed `sshKeys` | `delete(serverId)` |
+| `servers` | `list()`, `get(serverId)` — adds the installed `sshKeys` | `update(serverId, { name })`, `powerOn(serverId)`, `powerOff(serverId)`, `reboot(serverId)`, `delete(serverId)` |
 | `sshKeys` | `list()` | `create({ name, publicKey })`, `delete(sshKeyId)` |
-| `databases` | `list()` (every kind), `listDedicated()`, `getDedicated(databaseId)`, `listShared()`, `getShared(tenantId)` | `deleteDedicated(databaseId)`, `deleteShared(tenantId)` |
+| `databases` | `list()` (every kind), `listDedicated()`, `getDedicated(databaseId)`, `listShared()`, `getShared(tenantId)` | `rotateSharedPassword(tenantId)`, `deleteDedicated(databaseId)`, `deleteShared(tenantId)` |
 | `redis` | `list()`, `get(redisId)` | `delete(redisId)` |
 | `domains` | `list()`, `get(domain)` — by id or name, such as `example.com` | `create(name)`, `verify(domain)`, `delete(domain)` |
 | `buckets` | `list()` — there is no single-bucket read | `delete(bucketId)` |
 | `registries` | `list()`, `get(registryId)` | `delete(registryId)` |
 | `iam` | `list()`, `get(iamUserName)` — the list holds `credentials` plus partial-failure `errors` | `delete(iamUserName)` |
 | `members` | `list()` — members and pending invitations | |
-| `email` | `listDomains()`, `getDomain(emailDomainId)`, alongside `send()` | `deleteDomain(emailDomainId)` |
+| `email` | `listDomains()`, `getDomain(emailDomainId)`, `limits()`, alongside `send()` | `createDomain({ domainId })`, `createExternalDomain({ domainName })`, `verifyDomain(emailDomainId)`, `deleteDomain(emailDomainId)` |
 
 Two of these return a credential, and each needs only the namespace's read
 scope, so guard keys that carry it: `databases.getDedicated` always includes
@@ -185,6 +185,16 @@ to the deployment file. `domains.create` adds a domain you already own: publish
 the returned `verificationRecord`, then call `verify`. Deleting an SSH key
 leaves it on servers it was already installed on — `stillAuthorisedOn` counts
 them.
+
+Power actions are asynchronous: the server reads `PROVISIONING` until the
+action settles, so read it again to see the outcome. `powerOff` cuts the power
+outright, and a stopped server is still billed. `projects.delete` is refused
+with 409 while the project still holds resources. `email.createDomain` sets up
+a domain already in the project, `createExternalDomain` one whose DNS is hosted
+elsewhere; publish the returned `dnsRecords`, then call `verifyDomain`, whose
+first success puts the project's email plan on its subscription.
+`databases.rotateSharedPassword` returns the new password this once, and the
+old one stops working at once.
 
 ## Secrets
 

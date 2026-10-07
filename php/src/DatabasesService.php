@@ -8,7 +8,7 @@ use InvalidArgumentException;
 
 /**
  * Reads and deletes a project's databases: dedicated clusters and shared tenants.
- * Prices and creates dedicated clusters.
+ * Prices and creates dedicated clusters, and rotates shared tenants' passwords.
  *
  * Sizes, engine versions and regions to create one with come from
  * `catalog->databases()`. The API returns more fields than the shapes below
@@ -290,6 +290,28 @@ class DatabasesService
         return $this->transport->request(
             'DELETE',
             $this->basePath($projectId) . "/shared/{$tenantId}",
+        );
+    }
+
+    /**
+     * Replaces a shared database tenant's password; the old one stops working at once.
+     *
+     * The response holds the new `password`, and a `connectionUri` carrying it,
+     * exactly once: store it now; it cannot be read again.
+     *
+     * @return array{success: true, data: array{password: string, connectionUri: string}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function rotateSharedPassword(string $tenantId, ?string $projectId = null): array
+    {
+        self::requireTenantId($tenantId);
+
+        /** @var array{success: true, data: array{password: string, connectionUri: string}} */
+        return $this->transport->request(
+            'POST',
+            $this->basePath($projectId) . "/shared/{$tenantId}/rotate-password",
         );
     }
 

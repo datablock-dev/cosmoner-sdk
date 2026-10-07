@@ -61,6 +61,36 @@ use InvalidArgumentException;
  *     createdAt: string,
  *     ...
  * }
+ * @phpstan-type EmailDomainVerification array{
+ *     status: 'DNS_PENDING'|'ACTIVE'|'SUSPENDED',
+ *     verifiedAt: ?string,
+ *     records: list<array{
+ *         type: string,
+ *         name: string,
+ *         value: string,
+ *         purpose: string,
+ *         description: string,
+ *         verified: bool,
+ *         error: ?string,
+ *         ...
+ *     }>,
+ *     ...
+ * }
+ * @phpstan-type EmailLimits array{
+ *     plan: 'PAY_AS_YOU_GO'|'STARTER'|'PRO'|'SCALE'|'BUSINESS',
+ *     includedEmails: int,
+ *     monthlyQuota: int,
+ *     hourlyLimit: int,
+ *     dailyLimit: int,
+ *     sentThisMonth: int,
+ *     sentLastDay: int,
+ *     sentLastHour: int,
+ *     periodStart: string,
+ *     pausedUntil: ?string,
+ *     pauseReason: 'HOURLY_LIMIT'|'DAILY_LIMIT'|'MONTHLY_QUOTA'|null,
+ *     pendingRequest: ?array{id: string, requestedLimit: int, createdAt: string, ...},
+ *     ...
+ * }
  */
 class EmailService
 {
@@ -159,6 +189,101 @@ class EmailService
 
         /** @var array{success: true, data: EmailDomainDetail} */
         return $this->transport->request('GET', "/v1/projects/{$project}/email/{$emailDomainId}");
+    }
+
+    /**
+     * Sets up email on a domain already in the project (see `domains`).
+     *
+     * The domain starts `DNS_PENDING`: publish its `dnsRecords`, then call
+     * `verifyDomain()`. Refused with a 409 when email is already set up on it.
+     *
+     * @param string $domainId The project domain's id, not its name.
+     *
+     * @return array{success: true, data: EmailDomain}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function createDomain(string $domainId, ?string $projectId = null): array
+    {
+        if ($domainId === '') {
+            throw new InvalidArgumentException('domainId is required');
+        }
+
+        $project = $this->config->resolveProjectId($projectId);
+
+        /** @var array{success: true, data: EmailDomain} */
+        return $this->transport->request('POST', "/v1/projects/{$project}/email", ['domainId' => $domainId]);
+    }
+
+    /**
+     * Sets up email on a domain whose DNS is managed elsewhere.
+     *
+     * Also adds the domain to the project as `PENDING`. Refused with a 409 when
+     * the project already has the domain — use `createDomain()` for that — or the
+     * name cannot be used here.
+     *
+     * @return array{success: true, data: EmailDomain}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function createExternalDomain(string $domainName, ?string $projectId = null): array
+    {
+        if ($domainName === '') {
+            throw new InvalidArgumentException('domainName is required');
+        }
+
+        $project = $this->config->resolveProjectId($projectId);
+
+        /** @var array{success: true, data: EmailDomain} */
+        return $this->transport->request(
+            'POST',
+            "/v1/projects/{$project}/email/external",
+            ['domainName' => $domainName],
+        );
+    }
+
+    /**
+     * Checks an email domain's DNS records and reports each one.
+     *
+     * When every record resolves the domain goes `ACTIVE`. The first activation
+     * puts the project's email plan on its subscription, so it is refused with a
+     * 402 when the project cannot be billed.
+     *
+     * @return array{success: true, data: EmailDomainVerification}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function verifyDomain(string $emailDomainId, ?string $projectId = null): array
+    {
+        self::requireEmailDomainId($emailDomainId);
+
+        $project = $this->config->resolveProjectId($projectId);
+
+        /** @var array{success: true, data: EmailDomainVerification} */
+        return $this->transport->request('POST', "/v1/projects/{$project}/email/{$emailDomainId}/verify");
+    }
+
+    /**
+     * Reads the project's email plan, sending limits and usage so far.
+     *
+     * `pausedUntil` and `pauseReason` are set while sending is paused for
+     * hitting a limit; `pendingRequest` is a limit increase awaiting review.
+     *
+     * @param string|null $projectId Overrides the client-level default project.
+     *
+     * @return array{success: true, data: EmailLimits}
+     *
+     * @throws CosmonerError On API errors.
+     */
+    public function limits(?string $projectId = null): array
+    {
+        $project = $this->config->resolveProjectId($projectId);
+
+        /** @var array{success: true, data: EmailLimits} */
+        return $this->transport->request('GET', "/v1/projects/{$project}/email/limits");
     }
 
     /**

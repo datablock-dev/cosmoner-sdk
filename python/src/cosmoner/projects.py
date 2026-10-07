@@ -17,11 +17,24 @@ def _require_project(project: str) -> None:
         raise ValueError("project is required")
 
 
+def _update_payload(name: str) -> dict[str, Any]:
+    """Validates update arguments and shapes them into the API request body."""
+    if not name:
+        raise ValueError("name is required")
+
+    return {"name": name}
+
+
+def _project_path(project: str) -> str:
+    """Builds the route for one project, encoding a slug a person may have typed."""
+    return f"{_BASE_PATH}/{quote(project, safe='')}"
+
+
 class ProjectsService:
-    """Synchronous account-level project reads.
+    """Synchronous account-level project operations.
 
     Unlike every other namespace this one never falls back to the client's
-    default project: the project is the thing being read, not the scope.
+    default project: the project is the thing being acted on, not the scope.
     """
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
@@ -38,9 +51,32 @@ class ProjectsService:
         """Fetches one project by id or slug, with its resource counts."""
         _require_project(project)
 
+        result: dict[str, Any] = self._transport.request("GET", _project_path(project))
+        return result
+
+    def update(self, project: str, *, name: str) -> dict[str, Any]:
+        """Renames a project by id or slug and returns it.
+
+        ``name`` is 1-100 characters. Owners and admins only, otherwise 403;
+        409 when the caller already has a project of that name.
+        """
+        _require_project(project)
+        payload = _update_payload(name)
+
         result: dict[str, Any] = self._transport.request(
-            "GET", f"{_BASE_PATH}/{quote(project, safe='')}"
+            "PATCH", _project_path(project), json=payload
         )
+        return result
+
+    def delete(self, project: str) -> dict[str, Any]:
+        """Permanently deletes a project by id or slug. This cannot be undone.
+
+        Owner only. Refused with 409 while the project still holds resources
+        (servers, apps, databases, ...): delete those first.
+        """
+        _require_project(project)
+
+        result: dict[str, Any] = self._transport.request("DELETE", _project_path(project))
         return result
 
 
@@ -62,6 +98,33 @@ class AsyncProjectsService:
         _require_project(project)
 
         result: dict[str, Any] = await self._transport.request(
-            "GET", f"{_BASE_PATH}/{quote(project, safe='')}"
+            "GET", _project_path(project)
+        )
+        return result
+
+    async def update(self, project: str, *, name: str) -> dict[str, Any]:
+        """Renames a project by id or slug and returns it.
+
+        ``name`` is 1-100 characters. Owners and admins only, otherwise 403;
+        409 when the caller already has a project of that name.
+        """
+        _require_project(project)
+        payload = _update_payload(name)
+
+        result: dict[str, Any] = await self._transport.request(
+            "PATCH", _project_path(project), json=payload
+        )
+        return result
+
+    async def delete(self, project: str) -> dict[str, Any]:
+        """Permanently deletes a project by id or slug. This cannot be undone.
+
+        Owner only. Refused with 409 while the project still holds resources
+        (servers, apps, databases, ...): delete those first.
+        """
+        _require_project(project)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", _project_path(project)
         )
         return result

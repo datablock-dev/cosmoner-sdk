@@ -380,3 +380,61 @@ describe("EmailService credentials", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("EmailService domain setup", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("createDomain sends the project's domain id", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ id: "ed-1", status: "DNS_PENDING" }, 201));
+
+    const result = await client.email.createDomain({ domainId: "dom-1" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/email`, body: { domainId: "dom-1" } });
+    expect(result).toEqual({ success: true, data: { id: "ed-1", status: "DNS_PENDING" } });
+  });
+
+  it("createExternalDomain sends the domain name, honouring a per-call project", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ id: "ed-2" }, 201));
+
+    await client.email.createExternalDomain({ domainName: "example.org", projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: "https://api.test.dev/v1/projects/proj-2/email/external", body: { domainName: "example.org" } });
+  });
+
+  it("verifyDomain posts and returns each record's state", async () => {
+    const data = { status: "ACTIVE", verifiedAt: "2026-10-07T00:00:00.000Z", records: [{ type: "TXT", name: "x", value: "v", purpose: "SPF", description: "d", verified: true, error: null }] };
+    fetchSpy.mockResolvedValueOnce(writeReply(data));
+
+    const result = await client.email.verifyDomain("ed-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/email/ed-1/verify`, body: undefined });
+    expect(result).toEqual({ success: true, data });
+  });
+
+  it("limits reads the plan and usage", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ plan: "PAY_AS_YOU_GO", includedEmails: 0 }));
+
+    const result = await client.email.limits({ projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: "https://api.test.dev/v1/projects/proj-2/email/limits", body: undefined });
+    expect(result).toEqual({ success: true, data: { plan: "PAY_AS_YOU_GO", includedEmails: 0 } });
+  });
+
+  it("requires its arguments before any request", async () => {
+    await expect(client.email.createDomain({ domainId: "" })).rejects.toThrow("domainId is required");
+    await expect(client.email.createExternalDomain({ domainName: "" })).rejects.toThrow("domainName is required");
+    await expect(client.email.verifyDomain("")).rejects.toThrow("emailDomainId is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

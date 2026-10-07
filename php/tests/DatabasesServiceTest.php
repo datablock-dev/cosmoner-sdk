@@ -408,4 +408,44 @@ class DatabasesServiceTest extends TestCase
 
         $this->assertSame(0, $this->http->callCount());
     }
+
+    public function testRotatesASharedTenantPasswordAndReturnsItOnce(): void
+    {
+        $rotated = [
+            'password' => 'new-secret',
+            'connectionUri' => 'postgresql://tenant:new-secret@db.test.dev:25060/tenant',
+        ];
+        $this->http->queueJson(200, ['success' => true, 'data' => $rotated]);
+
+        $result = $this->client->databases->rotateSharedPassword('tenant-1');
+
+        $this->assertSame(['success' => true, 'data' => $rotated], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/shared/tenant-1/rotate-password', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testRotatesASharedTenantPasswordInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['password' => 'p', 'connectionUri' => 'u']]);
+
+        $this->client->databases->rotateSharedPassword('tenant-1', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/databases/shared/tenant-1/rotate-password',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testThrowsWhenTenantIdIsEmptyOnRotateWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->databases->rotateSharedPassword('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('tenantId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }

@@ -19,6 +19,7 @@ import {
   SERVER_ORDER_ACTIONS,
 } from "../write/create";
 import { EMAIL_CREDENTIAL_ACTIONS, IAM_CREDENTIAL_ACTIONS, SSH_KEY_GENERATE_ACTIONS } from "../write/credentials";
+import { DATABASE_ACTIONS, EMAIL_DOMAIN_ACTIONS, PROJECT_ACTIONS, SERVER_ACTIONS } from "../write/lifecycle";
 import type { ReadableResource } from "./resource";
 
 /** True when `ref` is any of the given identifiers, compared exactly. */
@@ -62,6 +63,9 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "MEMBERS", value: (row) => counts(row).members },
     ],
     notes: "Lists every project your login can reach; an API key sees only its own.",
+    remove: (client, row) => client.projects.delete(row.id),
+    removeWarning: "Owner only, and refused while it still holds resources: delete those first.",
+    actions: PROJECT_ACTIONS,
   },
 
   apps: {
@@ -106,7 +110,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     ],
     remove: (client, row) => client.servers.delete(row.id),
     removeWarning: "Its disk and everything on it go with it, and its billing stops.",
-    actions: SERVER_ORDER_ACTIONS,
+    actions: { ...SERVER_ORDER_ACTIONS, ...SERVER_ACTIONS },
   },
 
   "ssh-keys": {
@@ -154,7 +158,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     remove: (client, row) =>
       row.kind === "DEDICATED" ? client.databases.deleteDedicated(row.id) : client.databases.deleteShared(row.id),
     removeWarning: "Its data goes with it, and its billing stops.",
-    actions: DATABASE_ORDER_ACTIONS,
+    actions: { ...DATABASE_ORDER_ACTIONS, ...DATABASE_ACTIONS },
   },
 
   redis: {
@@ -264,7 +268,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     notes: "Lists sending domains. SMTP passwords are never returned.",
     remove: (client, row) => client.email.deleteDomain(row.id),
     removeWarning: "Sending from it stops. The domain itself stays in the project.",
-    actions: EMAIL_CREDENTIAL_ACTIONS,
+    actions: { ...EMAIL_DOMAIN_ACTIONS, ...EMAIL_CREDENTIAL_ACTIONS },
   },
 
   iam: {

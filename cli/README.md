@@ -285,8 +285,8 @@ Delete redis "cache"? [y/N]
 or an agent's shell — it changes nothing and exits 2, rather than waiting on
 an answer that cannot come.
 
-Every product except `projects` and `members` can be deleted. The other write
-commands are:
+Every product except `members` can be deleted; a project only once it holds
+no resources, and only by its owner. The other write commands are:
 
 | Command | |
 | --- | --- |
@@ -298,6 +298,10 @@ commands are:
 | `cosmoner webhooks update <webhook> [options]` | Changes it; `--enable` and `--disable` switch it on and off. |
 | `cosmoner webhooks test <webhook> [--event <event>]` | Sends a sample event; exits 1 when the delivery failed. |
 | `cosmoner webhooks rotate-secret <webhook>` | Replaces the signing secret, after asking. |
+| `cosmoner servers update <server> --name <name>` / `projects update <project> --name <name>` | Renames it. |
+| `cosmoner servers start\|stop\|reboot <server>` | Powers it on, cuts its power or restarts it; stop and reboot ask first. A stopped server is still billed. |
+| `cosmoner email create <domain>` | Sets a domain up for sending and prints the DNS records to publish. A domain not yet in the project is added as pending. |
+| `cosmoner email verify <domain>` | Checks those records and turns sending on; exits 1 until they are all visible. Asks first when it would start billing an email plan with a monthly price. |
 
 ### Credentials
 
@@ -310,6 +314,7 @@ so save it from the command's output. Every read shows it as `[hidden]`.
 | `cosmoner email credentials create <domain> --label <label> --from <address>` | An SMTP username and password, and the server to send through. |
 | `cosmoner ssh-keys generate <name> [--out <file>]` | An RSA private key — or, with `--out`, writes it to `<file>` (mode 600) and `<file>.pub` and prints neither. |
 | `cosmoner webhooks create` / `rotate-secret` | The signing secret. |
+| `cosmoner databases rotate-password <database>` | A shared database's new password and connection URI, after asking: the old password stops working at once. |
 
 `cosmoner email credentials delete <domain> <credential>` removes an SMTP
 login, after asking. `cosmoner iam delete` removes an access key.

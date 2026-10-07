@@ -212,7 +212,7 @@ describe("cosmoner <product> delete", () => {
   it("exits 2 for a delete with no name, before any request", async () => {
     expect((await cli(["apps", "delete"])).code).toBe(2);
     expect((await cli(["apps", "delete", "web", "extra"])).code).toBe(2);
-    expect((await cli(["projects", "delete", "acme"])).code).toBe(2);
+    expect((await cli(["members", "delete", "ana@example.com"])).code).toBe(2);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

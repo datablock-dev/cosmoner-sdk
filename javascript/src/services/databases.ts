@@ -93,6 +93,16 @@ export type GetSharedDatabaseResponse = Envelope<SharedDatabase>;
 
 export type DeleteDatabaseResponse = Envelope<Record<string, never>>;
 
+/** A shared database's new password, returned this once. */
+export interface RotatedSharedDatabasePassword {
+  /** Store it now: no later read returns it. */
+  password: string;
+  /** The connection string with the new password in it. */
+  connectionUri: string;
+}
+
+export type RotateSharedDatabasePasswordResponse = Envelope<RotatedSharedDatabasePassword>;
+
 /** Arguments accepted by `client.databases.previewDedicated()`. */
 export interface PreviewDedicatedDatabaseParams extends ProjectScopedParams {
   /** A size slug from `client.catalog.databases()`. */
@@ -173,6 +183,19 @@ export class DatabasesService {
     return this.transport.request<DeleteDatabaseResponse>(
       "DELETE",
       `${this.basePath(params.projectId)}/shared/${tenantId}`
+    );
+  }
+
+  /**
+   * Replaces a shared database's password. The old one stops working at once,
+   * so anything connecting with it fails until it is given the new one. The
+   * response holds the new password this once.
+   */
+  async rotateSharedPassword(tenantId: string, params: ProjectScopedParams = {}): Promise<RotateSharedDatabasePasswordResponse> {
+    if (!tenantId) throw new Error("tenantId is required");
+    return this.transport.request<RotateSharedDatabasePasswordResponse>(
+      "POST",
+      `${this.basePath(params.projectId)}/shared/${tenantId}/rotate-password`
     );
   }
 
