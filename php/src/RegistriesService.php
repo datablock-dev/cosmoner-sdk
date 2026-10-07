@@ -7,10 +7,18 @@ namespace Cosmoner\Sdk;
 use InvalidArgumentException;
 
 /**
- * Reads and deletes a project's container registries.
+ * Prices, creates, reads and deletes a project's container registries.
  *
  * The API returns more fields than the shapes below declare.
  *
+ * @phpstan-import-type CheckoutPreview from CatalogService
+ * @phpstan-type RegistryProvider array{
+ *     value: string,
+ *     label: string,
+ *     description: string,
+ *     regions: list<array{value: string, label: string, ...}>,
+ *     ...
+ * }
  * @phpstan-type Repository array{
  *     id: string,
  *     name: string,
@@ -69,6 +77,66 @@ class RegistriesService
 
         /** @var array{success: true, data: Registry} */
         return $this->transport->request('GET', $this->basePath($projectId) . "/{$registryId}");
+    }
+
+    /**
+     * Quotes the price of a container registry before it is created.
+     *
+     * Covers the base fee only: storage and egress are metered and not included.
+     * Prices the monthly charge exactly. `dueToday` is an estimate for a project
+     * that already has a subscription, because the real charge is prorated onto it.
+     *
+     * @return array{success: true, data: CheckoutPreview}
+     *
+     * @throws CosmonerError On API errors.
+     */
+    public function preview(?string $projectId = null): array
+    {
+        /** @var array{success: true, data: CheckoutPreview} */
+        return $this->transport->request('GET', $this->basePath($projectId) . '/preview');
+    }
+
+    /**
+     * Lists the providers a registry can be created on, with each one's regions.
+     *
+     * @return array{success: true, data: list<RegistryProvider>}
+     *
+     * @throws CosmonerError On API errors.
+     */
+    public function providers(?string $projectId = null): array
+    {
+        /** @var array{success: true, data: list<RegistryProvider>} */
+        return $this->transport->request('GET', $this->basePath($projectId) . '/providers');
+    }
+
+    /**
+     * Creates a container registry.
+     *
+     * Charges the project's saved card immediately (a prorated invoice). When the
+     * project cannot be billed the API refuses with a 402 —
+     * `ORG_PAYMENT_METHOD_REQUIRED`, `BILLER_PAYMENT_METHOD_REQUIRED` or
+     * `PAYMENT_REQUIRED` — before anything is created.
+     *
+     * @param array{name: string, region: string, provider?: ?string} $params
+     *     `provider` and `region` are `value`s from `providers()`; a provider left
+     *     out takes the API's default.
+     *
+     * @return array{success: true, data: array{deployed: true, id: string}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function create(array $params, ?string $projectId = null): array
+    {
+        Params::check($params, ['name', 'region', 'provider'], ['name', 'region']);
+
+        $body = ['name' => $params['name'], 'region' => $params['region']];
+        if (isset($params['provider'])) {
+            $body['provider'] = $params['provider'];
+        }
+
+        /** @var array{success: true, data: array{deployed: true, id: string}} */
+        return $this->transport->request('POST', $this->basePath($projectId), $body);
     }
 
     /**

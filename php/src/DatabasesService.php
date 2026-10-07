@@ -8,9 +8,13 @@ use InvalidArgumentException;
 
 /**
  * Reads and deletes a project's databases: dedicated clusters and shared tenants.
+ * Prices and creates dedicated clusters.
  *
- * The API returns more fields than the shapes below declare.
+ * Sizes, engine versions and regions to create one with come from
+ * `catalog->databases()`. The API returns more fields than the shapes below
+ * declare.
  *
+ * @phpstan-import-type CheckoutPreview from CatalogService
  * @phpstan-type DatabaseSummary array{
  *     kind: 'DEDICATED'|'LEGACY_POOLED',
  *     id: string,
@@ -84,6 +88,9 @@ use InvalidArgumentException;
  */
 class DatabasesService
 {
+    /** The engine `createDedicated()` uses when none is given. */
+    public const DEFAULT_ENGINE = 'POSTGRESQL';
+
     /** Binds the namespace to the client's transport and resolved configuration. */
     public function __construct(
         private readonly Transport $transport,
@@ -143,6 +150,77 @@ class DatabasesService
             'GET',
             $this->basePath($projectId) . "/dedicated/{$databaseId}",
         );
+    }
+
+    /**
+     * Quotes the price of a dedicated cluster of the given size before it is created.
+     *
+     * Prices the monthly charge exactly. `dueToday` is an estimate for a project
+     * that already has a subscription, because the real charge is prorated onto it.
+     *
+     * @param string $size A size slug from `catalog->databases()`.
+     *
+     * @return array{success: true, data: CheckoutPreview}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function previewDedicated(string $size, ?string $projectId = null): array
+    {
+        if ($size === '') {
+            throw new InvalidArgumentException('size is required');
+        }
+
+        /** @var array{success: true, data: CheckoutPreview} */
+        return $this->transport->request(
+            'GET',
+            $this->basePath($projectId) . '/dedicated/preview',
+            null,
+            ['slug' => $size],
+        );
+    }
+
+    /**
+     * Creates a dedicated database cluster, which starts `CREATING`.
+     *
+     * Charges the project's saved card immediately (a prorated invoice). When the
+     * project cannot be billed the API refuses with a 402 —
+     * `ORG_PAYMENT_METHOD_REQUIRED`, `BILLER_PAYMENT_METHOD_REQUIRED` or
+     * `PAYMENT_REQUIRED` — before anything is created.
+     *
+     * The response carries no id: `listDedicated()` and match by name to find
+     * the cluster.
+     *
+     * @param array{
+     *     name: string,
+     *     size: string,
+     *     version: string,
+     *     region: string,
+     *     engine?: ?string,
+     * } $params `size`, `version` and `region` come from `catalog->databases()`;
+     *     `engine` defaults to `POSTGRESQL`.
+     *
+     * @return array{success: true, data: array{deployed: true}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function createDedicated(array $params, ?string $projectId = null): array
+    {
+        Params::check(
+            $params,
+            ['name', 'size', 'version', 'region', 'engine'],
+            ['name', 'size', 'version', 'region'],
+        );
+
+        /** @var array{success: true, data: array{deployed: true}} */
+        return $this->transport->request('POST', $this->basePath($projectId) . '/dedicated', [
+            'name' => $params['name'],
+            'engine' => $params['engine'] ?? self::DEFAULT_ENGINE,
+            'version' => $params['version'],
+            'slug' => $params['size'],
+            'region' => $params['region'],
+        ]);
     }
 
     /**

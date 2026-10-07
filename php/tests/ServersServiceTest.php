@@ -165,4 +165,148 @@ class ServersServiceTest extends TestCase
             $this->http->requests[0]['url'],
         );
     }
+
+    /** @return array<string, mixed> */
+    private function previewFixture(): array
+    {
+        return [
+            'subtotal' => 600,
+            'tax' => null,
+            'creditApplied' => 0,
+            'dueToday' => 600,
+            'monthly' => 600,
+            'currency' => 'USD',
+            'nextBillingDate' => '2026-11-01T00:00:00.000Z',
+        ];
+    }
+
+    public function testPreviewsASizeOnTheDefaultProvider(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $result = $this->client->servers->preview(['size' => 's-1vcpu-1gb']);
+
+        $this->assertSame(['success' => true, 'data' => $this->previewFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(
+            self::BASE . '/preview?provider=digitalocean&slug=s-1vcpu-1gb',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testPreviewsOnAnotherProviderInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $this->client->servers->preview(['size' => 'cx22', 'provider' => 'hetzner'], 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/servers/preview?provider=hetzner&slug=cx22',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testRejectsAPreviewWithoutASizeWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->servers->preview(['size' => '']);
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('size is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testCreatesAServerWithOnlyTheRequiredFields(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true]]);
+
+        $result = $this->client->servers->create(['name' => 'web-1', 'size' => 's-1vcpu-1gb', 'region' => 'fra1']);
+
+        $this->assertSame(['success' => true, 'data' => ['deployed' => true]], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE, $this->http->requests[0]['url']);
+        $this->assertSame(
+            '{"name":"web-1","slug":"s-1vcpu-1gb","provider":"digitalocean","region":"fra1"}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testCreatesAServerWithEveryOption(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true]]);
+
+        $this->client->servers->create([
+            'name' => 'web-1',
+            'size' => 's-1vcpu-1gb',
+            'region' => 'fra1',
+            'image' => 'wordpress-20-04',
+            'sshKeyIds' => ['key-1', 'key-2'],
+            'provider' => 'hetzner',
+        ]);
+
+        $this->assertSame(
+            '{"name":"web-1","slug":"s-1vcpu-1gb","provider":"hetzner","region":"fra1",'
+            . '"template":"wordpress-20-04","sshKeyIds":["key-1","key-2"]}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testLeavesOutOptionsSetToNull(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true]]);
+
+        $this->client->servers->create([
+            'name' => 'web-1',
+            'size' => 's-1vcpu-1gb',
+            'region' => 'fra1',
+            'image' => null,
+            'sshKeyIds' => null,
+            'provider' => null,
+        ]);
+
+        $this->assertSame(
+            '{"name":"web-1","slug":"s-1vcpu-1gb","provider":"digitalocean","region":"fra1"}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testCreatesAServerInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true]]);
+
+        $this->client->servers->create(['name' => 'web-1', 'size' => 's-1vcpu-1gb', 'region' => 'fra1'], 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/servers', $this->http->requests[0]['url']);
+    }
+
+    public function testRejectsACreateMissingARequiredFieldWithoutSendingARequest(): void
+    {
+        $valid = ['name' => 'web-1', 'size' => 's-1vcpu-1gb', 'region' => 'fra1'];
+
+        foreach (['name', 'size', 'region'] as $field) {
+            try {
+                $this->client->servers->create([...$valid, $field => '']);
+                $this->fail("Expected an InvalidArgumentException for an empty {$field}");
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame("{$field} is required", $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testRejectsAnUnknownCreateFieldWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->servers->create(['name' => 'web-1', 'size' => 's', 'region' => 'fra1', 'ssh_key_ids' => []]);
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('Unknown field "ssh_key_ids"', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }

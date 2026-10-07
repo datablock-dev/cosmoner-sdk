@@ -166,4 +166,118 @@ class RegistriesServiceTest extends TestCase
             $this->http->requests[0]['url'],
         );
     }
+
+    /** @return array<string, mixed> */
+    private function previewFixture(): array
+    {
+        return [
+            'subtotal' => 1500,
+            'tax' => 375,
+            'creditApplied' => 0,
+            'dueToday' => 1875,
+            'monthly' => 1500,
+            'currency' => 'USD',
+            'nextBillingDate' => '2026-11-01T00:00:00.000Z',
+        ];
+    }
+
+    public function testPreviewsARegistry(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $result = $this->client->registries->preview();
+
+        $this->assertSame(['success' => true, 'data' => $this->previewFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/preview', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testPreviewsARegistryInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $this->client->registries->preview('proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/storage/container-registry/preview',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testListsProviders(): void
+    {
+        $providers = [[
+            'value' => 'cosmoner',
+            'label' => 'Cosmoner',
+            'description' => 'Hosted next to your apps',
+            'regions' => [['value' => 'eu-north-1', 'label' => 'Stockholm']],
+        ]];
+        $this->http->queueJson(200, ['success' => true, 'data' => $providers]);
+
+        $result = $this->client->registries->providers();
+
+        $this->assertSame(['success' => true, 'data' => $providers], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/providers', $this->http->requests[0]['url']);
+    }
+
+    public function testListsProvidersInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => []]);
+
+        $this->client->registries->providers('proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/storage/container-registry/providers',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testCreatesARegistryWithOnlyTheRequiredFields(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true, 'id' => 'reg-1']]);
+
+        $result = $this->client->registries->create(['name' => 'images', 'region' => 'eu-north-1']);
+
+        $this->assertSame(['success' => true, 'data' => ['deployed' => true, 'id' => 'reg-1']], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE, $this->http->requests[0]['url']);
+        $this->assertSame('{"name":"images","region":"eu-north-1"}', $this->http->requests[0]['body']);
+    }
+
+    public function testCreatesARegistryOnTheGivenProviderInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true, 'id' => 'reg-1']]);
+
+        $this->client->registries->create(
+            ['name' => 'images', 'region' => 'eu-north-1', 'provider' => 'cosmoner'],
+            'proj-2',
+        );
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/storage/container-registry',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertSame(
+            '{"name":"images","region":"eu-north-1","provider":"cosmoner"}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testRejectsACreateMissingARequiredFieldWithoutSendingARequest(): void
+    {
+        $valid = ['name' => 'images', 'region' => 'eu-north-1'];
+
+        foreach (['name', 'region'] as $field) {
+            try {
+                $this->client->registries->create([...$valid, $field => '']);
+                $this->fail("Expected an InvalidArgumentException for an empty {$field}");
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame("{$field} is required", $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }

@@ -191,6 +191,7 @@ one before sending anything.
 | Namespace | Methods |
 | --- | --- |
 | `projects` | `list()`, `get($project)` — by id or slug |
+| `catalog` | `serverSizes()`, `serverRegions()`, `serverImages()`, `redisPlans()`, `redisRegions()`, `databases()`, `appSizes()`, `appRegions()` — what can be ordered; account-wide, so it never uses the default project |
 | `apps` | `get($appId)`, `logs($appId, 'BUILD' \| 'RUN')`, alongside `list()` and the deploy methods |
 | `servers` | `list()`, `get($serverId)` — adds the installed `sshKeys` |
 | `sshKeys` | `list()` |
@@ -243,6 +244,62 @@ domain an app or email domain still uses fails with `ConflictError`.
 
 `sshKeys->delete()` does not remove the key from servers it was already
 installed on; `stillAuthorisedOn` in the response counts them.
+
+## Ordering paid resources
+
+These take the same optional trailing `$projectId`. Methods with several fields
+take them as one `$params` array; optional keys left out, or set to `null`, are
+not sent. An empty required field, or a key the method does not take, throws
+`InvalidArgumentException` before anything is sent.
+
+| Namespace | Price first | Order |
+| --- | --- | --- |
+| `servers` | `preview(['size' => …, 'provider' => …])` | `create(['name', 'size', 'region', 'image', 'sshKeyIds', 'provider'])` |
+| `redis` | `preview($plan)` | `create(['name', 'plan', 'region', 'persistence'])` |
+| `databases` | `previewDedicated($size)` | `createDedicated(['name', 'size', 'version', 'region', 'engine'])` |
+| `buckets` | `preview($tier = 'STARTER')` | `create(['name', 'region', 'tier', 'publicAccess', 'versioning', 'cdnEnabled'])` |
+| `registries` | `preview()`, `providers()` | `create(['name', 'region', 'provider'])` |
+| `hosting` | `prices()`, `preview(['tier' => …, 'extraStorageGb' => …])` | `create(['siteName', 'tier', 'phpVersion', 'database', 'extraStorageGb'])` |
+| `apps` | `preview($size)` | `createDraft([...])`, then `create(['draftId' => …, 'size' => …])` |
+| `apps` | `sizes($appId)`, `resizePreview($appId, $size)` | `resize($appId, $size)` |
+
+Every order, `apps->resize()` included, **charges the project's saved card
+immediately** with a prorated invoice. A project that cannot be billed is
+refused with a 402 (`ORG_PAYMENT_METHOD_REQUIRED`,
+`BILLER_PAYMENT_METHOD_REQUIRED` or `PAYMENT_REQUIRED`) before anything is
+created. The 402 arrives as a plain `CosmonerError`; read `$e->errorCode` to
+tell the three apart. `catalog` lists the sizes, plans and regions to order
+with.
+
+```php
+$sizes = $client->catalog->serverSizes()['data'];
+$price = $client->servers->preview(['size' => 's-1vcpu-1gb'])['data'];
+echo "{$price['monthly']} {$price['currency']}\n"; // 600 USD — minor units, before tax
+
+$client->servers->create(['name' => 'web', 'size' => 's-1vcpu-1gb', 'region' => 'fra1']);
+```
+
+A preview returns `subtotal`, `tax`, `creditApplied`, `dueToday`, `monthly`,
+`currency` and `nextBillingDate`, every amount an integer in minor units.
+`monthly` is exact and excludes tax; `dueToday` is an estimate for a project
+that already has a subscription, because the real charge is prorated onto it.
+The bucket preview prices the tier fee only, since CDN traffic is metered, and
+the registry preview the base fee only, since storage and egress are metered.
+`resizePreview()` adds `direction`, `creditBack` and `currentMonthly`.
+
+Server, Redis, dedicated database and bucket orders return `['deployed' => true]`
+with no id — list the namespace and match by name. Servers start
+`PROVISIONING`, Redis and databases `CREATING`. A registry order returns its
+`id`, and an app order its `appId`.
+
+An app is ordered in two calls. `createDraft()` saves what it should be, for
+free — a draft expires after 24 hours — and `create()` turns it into a billed
+app that starts `DEPLOYING`. `createDraft()` takes `size` and `region` plus any
+of `name`, `appType`, `gitProvider`, `gitRepo`, `gitBranch`, `sourceDir`,
+`buildStrategy`, `buildCommand`, `runCommand`, `outputDir`, `publicPort`,
+`internalPort`, `autoDeploy`, `containerRegistry`, `containerImage`,
+`containerPublicPort`, `imageDeployPolicy` and `instances`, and the app gets a
+Cosmoner subdomain.
 
 ## Secrets
 

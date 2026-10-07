@@ -303,4 +303,109 @@ class DatabasesServiceTest extends TestCase
             $this->http->requests[0]['url'],
         );
     }
+
+    /** @return array<string, mixed> */
+    private function previewFixture(): array
+    {
+        return [
+            'subtotal' => 1500,
+            'tax' => 375,
+            'creditApplied' => 0,
+            'dueToday' => 1875,
+            'monthly' => 1500,
+            'currency' => 'USD',
+            'nextBillingDate' => '2026-11-01T00:00:00.000Z',
+        ];
+    }
+
+    public function testPreviewsADedicatedSize(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $result = $this->client->databases->previewDedicated('db-s-1vcpu-1gb');
+
+        $this->assertSame(['success' => true, 'data' => $this->previewFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/dedicated/preview?slug=db-s-1vcpu-1gb', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testPreviewsADedicatedSizeInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $this->client->databases->previewDedicated('db-s-1vcpu-1gb', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/databases/dedicated/preview?slug=db-s-1vcpu-1gb',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testRejectsADedicatedPreviewWithoutASizeWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->databases->previewDedicated('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('size is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testCreatesADedicatedClusterOnPostgresByDefault(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true]]);
+
+        $result = $this->client->databases->createDedicated([
+            'name' => 'main',
+            'size' => 'db-s-1vcpu-1gb',
+            'version' => '17',
+            'region' => 'fra1',
+        ]);
+
+        $this->assertSame(['success' => true, 'data' => ['deployed' => true]], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/dedicated', $this->http->requests[0]['url']);
+        $this->assertSame(
+            '{"name":"main","engine":"POSTGRESQL","version":"17","slug":"db-s-1vcpu-1gb","region":"fra1"}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testCreatesADedicatedClusterOnTheGivenEngineInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true]]);
+
+        $this->client->databases->createDedicated(
+            ['name' => 'main', 'size' => 'db-s-1vcpu-1gb', 'version' => '8', 'region' => 'fra1', 'engine' => 'MYSQL'],
+            'proj-2',
+        );
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/databases/dedicated',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertSame(
+            '{"name":"main","engine":"MYSQL","version":"8","slug":"db-s-1vcpu-1gb","region":"fra1"}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testRejectsADedicatedCreateMissingARequiredFieldWithoutSendingARequest(): void
+    {
+        $valid = ['name' => 'main', 'size' => 'db-s-1vcpu-1gb', 'version' => '17', 'region' => 'fra1'];
+
+        foreach (['name', 'size', 'version', 'region'] as $field) {
+            try {
+                $this->client->databases->createDedicated([...$valid, $field => '']);
+                $this->fail("Expected an InvalidArgumentException for an empty {$field}");
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame("{$field} is required", $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }
