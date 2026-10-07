@@ -65,17 +65,10 @@ export function runAgents(args: ParsedArgs, cwd: string): number {
   if (args.positional.length > 1) throw new UsageError("agents takes at most one file");
 
   const path = resolve(cwd, args.positional[0] ?? AGENTS_FILE);
-  const deploymentFile = DEPLOYMENT_FILE_PATHS.find((candidate) => existsSync(join(cwd, candidate)));
 
   let plan: AgentsPlan;
   try {
-    plan = planAgentsFile(
-      path,
-      agentsSection({
-        deploymentFile: deploymentFile ?? DEPLOYMENT_FILE_PATHS[0],
-        exists: deploymentFile !== undefined,
-      })
-    );
+    plan = planAgentsFile(path, sectionFor(cwd));
   } catch (err) {
     if (err instanceof MarkerError) {
       console.error(err.message);
@@ -86,6 +79,28 @@ export function runAgents(args: ParsedArgs, cwd: string): number {
 
   writeAgentsPlan(plan, cwd);
   return 0;
+}
+
+/** The section this CLI writes for the repository at `cwd`. */
+function sectionFor(cwd: string): string {
+  const deploymentFile = DEPLOYMENT_FILE_PATHS.find((candidate) => existsSync(join(cwd, candidate)));
+  return agentsSection({ deploymentFile: deploymentFile ?? DEPLOYMENT_FILE_PATHS[0], exists: deploymentFile !== undefined });
+}
+
+/**
+ * Whether AGENTS.md in `cwd` has a Cosmoner section that this CLI would write
+ * differently — written by an older release, usually, so it names commands
+ * that have since changed. False when there is no file or no section, and
+ * when the markers are broken, since `cosmoner agents` would refuse it too.
+ */
+export function agentsSectionIsStale(cwd: string): boolean {
+  const path = join(cwd, AGENTS_FILE);
+  if (!existsSync(path) || !readFileSync(path, "utf8").includes(SECTION_START)) return false;
+  try {
+    return planAgentsFile(path, sectionFor(cwd)).status === "updated";
+  } catch {
+    return false;
+  }
 }
 
 /**

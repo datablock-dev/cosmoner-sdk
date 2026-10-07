@@ -12,11 +12,18 @@
  * stderr is not a terminal (a pipe, an agent's shell), when
  * COSMONER_NO_UPDATE_CHECK is set, and for the offline file commands, which
  * promise never to touch the network.
+ *
+ * The same rules govern a second notice: that the Cosmoner section of this
+ * directory's AGENTS.md is out of date. A coding agent reads that file rather
+ * than this CLI's help, so after an upgrade it would otherwise go on working
+ * from the old release's list of commands. The agent's own shell never sees
+ * the notice; the person in the terminal does, and refreshes the file.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { agentsSectionIsStale } from "./commands/agents";
 import { credentialsPath } from "./credentials";
 
 const REGISTRY_URL = "https://registry.npmjs.org/@cosmoner/cli/latest";
@@ -32,6 +39,7 @@ interface UpdateState {
   checkedAt?: number;
   latest?: string;
   notifiedAt?: number;
+  agentsNotifiedAt?: number;
 }
 
 /** What the check needs from the process, so tests can supply their own. */
@@ -55,9 +63,8 @@ export interface UpdateCheckContext {
  */
 export async function checkForUpdate(context: UpdateCheckContext): Promise<string | null> {
   try {
-    const { env, command } = context;
-    if (env.CI || env.COSMONER_NO_UPDATE_CHECK || !context.stderrIsTty) return null;
-    if (command === undefined || SILENT_COMMANDS.has(command)) return null;
+    const { env } = context;
+    if (!noticesAllowed(env, context.command, context.stderrIsTty)) return null;
     const path = statePath(env);
     if (path === null || parse(context.current) === null) return null;
 
@@ -79,6 +86,46 @@ export async function checkForUpdate(context: UpdateCheckContext): Promise<strin
   } catch {
     return null;
   }
+}
+
+/** What the AGENTS.md check needs from the process. */
+export interface AgentsCheckContext {
+  env: NodeJS.ProcessEnv;
+  command: string | undefined;
+  /** The directory the command runs in, where AGENTS.md is looked for. */
+  cwd: string;
+  stderrIsTty: boolean;
+  now?: number;
+}
+
+/**
+ * The notice to print when AGENTS.md here has a Cosmoner section this CLI
+ * would write differently, or null. At most once a day; never throws.
+ */
+export function checkAgentsFile(context: AgentsCheckContext): string | null {
+  try {
+    const { env } = context;
+    if (!noticesAllowed(env, context.command, context.stderrIsTty)) return null;
+    const path = statePath(env);
+    if (path === null) return null;
+
+    const now = context.now ?? Date.now();
+    const state = readState(path);
+    if (state.agentsNotifiedAt !== undefined && now - state.agentsNotifiedAt < DAY_MS) return null;
+    if (!agentsSectionIsStale(context.cwd)) return null;
+    state.agentsNotifiedAt = now;
+    writeState(path, state);
+
+    return "The Cosmoner section of AGENTS.md here is out of date. Run cosmoner agents to refresh it, so coding agents see the current commands.";
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a notice may be shown at all: never in CI, a pipe, when switched off, or for the offline commands. */
+function noticesAllowed(env: NodeJS.ProcessEnv, command: string | undefined, stderrIsTty: boolean): boolean {
+  if (env.CI || env.COSMONER_NO_UPDATE_CHECK || !stderrIsTty) return false;
+  return command !== undefined && !SILENT_COMMANDS.has(command);
 }
 
 /** Where the state lives: beside the saved login, in the CLI's config folder. */
