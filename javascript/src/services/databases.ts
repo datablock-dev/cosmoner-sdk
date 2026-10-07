@@ -6,6 +6,7 @@
 /** Databases service namespace — a project's dedicated and shared databases. */
 
 import { resolveProjectId, type ResolvedConfig } from "../config";
+import type { CheckoutPreview } from "./preview";
 import type { Transport } from "../transport";
 
 /** One database of any kind, as the project overview lists it. */
@@ -92,6 +93,26 @@ export type GetSharedDatabaseResponse = Envelope<SharedDatabase>;
 
 export type DeleteDatabaseResponse = Envelope<Record<string, never>>;
 
+/** Arguments accepted by `client.databases.previewDedicated()`. */
+export interface PreviewDedicatedDatabaseParams extends ProjectScopedParams {
+  /** A size slug from `client.catalog.databases()`. */
+  size: string;
+}
+
+/** Arguments accepted by `client.databases.createDedicated()`. */
+export interface CreateDedicatedDatabaseParams extends PreviewDedicatedDatabaseParams {
+  name: string;
+  /** An engine version from `client.catalog.databases()`, e.g. `"17"`. */
+  version: string;
+  /** A region slug from `client.catalog.databases()`. */
+  region: string;
+  /** Defaults to `POSTGRESQL`, the only engine on sale. */
+  engine?: string;
+}
+
+export type PreviewDedicatedDatabaseResponse = Envelope<CheckoutPreview>;
+export type CreateDedicatedDatabaseResponse = Envelope<{ deployed: true }>;
+
 /** Read operations on a project's databases. */
 export class DatabasesService {
   constructor(
@@ -152,6 +173,44 @@ export class DatabasesService {
     return this.transport.request<DeleteDatabaseResponse>(
       "DELETE",
       `${this.basePath(params.projectId)}/shared/${tenantId}`
+    );
+  }
+
+  /** Prices a dedicated database before ordering it. `monthly` is exact; `dueToday` is an estimate once the project has a subscription. */
+  async previewDedicated(params: PreviewDedicatedDatabaseParams): Promise<PreviewDedicatedDatabaseResponse> {
+    if (!params?.size) throw new Error("size is required");
+    return this.transport.request<PreviewDedicatedDatabaseResponse>(
+      "GET",
+      `${this.basePath(params.projectId)}/dedicated/preview`,
+      { query: { slug: params.size } }
+    );
+  }
+
+  /**
+   * Orders a dedicated database. It starts `CREATING`; the response carries
+   * no id, so list and match the name to follow it.
+   *
+   * Charges the project's saved card immediately, with a prorated invoice. It
+   * is refused with 402 before anything is created when the project cannot be
+   * billed.
+   */
+  async createDedicated(params: CreateDedicatedDatabaseParams): Promise<CreateDedicatedDatabaseResponse> {
+    if (!params?.name) throw new Error("name is required");
+    if (!params.size) throw new Error("size is required");
+    if (!params.version) throw new Error("version is required");
+    if (!params.region) throw new Error("region is required");
+    return this.transport.request<CreateDedicatedDatabaseResponse>(
+      "POST",
+      `${this.basePath(params.projectId)}/dedicated`,
+      {
+        body: {
+          name: params.name,
+          engine: params.engine ?? "POSTGRESQL",
+          version: params.version,
+          slug: params.size,
+          region: params.region,
+        },
+      }
     );
   }
 }

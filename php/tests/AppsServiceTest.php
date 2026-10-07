@@ -499,4 +499,323 @@ class AppsServiceTest extends TestCase
 
         $this->assertSame('https://api.test.dev/v1/projects/proj-2/apps/app-1', $this->http->requests[0]['url']);
     }
+
+    /** @return array<string, mixed> */
+    private function previewFixture(): array
+    {
+        return [
+            'subtotal' => 500,
+            'tax' => null,
+            'creditApplied' => 0,
+            'dueToday' => 500,
+            'monthly' => 500,
+            'currency' => 'USD',
+            'nextBillingDate' => '2026-11-01T00:00:00.000Z',
+        ];
+    }
+
+    public function testPreviewsASize(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $result = $this->client->apps->preview('basic-xxs');
+
+        $this->assertSame(['success' => true, 'data' => $this->previewFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/preview?size=basic-xxs', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testPreviewsASizeInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $this->client->apps->preview('basic-xxs', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/apps/preview?size=basic-xxs',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testRejectsAPreviewWithoutASizeWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->apps->preview('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('size is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testCreatesADraftWithOnlyTheRequiredFieldsOnACosmonerDomain(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['draftId' => 'draft-1']]);
+
+        $result = $this->client->apps->createDraft(['size' => 'basic-xxs', 'region' => 'fra']);
+
+        $this->assertSame(['success' => true, 'data' => ['draftId' => 'draft-1']], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/draft', $this->http->requests[0]['url']);
+        $this->assertSame(
+            '{"size":"basic-xxs","region":"fra","domainType":"cosmoner"}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testPassesThroughTheGivenDraftFields(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['draftId' => 'draft-1']]);
+
+        $this->client->apps->createDraft([
+            'name' => 'web',
+            'size' => 'basic-xxs',
+            'region' => 'fra',
+            'appType' => 'service',
+            'gitProvider' => 'github',
+            'gitRepo' => 'acme/web',
+            'gitBranch' => 'main',
+            'sourceDir' => '/',
+            'buildStrategy' => 'nixpacks',
+            'buildCommand' => 'npm run build',
+            'runCommand' => 'npm start',
+            'outputDir' => null,
+            'publicPort' => 3000,
+            'internalPort' => 3001,
+            'autoDeploy' => false,
+            'instances' => 2,
+        ]);
+
+        $this->assertSame(
+            [
+                'name' => 'web',
+                'size' => 'basic-xxs',
+                'region' => 'fra',
+                'appType' => 'service',
+                'gitProvider' => 'github',
+                'gitRepo' => 'acme/web',
+                'gitBranch' => 'main',
+                'sourceDir' => '/',
+                'buildStrategy' => 'nixpacks',
+                'buildCommand' => 'npm run build',
+                'runCommand' => 'npm start',
+                'publicPort' => 3000,
+                'internalPort' => 3001,
+                'autoDeploy' => false,
+                'instances' => 2,
+                'domainType' => 'cosmoner',
+            ],
+            $this->sentBody(),
+        );
+    }
+
+    public function testCreatesAnImageDraftInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['draftId' => 'draft-1']]);
+
+        $this->client->apps->createDraft([
+            'size' => 'basic-xxs',
+            'region' => 'fra',
+            'containerRegistry' => 'cosmoner',
+            'containerImage' => 'registry.cosmoner.com/acme/web:v1',
+            'containerPublicPort' => '8080',
+            'imageDeployPolicy' => 'NEWEST',
+        ], 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/apps/draft', $this->http->requests[0]['url']);
+        $this->assertSame(
+            [
+                'size' => 'basic-xxs',
+                'region' => 'fra',
+                'containerRegistry' => 'cosmoner',
+                'containerImage' => 'registry.cosmoner.com/acme/web:v1',
+                'containerPublicPort' => '8080',
+                'imageDeployPolicy' => 'NEWEST',
+                'domainType' => 'cosmoner',
+            ],
+            $this->sentBody(),
+        );
+    }
+
+    public function testRejectsADraftMissingARequiredFieldWithoutSendingARequest(): void
+    {
+        $valid = ['size' => 'basic-xxs', 'region' => 'fra'];
+
+        foreach (['size', 'region'] as $field) {
+            try {
+                $this->client->apps->createDraft([...$valid, $field => '']);
+                $this->fail("Expected an InvalidArgumentException for an empty {$field}");
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame("{$field} is required", $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testRejectsADraftThatSetsItsOwnDomainTypeWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->apps->createDraft(['size' => 'basic-xxs', 'region' => 'fra', 'domainType' => 'searched']);
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('Unknown field "domainType"', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testCreatesAnAppFromADraft(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true, 'appId' => 'app-1']]);
+
+        $result = $this->client->apps->create(['draftId' => 'draft-1', 'size' => 'basic-xxs']);
+
+        $this->assertSame(['success' => true, 'data' => ['deployed' => true, 'appId' => 'app-1']], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE, $this->http->requests[0]['url']);
+        $this->assertSame('{"draftId":"draft-1","size":"basic-xxs"}', $this->http->requests[0]['body']);
+    }
+
+    public function testCreatesAnAppInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true, 'appId' => 'app-1']]);
+
+        $this->client->apps->create(['draftId' => 'draft-1', 'size' => 'basic-xxs'], 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/apps', $this->http->requests[0]['url']);
+    }
+
+    public function testRejectsACreateMissingARequiredFieldWithoutSendingARequest(): void
+    {
+        $valid = ['draftId' => 'draft-1', 'size' => 'basic-xxs'];
+
+        foreach (['draftId', 'size'] as $field) {
+            try {
+                $this->client->apps->create([...$valid, $field => '']);
+                $this->fail("Expected an InvalidArgumentException for an empty {$field}");
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame("{$field} is required", $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testListsTheSizesAnAppCanMoveTo(): void
+    {
+        $options = [
+            'currentSize' => 'basic-xxs',
+            'resizable' => true,
+            'sizes' => [[
+                'slug' => 'basic-xs',
+                'name' => 'Basic XS',
+                'tierSlug' => 'basic',
+                'cpuType' => 'shared',
+                'cpus' => 1,
+                'memoryMb' => 1024,
+                'bandwidthGib' => 100,
+                'priceMonthly' => 10,
+            ]],
+        ];
+        $this->http->queueJson(200, ['success' => true, 'data' => $options]);
+
+        $result = $this->client->apps->sizes('app-1');
+
+        $this->assertSame(['success' => true, 'data' => $options], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/app-1/sizes', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testListsSizesInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['currentSize' => null, 'resizable' => false]]);
+
+        $this->client->apps->sizes('app-1', 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/apps/app-1/sizes', $this->http->requests[0]['url']);
+    }
+
+    public function testPreviewsAResize(): void
+    {
+        $preview = [
+            ...$this->previewFixture(),
+            'direction' => 'upgrade',
+            'creditBack' => 0,
+            'currentMonthly' => 500,
+            'monthly' => 1000,
+        ];
+        $this->http->queueJson(200, ['success' => true, 'data' => $preview]);
+
+        $result = $this->client->apps->resizePreview('app-1', 'basic-xs');
+
+        $this->assertSame(['success' => true, 'data' => $preview], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/app-1/resize-preview?size=basic-xs', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testPreviewsAResizeInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $this->client->apps->resizePreview('app-1', 'basic-xs', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/apps/app-1/resize-preview?size=basic-xs',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testResizesAnApp(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['instanceSize' => 'basic-xs']]);
+
+        $result = $this->client->apps->resize('app-1', 'basic-xs');
+
+        $this->assertSame(['success' => true, 'data' => ['instanceSize' => 'basic-xs']], $result);
+        $this->assertSame('PATCH', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/app-1/size', $this->http->requests[0]['url']);
+        $this->assertSame('{"size":"basic-xs"}', $this->http->requests[0]['body']);
+    }
+
+    public function testResizesAnAppInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['instanceSize' => 'basic-xs']]);
+
+        $this->client->apps->resize('app-1', 'basic-xs', 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/apps/app-1/size', $this->http->requests[0]['url']);
+    }
+
+    public function testRejectsAnEmptyAppIdOrSizeOnResizeWithoutSendingARequest(): void
+    {
+        $calls = [
+            'appId is required' => [
+                fn () => $this->client->apps->sizes(''),
+                fn () => $this->client->apps->resizePreview('', 'basic-xs'),
+                fn () => $this->client->apps->resize('', 'basic-xs'),
+            ],
+            'size is required' => [
+                fn () => $this->client->apps->resizePreview('app-1', ''),
+                fn () => $this->client->apps->resize('app-1', ''),
+            ],
+        ];
+
+        foreach ($calls as $message => $attempts) {
+            foreach ($attempts as $attempt) {
+                try {
+                    $attempt();
+                    $this->fail("Expected an InvalidArgumentException: {$message}");
+                } catch (InvalidArgumentException $err) {
+                    $this->assertSame($message, $err->getMessage());
+                }
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }

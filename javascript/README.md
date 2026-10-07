@@ -166,6 +166,19 @@ scope, so guard keys that carry it: `databases.getDedicated` always includes
 `connectionUri`, a full connection URI with the password, and `redis.get`
 always includes the plaintext `password`.
 
+### Ordering paid resources
+
+`servers.create`, `redis.create`, `databases.createDedicated`,
+`buckets.create`, `registries.create`, `hosting.create`, `apps.create` and
+`apps.resize` charge the project's saved card at once, and are refused with a
+402 before anything is created when the project cannot be billed. Each has a
+`preview` (`previewDedicated`, `resizePreview`) that returns the price first:
+`monthly` is exact, `dueToday` an estimate once the project has a
+subscription. `client.catalog` lists the sizes, plans and regions to order
+with, and needs no project. An app is ordered in two calls: `createDraft`
+saves what it should be, for free, and `create` turns the draft into a billed
+app.
+
 Deletes are permanent, and a delete of a billed resource stops its billing.
 `apps.update` changes settings only, for free; it leaves environment variables
 to the deployment file. `domains.create` adds a domain you already own: publish

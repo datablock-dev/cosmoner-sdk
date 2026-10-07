@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from cosmoner import AsyncCosmoner, Cosmoner, NotFoundError
@@ -22,6 +24,16 @@ SERVER = {
     "sshUser": "ubuntu",
     "createdAt": "2026-09-01T12:00:00.000Z",
     "updatedAt": "2026-09-01T12:00:00.000Z",
+}
+
+PREVIEW = {
+    "subtotal": 600,
+    "tax": None,
+    "creditApplied": 0,
+    "dueToday": 600,
+    "monthly": 600,
+    "currency": "USD",
+    "nextBillingDate": "2026-11-01T00:00:00.000Z",
 }
 
 SSH_KEYS = [{"id": "key-1", "name": "laptop", "fingerprint": "SHA256:abc"}]
@@ -206,5 +218,165 @@ class TestAsyncServerDelete:
         ) as client:
             with pytest.raises(ValueError, match="server_id is required"):
                 await client.servers.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestServerPreview:
+    """Tests for pricing a server before creating it."""
+
+    def test_sends_the_default_provider_and_size_as_slug(self, client, httpx_mock):
+        envelope = {"success": True, "data": PREVIEW}
+        httpx_mock.add_response(
+            url=f"{BASE}/preview?provider=digitalocean&slug=s-1vcpu-1gb", json=envelope
+        )
+
+        result = client.servers.preview(size="s-1vcpu-1gb")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "GET"
+        assert request.url.query == b"provider=digitalocean&slug=s-1vcpu-1gb"
+
+    def test_sends_a_given_provider_to_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=(
+                "https://api.test.dev/v1/projects/proj-2/servers/preview"
+                "?provider=hetzner&slug=cx22"
+            ),
+            json={"success": True, "data": PREVIEW},
+        )
+
+        client.servers.preview(size="cx22", provider="hetzner", project_id="proj-2")
+
+        assert httpx_mock.get_request().url.query == b"provider=hetzner&slug=cx22"
+
+    def test_requires_a_size_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="size is required"):
+            client.servers.preview(size="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestServerCreate:
+    """Tests for creating a server via mocked HTTP."""
+
+    def test_sends_only_the_required_fields_with_the_default_provider(
+        self, client, httpx_mock
+    ):
+        envelope = {"success": True, "data": {"deployed": True}}
+        httpx_mock.add_response(url=BASE, method="POST", json=envelope)
+
+        result = client.servers.create(name="web", size="s-1vcpu-1gb", region="fra1")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {
+            "name": "web",
+            "slug": "s-1vcpu-1gb",
+            "provider": "digitalocean",
+            "region": "fra1",
+        }
+
+    def test_renames_the_optional_fields(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/servers",
+            method="POST",
+            json={"success": True, "data": {"deployed": True}},
+        )
+
+        client.servers.create(
+            name="web",
+            size="cx22",
+            region="nbg1",
+            image="wordpress",
+            ssh_key_ids=("key-1", "key-2"),
+            provider="hetzner",
+            project_id="proj-2",
+        )
+
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "web",
+            "slug": "cx22",
+            "provider": "hetzner",
+            "region": "nbg1",
+            "template": "wordpress",
+            "sshKeyIds": ["key-1", "key-2"],
+        }
+
+    @pytest.mark.parametrize(
+        ("fields", "message"),
+        [
+            ({"name": "", "size": "s", "region": "r"}, "name is required"),
+            ({"name": "n", "size": "", "region": "r"}, "size is required"),
+            ({"name": "n", "size": "s", "region": ""}, "region is required"),
+        ],
+    )
+    def test_requires_each_field_before_any_request(
+        self, client, httpx_mock, fields, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            client.servers.create(**fields)
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncServerCreate:
+    """Tests for pricing and creating a server through the async client."""
+
+    async def test_previews_a_server(self, httpx_mock):
+        envelope = {"success": True, "data": PREVIEW}
+        httpx_mock.add_response(
+            url=f"{BASE}/preview?provider=digitalocean&slug=s-1vcpu-1gb", json=envelope
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.servers.preview(size="s-1vcpu-1gb") == envelope
+
+        assert (
+            httpx_mock.get_request().url.query
+            == b"provider=digitalocean&slug=s-1vcpu-1gb"
+        )
+
+    async def test_creates_a_server(self, httpx_mock):
+        envelope = {"success": True, "data": {"deployed": True}}
+        httpx_mock.add_response(url=BASE, method="POST", json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.servers.create(
+                name="web", size="s-1vcpu-1gb", region="fra1", image="wordpress"
+            )
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "web",
+            "slug": "s-1vcpu-1gb",
+            "provider": "digitalocean",
+            "region": "fra1",
+            "template": "wordpress",
+        }
+
+    async def test_requires_a_name_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="name is required"):
+                await client.servers.create(name="", size="s", region="r")
+            with pytest.raises(ValueError, match="size is required"):
+                await client.servers.preview(size="")
 
         assert httpx_mock.get_requests() == []

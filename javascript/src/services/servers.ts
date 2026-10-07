@@ -6,6 +6,7 @@
 /** Servers service namespace — a project's virtual servers. */
 
 import { resolveProjectId, type ResolvedConfig } from "../config";
+import type { CheckoutPreview } from "./preview";
 import type { Transport } from "../transport";
 
 export type ServerStatus = "PROVISIONING" | "RUNNING" | "STOPPED" | "ERROR" | "TERMINATED";
@@ -52,6 +53,29 @@ export type GetServerResponse = Envelope<ServerDetail>;
 
 export type DeleteServerResponse = Envelope<Record<string, never>>;
 
+/** Arguments accepted by `client.servers.preview()`. */
+export interface PreviewServerParams extends ProjectScopedParams {
+  /** A size slug from `client.catalog.serverSizes()`. */
+  size: string;
+  /** Defaults to `digitalocean`, the only provider on sale. */
+  provider?: string;
+}
+
+/** Arguments accepted by `client.servers.create()`. */
+export interface CreateServerParams extends PreviewServerParams {
+  /** Lowercase letters, digits and hyphens. */
+  name: string;
+  /** A region slug from `client.catalog.serverRegions()`. */
+  region: string;
+  /** A one-click image slug from `client.catalog.serverImages()`. */
+  image?: string;
+  /** SSH keys to install, by id. */
+  sshKeyIds?: string[];
+}
+
+export type PreviewServerResponse = Envelope<CheckoutPreview>;
+export type CreateServerResponse = Envelope<{ deployed: true }>;
+
 /** Read operations on a project's servers. */
 export class ServersService {
   constructor(
@@ -79,5 +103,37 @@ export class ServersService {
   async delete(serverId: string, params: ProjectScopedParams = {}): Promise<DeleteServerResponse> {
     if (!serverId) throw new Error("serverId is required");
     return this.transport.request<DeleteServerResponse>("DELETE", `${this.basePath(params.projectId)}/${serverId}`);
+  }
+
+  /** Prices a server before ordering it. `monthly` is exact; `dueToday` is an estimate once the project has a subscription. */
+  async preview(params: PreviewServerParams): Promise<PreviewServerResponse> {
+    if (!params?.size) throw new Error("size is required");
+    return this.transport.request<PreviewServerResponse>("GET", `${this.basePath(params.projectId)}/preview`, {
+      query: { provider: params.provider ?? "digitalocean", slug: params.size },
+    });
+  }
+
+  /**
+   * Orders a server. It starts `PROVISIONING`; the response carries no id, so
+   * list servers and match the name to follow it.
+   *
+   * Charges the project's saved card immediately, with a prorated invoice. It
+   * is refused with 402 before anything is created when the project cannot be
+   * billed.
+   */
+  async create(params: CreateServerParams): Promise<CreateServerResponse> {
+    if (!params?.name) throw new Error("name is required");
+    if (!params.size) throw new Error("size is required");
+    if (!params.region) throw new Error("region is required");
+    return this.transport.request<CreateServerResponse>("POST", this.basePath(params.projectId), {
+      body: {
+        name: params.name,
+        slug: params.size,
+        provider: params.provider ?? "digitalocean",
+        region: params.region,
+        template: params.image,
+        sshKeyIds: params.sshKeyIds,
+      },
+    });
   }
 }

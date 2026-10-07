@@ -120,3 +120,42 @@ describe("RedisService writes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("RedisService paid creates", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("preview prices a plan", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" }, 200));
+
+    const result = await client.redis.preview({ plan: "valkey-1gb" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/redis/preview?planSlug=valkey-1gb`, body: undefined });
+    expect(result).toEqual({ success: true, data: { subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" } });
+  });
+
+  it("create renames plan and persistence for the API", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ deployed: true }, 200));
+
+    const result = await client.redis.create({ name: "cache", plan: "valkey-1gb", region: "se-sto", persistence: "AOF_EVERY_1_SECOND" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/redis`, body: { name: "cache", planSlug: "valkey-1gb", region: "se-sto", dataPersistence: "AOF_EVERY_1_SECOND" } });
+    expect(result).toEqual({ success: true, data: { deployed: true } });
+  });
+
+  it("requires a name, plan and region before any request", async () => {
+    await expect(client.redis.create({ name: "cache", plan: "", region: "se-sto" })).rejects.toThrow("is required");
+    await expect(client.redis.preview({ plan: "" })).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

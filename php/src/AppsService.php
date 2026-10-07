@@ -9,7 +9,24 @@ use InvalidArgumentException;
 use RuntimeException;
 use stdClass;
 
-/** App lookup, configuration, deletion and image deploy operations for a project. */
+/**
+ * App ordering, lookup, configuration, resizing, deletion and image deploy
+ * operations for a project.
+ *
+ * @phpstan-import-type CheckoutPreview from CatalogService
+ * @phpstan-import-type PlanChangePreview from CatalogService
+ * @phpstan-type AppSizeOption array{
+ *     slug: string,
+ *     name: string,
+ *     tierSlug: string,
+ *     cpuType: string,
+ *     cpus: int|float,
+ *     memoryMb: int,
+ *     bandwidthGib?: int|float,
+ *     priceMonthly: int|float,
+ *     ...
+ * }
+ */
 class AppsService
 {
     /** Phases after which a deployment will not change again. */
@@ -35,6 +52,30 @@ class AppsService
         'publicPort',
         'internalPort',
         'autoDeploy',
+        'imageDeployPolicy',
+        'instances',
+    ];
+
+    /** The fields `createDraft()` passes through, under the camelCase keys the API takes. */
+    private const DRAFT_FIELDS = [
+        'name',
+        'size',
+        'region',
+        'appType',
+        'gitProvider',
+        'gitRepo',
+        'gitBranch',
+        'sourceDir',
+        'buildStrategy',
+        'buildCommand',
+        'runCommand',
+        'outputDir',
+        'publicPort',
+        'internalPort',
+        'autoDeploy',
+        'containerRegistry',
+        'containerImage',
+        'containerPublicPort',
         'imageDeployPolicy',
         'instances',
     ];
@@ -95,6 +136,110 @@ class AppsService
     }
 
     /**
+     * Quotes the price of an app of the given size before it is created.
+     *
+     * Prices the monthly charge exactly. `dueToday` is an estimate for a project
+     * that already has a subscription, because the real charge is prorated onto it.
+     *
+     * @param string $size A size slug from `catalog->appSizes()`.
+     *
+     * @return array{success: true, data: CheckoutPreview}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function preview(string $size, ?string $projectId = null): array
+    {
+        self::requireSize($size);
+
+        /** @var array{success: true, data: CheckoutPreview} */
+        return $this->transport->request(
+            'GET',
+            $this->basePath($projectId) . '/preview',
+            null,
+            ['size' => $size],
+        );
+    }
+
+    /**
+     * Saves an app's configuration as a draft, the first step of creating an app.
+     *
+     * A draft costs nothing and expires after 24 hours; `create()` turns it into
+     * an app. Only the fields given are sent, and the app gets a Cosmoner
+     * subdomain.
+     *
+     * @param array{
+     *     name?: ?string,
+     *     size: string,
+     *     region: string,
+     *     appType?: 'service'|'static'|null,
+     *     gitProvider?: 'github'|'gitlab'|'bitbucket'|null,
+     *     gitRepo?: ?string,
+     *     gitBranch?: ?string,
+     *     sourceDir?: ?string,
+     *     buildStrategy?: 'nixpacks'|'docker'|null,
+     *     buildCommand?: ?string,
+     *     runCommand?: ?string,
+     *     outputDir?: ?string,
+     *     publicPort?: ?int,
+     *     internalPort?: ?int,
+     *     autoDeploy?: ?bool,
+     *     containerRegistry?: 'dockerhub'|'ghcr'|'cosmoner'|null,
+     *     containerImage?: ?string,
+     *     containerPublicPort?: ?string,
+     *     imageDeployPolicy?: 'TAG'|'NEWEST'|'MANUAL'|null,
+     *     instances?: ?int,
+     * } $params `size` and `region` come from `catalog`.
+     *
+     * @return array{success: true, data: array{draftId: string}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function createDraft(array $params, ?string $projectId = null): array
+    {
+        Params::check($params, self::DRAFT_FIELDS, ['size', 'region']);
+
+        $body = [];
+        foreach (self::DRAFT_FIELDS as $key) {
+            if (isset($params[$key])) {
+                $body[$key] = $params[$key];
+            }
+        }
+        $body['domainType'] = 'cosmoner';
+
+        /** @var array{success: true, data: array{draftId: string}} */
+        return $this->transport->request('POST', $this->basePath($projectId) . '/draft', $body);
+    }
+
+    /**
+     * Creates an app from a draft saved by `createDraft()`; the app starts `DEPLOYING`.
+     *
+     * Charges the project's saved card immediately (a prorated invoice). When the
+     * project cannot be billed the API refuses with a 402 —
+     * `ORG_PAYMENT_METHOD_REQUIRED`, `BILLER_PAYMENT_METHOD_REQUIRED` or
+     * `PAYMENT_REQUIRED` — before anything is created.
+     *
+     * @param array{draftId: string, size: string} $params
+     *
+     * @return array{success: true, data: array{deployed: true, appId: string}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function create(array $params, ?string $projectId = null): array
+    {
+        Params::check($params, ['draftId', 'size'], ['draftId', 'size']);
+
+        /** @var array{success: true, data: array{deployed: true, appId: string}} */
+        return $this->transport->request(
+            'POST',
+            $this->basePath($projectId),
+            ['draftId' => $params['draftId'], 'size' => $params['size']],
+        );
+    }
+
+    /**
      * Changes an app's settings, sending only the keys present in `$changes`.
      *
      * Keys take the API's camelCase names. A key set to null is sent as null,
@@ -133,6 +278,86 @@ class AppsService
             'PATCH',
             $this->basePath($projectId) . "/{$appId}",
             $changes,
+        );
+    }
+
+    /**
+     * Lists the sizes an app can be resized to, and whether it can be resized at all.
+     *
+     * @return array{success: true, data: array{
+     *     currentSize: ?string,
+     *     resizable: bool,
+     *     sizes: list<AppSizeOption>,
+     *     ...
+     * }}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function sizes(string $appId, ?string $projectId = null): array
+    {
+        self::requireAppId($appId);
+
+        /**
+         * @var array{success: true, data: array{
+         *     currentSize: ?string,
+         *     resizable: bool,
+         *     sizes: list<AppSizeOption>,
+         *     ...
+         * }}
+         */
+        return $this->transport->request('GET', $this->basePath($projectId) . "/{$appId}/sizes");
+    }
+
+    /**
+     * Quotes the price of moving an app to another size.
+     *
+     * Prices the monthly charge exactly. `dueToday` is an estimate for a project
+     * that already has a subscription, because the real charge is prorated onto it.
+     *
+     * @param string $size A size slug from `sizes()`.
+     *
+     * @return array{success: true, data: PlanChangePreview}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function resizePreview(string $appId, string $size, ?string $projectId = null): array
+    {
+        self::requireAppId($appId);
+        self::requireSize($size);
+
+        /** @var array{success: true, data: PlanChangePreview} */
+        return $this->transport->request(
+            'GET',
+            $this->basePath($projectId) . "/{$appId}/resize-preview",
+            null,
+            ['size' => $size],
+        );
+    }
+
+    /**
+     * Moves an app to another size.
+     *
+     * Charges the difference to the project's saved card immediately.
+     *
+     * @param string $size A size slug from `sizes()`.
+     *
+     * @return array{success: true, data: array{instanceSize: string}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function resize(string $appId, string $size, ?string $projectId = null): array
+    {
+        self::requireAppId($appId);
+        self::requireSize($size);
+
+        /** @var array{success: true, data: array{instanceSize: string}} */
+        return $this->transport->request(
+            'PATCH',
+            $this->basePath($projectId) . "/{$appId}/size",
+            ['size' => $size],
         );
     }
 
@@ -316,6 +541,14 @@ class AppsService
     {
         if ($appId === '') {
             throw new InvalidArgumentException('appId is required');
+        }
+    }
+
+    /** Rejects an empty size slug before it is quoted or ordered. */
+    private static function requireSize(string $size): void
+    {
+        if ($size === '') {
+            throw new InvalidArgumentException('size is required');
         }
     }
 }

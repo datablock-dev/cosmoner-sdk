@@ -333,3 +333,82 @@ describe("AppsService writes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("AppsService paid creates", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("preview prices a size", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" }, 200));
+
+    const result = await client.apps.preview({ size: "apps-s-1vcpu-0.5gb" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/apps/preview?size=apps-s-1vcpu-0.5gb`, body: undefined });
+    expect(result).toEqual({ success: true, data: { subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" } });
+  });
+
+  it("createDraft passes the fields through with a Cosmoner domain", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ draftId: "draft-1" }, 201));
+
+    const result = await client.apps.createDraft({ name: "web", size: "apps-s-1vcpu-0.5gb", region: "ams3", containerRegistry: "ghcr", containerImage: "ghcr.io/acme/web:v1", containerPublicPort: "8080" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/apps/draft`, body: { name: "web", size: "apps-s-1vcpu-0.5gb", region: "ams3", containerRegistry: "ghcr", containerImage: "ghcr.io/acme/web:v1", containerPublicPort: "8080", domainType: "cosmoner" } });
+    expect(result).toEqual({ success: true, data: { draftId: "draft-1" } });
+  });
+
+  it("create checks out a draft at its size", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ deployed: true, appId: "app-1" }, 200));
+
+    const result = await client.apps.create({ draftId: "draft-1", size: "apps-s-1vcpu-0.5gb" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/apps`, body: { draftId: "draft-1", size: "apps-s-1vcpu-0.5gb" } });
+    expect(result).toEqual({ success: true, data: { deployed: true, appId: "app-1" } });
+  });
+
+  it("sizes lists what an app can move to", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ currentSize: "a", resizable: true, sizes: [] }, 200));
+
+    const result = await client.apps.sizes("app-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/apps/app-1/sizes`, body: undefined });
+    expect(result).toEqual({ success: true, data: { currentSize: "a", resizable: true, sizes: [] } });
+  });
+
+  it("resizePreview prices a size change", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ direction: "upgrade", subtotal: 100, tax: null, creditApplied: 0, dueToday: 100, monthly: 2400, currency: "USD", nextBillingDate: "x", creditBack: 0, currentMonthly: 1200 }, 200));
+
+    const result = await client.apps.resizePreview("app-1", { size: "b" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/apps/app-1/resize-preview?size=b`, body: undefined });
+    expect(result).toEqual({ success: true, data: { direction: "upgrade", subtotal: 100, tax: null, creditApplied: 0, dueToday: 100, monthly: 2400, currency: "USD", nextBillingDate: "x", creditBack: 0, currentMonthly: 1200 } });
+  });
+
+  it("resize patches the size", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ instanceSize: "b" }, 200));
+
+    const result = await client.apps.resize("app-1", { size: "b" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "PATCH", url: `${P}/apps/app-1/size`, body: { size: "b" } });
+    expect(result).toEqual({ success: true, data: { instanceSize: "b" } });
+  });
+
+  it("requires its arguments before any request", async () => {
+    await expect(client.apps.createDraft({ name: "web", size: "s", region: "" })).rejects.toThrow("is required");
+    await expect(client.apps.create({ draftId: "", size: "s" })).rejects.toThrow("is required");
+    await expect(client.apps.resize("", { size: "b" })).rejects.toThrow("is required");
+    await expect(client.apps.resizePreview("app-1", { size: "" })).rejects.toThrow("is required");
+    await expect(client.apps.sizes("")).rejects.toThrow("is required");
+    await expect(client.apps.preview({ size: "" })).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

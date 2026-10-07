@@ -121,4 +121,103 @@ class BucketsServiceTest extends TestCase
             $this->http->requests[0]['url'],
         );
     }
+
+    /** @return array<string, mixed> */
+    private function previewFixture(): array
+    {
+        return [
+            'subtotal' => 1500,
+            'tax' => 375,
+            'creditApplied' => 0,
+            'dueToday' => 1875,
+            'monthly' => 1500,
+            'currency' => 'USD',
+            'nextBillingDate' => '2026-11-01T00:00:00.000Z',
+        ];
+    }
+
+    public function testPreviewsTheStarterTierByDefault(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $result = $this->client->buckets->preview();
+
+        $this->assertSame(['success' => true, 'data' => $this->previewFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/storage/object-storage/preview?provider=AWS_S3&tier=STARTER',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testPreviewsTheGivenTierInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $this->client->buckets->preview('PRO', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/storage/object-storage/preview?provider=AWS_S3&tier=PRO',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testCreatesABucketWithOnlyTheRequiredFields(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true]]);
+
+        $result = $this->client->buckets->create(['name' => 'assets', 'region' => 'eu-north-1']);
+
+        $this->assertSame(['success' => true, 'data' => ['deployed' => true]], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/storage/object-storage',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertSame(
+            '{"name":"assets","provider":"AWS_S3","region":"eu-north-1"}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testCreatesABucketWithEveryOptionInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => ['deployed' => true]]);
+
+        $this->client->buckets->create([
+            'name' => 'assets',
+            'region' => 'eu-north-1',
+            'tier' => 'PRO',
+            'publicAccess' => false,
+            'versioning' => true,
+            'cdnEnabled' => true,
+        ], 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/storage/object-storage',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertSame(
+            '{"name":"assets","provider":"AWS_S3","region":"eu-north-1","tier":"PRO",'
+            . '"publicAccess":false,"versioning":true,"cdnEnabled":true}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testRejectsACreateMissingARequiredFieldWithoutSendingARequest(): void
+    {
+        $valid = ['name' => 'assets', 'region' => 'eu-north-1'];
+
+        foreach (['name', 'region'] as $field) {
+            try {
+                $this->client->buckets->create([...$valid, $field => '']);
+                $this->fail("Expected an InvalidArgumentException for an empty {$field}");
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame("{$field} is required", $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }

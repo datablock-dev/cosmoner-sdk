@@ -61,9 +61,16 @@ Reading what a project has
   cosmoner apps logs <app> prints an app's recent log lines.
 
 Changing what a project has
+  cosmoner <product> create <name>  Order servers, redis, databases, buckets,
+                                    registries, hosting and apps. Shows the
+                                    price and asks first; --yes skips it.
   cosmoner <product> delete <name>  Delete one item. Asks first; --yes skips it.
-  ssh-keys create, domains create|verify, apps update,
+  apps update|resize, ssh-keys create, domains create|verify,
   webhooks create|update|test|rotate-secret.
+
+  servers sizes|regions|images, redis plans|regions, databases sizes,
+  apps sizes|regions, registries providers and hosting plans list what can
+  be ordered.
 
   cosmoner <command> --help for a command's options.
 

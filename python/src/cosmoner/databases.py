@@ -20,6 +20,33 @@ def _require_tenant_id(tenant_id: str) -> None:
         raise ValueError("tenant_id is required")
 
 
+def _require_size(size: str) -> None:
+    """Rejects an empty size slug before it spends a request."""
+    if not size:
+        raise ValueError("size is required")
+
+
+def _create_dedicated_payload(
+    name: str, size: str, version: str, region: str, engine: str | None
+) -> dict[str, Any]:
+    """Validates dedicated create arguments and shapes them into the request body."""
+    if not name:
+        raise ValueError("name is required")
+    _require_size(size)
+    if not version:
+        raise ValueError("version is required")
+    if not region:
+        raise ValueError("region is required")
+
+    return {
+        "name": name,
+        "engine": "POSTGRESQL" if engine is None else engine,
+        "version": version,
+        "slug": size,
+        "region": region,
+    }
+
+
 class DatabasesService:
     """Synchronous operations on a project's databases."""
 
@@ -102,6 +129,49 @@ class DatabasesService:
 
         result: dict[str, Any] = self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/shared/{tenant_id}"
+        )
+        return result
+
+    def preview_dedicated(
+        self, *, size: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Prices a dedicated cluster of ``size`` without creating it.
+
+        The ``monthly`` charge is exact. ``dueToday`` is an estimate for a project
+        that already has a subscription, because the real charge is prorated onto
+        it. Amounts are integers in minor units; ``monthly`` excludes tax.
+        """
+        _require_size(size)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET",
+            f"{self._base_path(project_id)}/dedicated/preview",
+            params={"slug": size},
+        )
+        return result
+
+    def create_dedicated(
+        self,
+        *,
+        name: str,
+        size: str,
+        version: str,
+        region: str,
+        engine: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Creates a dedicated cluster, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. ``engine`` defaults to ``POSTGRESQL``. The response carries no
+        id: list the clusters and match by name. The cluster starts ``CREATING``.
+        """
+        payload = _create_dedicated_payload(name, size, version, region, engine)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", f"{self._base_path(project_id)}/dedicated", json=payload
         )
         return result
 
@@ -188,5 +258,48 @@ class AsyncDatabasesService:
 
         result: dict[str, Any] = await self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/shared/{tenant_id}"
+        )
+        return result
+
+    async def preview_dedicated(
+        self, *, size: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Prices a dedicated cluster of ``size`` without creating it.
+
+        The ``monthly`` charge is exact. ``dueToday`` is an estimate for a project
+        that already has a subscription, because the real charge is prorated onto
+        it. Amounts are integers in minor units; ``monthly`` excludes tax.
+        """
+        _require_size(size)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET",
+            f"{self._base_path(project_id)}/dedicated/preview",
+            params={"slug": size},
+        )
+        return result
+
+    async def create_dedicated(
+        self,
+        *,
+        name: str,
+        size: str,
+        version: str,
+        region: str,
+        engine: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Creates a dedicated cluster, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. ``engine`` defaults to ``POSTGRESQL``. The response carries no
+        id: list the clusters and match by name. The cluster starts ``CREATING``.
+        """
+        payload = _create_dedicated_payload(name, size, version, region, engine)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", f"{self._base_path(project_id)}/dedicated", json=payload
         )
         return result

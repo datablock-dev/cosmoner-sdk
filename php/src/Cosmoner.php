@@ -21,6 +21,7 @@ class Cosmoner
 
     public readonly AppsService $apps;
     public readonly BucketsService $buckets;
+    public readonly CatalogService $catalog;
     public readonly DatabasesService $databases;
     public readonly DomainsService $domains;
     public readonly EmailService $email;
@@ -58,6 +59,7 @@ class Cosmoner
         $this->transport = new Transport($this->config, $httpClient ?? new CurlHttpClient());
         $this->apps = new AppsService($this->transport, $this->config);
         $this->buckets = new BucketsService($this->transport, $this->config);
+        $this->catalog = new CatalogService($this->transport);
         $this->databases = new DatabasesService($this->transport, $this->config);
         $this->domains = new DomainsService($this->transport, $this->config);
         $this->email = new EmailService($this->transport, $this->config);

@@ -204,4 +204,129 @@ class HostingServiceTest extends TestCase
             $this->http->requests[0]['url'],
         );
     }
+
+    /** @return array<string, mixed> */
+    private function previewFixture(): array
+    {
+        return [
+            'subtotal' => 1500,
+            'tax' => 375,
+            'creditApplied' => 0,
+            'dueToday' => 1875,
+            'monthly' => 1500,
+            'currency' => 'USD',
+            'nextBillingDate' => '2026-11-01T00:00:00.000Z',
+        ];
+    }
+
+    public function testListsTierPrices(): void
+    {
+        $prices = [['tier' => 'shared-xs', 'monthly' => 500, 'currency' => 'USD']];
+        $this->http->queueJson(200, ['success' => true, 'data' => $prices]);
+
+        $result = $this->client->hosting->prices();
+
+        $this->assertSame(['success' => true, 'data' => $prices], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/prices', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testListsTierPricesInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => []]);
+
+        $this->client->hosting->prices('proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/hosting/shared/prices',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testPreviewsATierWithNoExtraStorageByDefault(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $result = $this->client->hosting->preview(['tier' => 'shared-xs']);
+
+        $this->assertSame(['success' => true, 'data' => $this->previewFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/preview?tier=shared-xs&extraStorageGb=0', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testPreviewsExtraStorageInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->previewFixture()]);
+
+        $this->client->hosting->preview(['tier' => 'shared-s', 'extraStorageGb' => 10], 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/hosting/shared/preview?tier=shared-s&extraStorageGb=10',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testRejectsAPreviewWithoutATierWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->hosting->preview(['tier' => '']);
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('tier is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testCreatesASiteWithOnlyItsName(): void
+    {
+        $created = ['tenantId' => 'site-1', 'status' => 'ACTIVE'];
+        $this->http->queueJson(201, ['success' => true, 'data' => $created]);
+
+        $result = $this->client->hosting->create(['siteName' => 'blog']);
+
+        $this->assertSame(['success' => true, 'data' => $created], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE, $this->http->requests[0]['url']);
+        $this->assertSame('{"siteName":"blog"}', $this->http->requests[0]['body']);
+    }
+
+    public function testCreatesASiteWithADatabaseInAnotherProject(): void
+    {
+        $created = [
+            'tenantId' => 'site-1',
+            'status' => 'ACTIVE',
+            'database' => ['id' => 'db-1', 'name' => 'wp', 'status' => 'ACTIVE'],
+        ];
+        $this->http->queueJson(201, ['success' => true, 'data' => $created]);
+
+        $result = $this->client->hosting->create([
+            'siteName' => 'blog',
+            'tier' => 'shared-s',
+            'phpVersion' => '8.3',
+            'database' => 'wp',
+            'extraStorageGb' => 5,
+        ], 'proj-2');
+
+        $this->assertSame(['success' => true, 'data' => $created], $result);
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/hosting/shared', $this->http->requests[0]['url']);
+        $this->assertSame(
+            '{"siteName":"blog","tier":"shared-s","phpVersion":"8.3","database":{"name":"wp"},"extraStorageGb":5}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testRejectsACreateWithoutASiteNameWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->hosting->create(['siteName' => '', 'tier' => 'shared-xs']);
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('siteName is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }

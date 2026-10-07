@@ -111,4 +111,11 @@ class CosmonerTest extends TestCase
         $this->assertInstanceOf(\Cosmoner\Sdk\IamService::class, $client->iam);
         $this->assertInstanceOf(\Cosmoner\Sdk\MembersService::class, $client->members);
     }
+
+    public function testExposesTheAccountLevelCatalog(): void
+    {
+        $client = new Cosmoner('key-123');
+
+        $this->assertInstanceOf(\Cosmoner\Sdk\CatalogService::class, $client->catalog);
+    }
 }

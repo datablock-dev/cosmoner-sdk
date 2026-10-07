@@ -1,8 +1,29 @@
+import json
+
 import pytest
 
 from cosmoner import AsyncCosmoner, Cosmoner, NotFoundError
 
 BASE = "https://api.test.dev/v1/projects/proj-1/storage/container-registry"
+
+PREVIEW = {
+    "subtotal": 1000,
+    "tax": None,
+    "creditApplied": 0,
+    "dueToday": 1000,
+    "monthly": 1000,
+    "currency": "USD",
+    "nextBillingDate": "2026-11-01T00:00:00.000Z",
+}
+
+PROVIDERS = [
+    {
+        "value": "cosmoner",
+        "label": "Cosmoner",
+        "description": "Managed registry",
+        "regions": [{"value": "eu-north-1", "label": "Stockholm"}],
+    }
+]
 
 REGISTRY = {
     "id": "reg-1",
@@ -200,5 +221,146 @@ class TestAsyncRegistryDelete:
         ) as client:
             with pytest.raises(ValueError, match="registry_id is required"):
                 await client.registries.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestRegistryPreview:
+    """Tests for pricing a registry and listing providers."""
+
+    def test_previews_the_base_fee(self, client, httpx_mock):
+        envelope = {"success": True, "data": PREVIEW}
+        httpx_mock.add_response(url=f"{BASE}/preview", json=envelope)
+
+        result = client.registries.preview()
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "GET"
+        assert request.url.query == b""
+
+    def test_lists_providers(self, client, httpx_mock):
+        envelope = {"success": True, "data": PROVIDERS}
+        httpx_mock.add_response(url=f"{BASE}/providers", json=envelope)
+
+        assert client.registries.providers() == envelope
+        assert httpx_mock.get_request().method == "GET"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/storage/container-registry/preview",
+            json={"success": True, "data": PREVIEW},
+        )
+        httpx_mock.add_response(
+            url=(
+                "https://api.test.dev/v1/projects/proj-2/storage/container-registry"
+                "/providers"
+            ),
+            json={"success": True, "data": PROVIDERS},
+        )
+
+        client.registries.preview(project_id="proj-2")
+        client.registries.providers(project_id="proj-2")
+
+        assert len(httpx_mock.get_requests()) == 2
+
+
+class TestRegistryCreate:
+    """Tests for creating a registry via mocked HTTP."""
+
+    def test_sends_only_the_required_fields(self, client, httpx_mock):
+        envelope = {"success": True, "data": {"deployed": True, "id": "reg-1"}}
+        httpx_mock.add_response(url=BASE, method="POST", json=envelope)
+
+        result = client.registries.create(name="images", region="eu-north-1")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"name": "images", "region": "eu-north-1"}
+
+    def test_sends_a_given_provider_to_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/storage/container-registry",
+            method="POST",
+            json={"success": True, "data": {"deployed": True, "id": "reg-1"}},
+        )
+
+        client.registries.create(
+            name="images", region="eu-north-1", provider="cosmoner", project_id="proj-2"
+        )
+
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "images",
+            "region": "eu-north-1",
+            "provider": "cosmoner",
+        }
+
+    @pytest.mark.parametrize(
+        ("fields", "message"),
+        [
+            ({"name": "", "region": "r"}, "name is required"),
+            ({"name": "n", "region": ""}, "region is required"),
+        ],
+    )
+    def test_requires_each_field_before_any_request(
+        self, client, httpx_mock, fields, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            client.registries.create(**fields)
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncRegistryCreate:
+    """Tests for pricing and creating a registry through the async client."""
+
+    async def test_previews_and_lists_providers(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/preview", json={"success": True, "data": PREVIEW}
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/providers", json={"success": True, "data": PROVIDERS}
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert (await client.registries.preview())["data"] == PREVIEW
+            assert (await client.registries.providers())["data"] == PROVIDERS
+
+    async def test_creates_a_registry(self, httpx_mock):
+        envelope = {"success": True, "data": {"deployed": True, "id": "reg-1"}}
+        httpx_mock.add_response(url=BASE, method="POST", json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.registries.create(
+                name="images", region="eu-north-1", provider="cosmoner"
+            )
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "images",
+            "region": "eu-north-1",
+            "provider": "cosmoner",
+        }
+
+    async def test_requires_a_region_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="region is required"):
+                await client.registries.create(name="images", region="")
 
         assert httpx_mock.get_requests() == []

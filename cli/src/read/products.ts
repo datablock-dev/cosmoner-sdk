@@ -9,6 +9,15 @@
  */
 
 import { APP_ACTIONS, DOMAIN_ACTIONS, SSH_KEY_ACTIONS, WEBHOOK_ACTIONS } from "../write/actions";
+import {
+  APP_ORDER_ACTIONS,
+  BUCKET_ORDER_ACTIONS,
+  DATABASE_ORDER_ACTIONS,
+  HOSTING_ORDER_ACTIONS,
+  REDIS_ORDER_ACTIONS,
+  REGISTRY_ORDER_ACTIONS,
+  SERVER_ORDER_ACTIONS,
+} from "../write/create";
 import type { ReadableResource } from "./resource";
 
 /** True when `ref` is any of the given identifiers, compared exactly. */
@@ -74,7 +83,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       "Environment variables marked secret show masked. cosmoner apps logs <app> reads an app's log.",
     remove: (client, row) => client.apps.delete(row.id),
     removeWarning: "Its runtime, routing, custom domain and deployments go with it.",
-    actions: APP_ACTIONS,
+    actions: { ...APP_ORDER_ACTIONS, ...APP_ACTIONS },
   },
 
   servers: {
@@ -96,6 +105,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     ],
     remove: (client, row) => client.servers.delete(row.id),
     removeWarning: "Its disk and everything on it go with it, and its billing stops.",
+    actions: SERVER_ORDER_ACTIONS,
   },
 
   "ssh-keys": {
@@ -143,6 +153,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     remove: (client, row) =>
       row.kind === "DEDICATED" ? client.databases.deleteDedicated(row.id) : client.databases.deleteShared(row.id),
     removeWarning: "Its data goes with it, and its billing stops.",
+    actions: DATABASE_ORDER_ACTIONS,
   },
 
   redis: {
@@ -165,6 +176,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     notes: "The password is hidden.",
     remove: (client, row) => client.redis.delete(row.id),
     removeWarning: "Its data goes with it, and its billing stops.",
+    actions: REDIS_ORDER_ACTIONS,
   },
 
   domains: {
@@ -209,6 +221,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     remove: (client, row) => client.buckets.delete(row.id),
     removeWarning: "Every object in it and its access keys go with it, and its billing stops.",
     writeScope: "object-storage:write",
+    actions: BUCKET_ORDER_ACTIONS,
   },
 
   registries: {
@@ -229,6 +242,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     ],
     remove: (client, row) => client.registries.delete(row.id),
     removeWarning: "Every repository and image in it goes with it, and its billing stops.",
+    actions: REGISTRY_ORDER_ACTIONS,
   },
 
   email: {
@@ -306,6 +320,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     notes: "cosmoner upload <site> <dir> uploads to a site.",
     remove: (client, row) => client.hosting.delete(row.id),
     removeWarning: "Its files, databases and domains go with it, and its billing stops.",
+    actions: HOSTING_ORDER_ACTIONS,
   },
 
   webhooks: {

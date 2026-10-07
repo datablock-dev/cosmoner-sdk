@@ -1,8 +1,20 @@
+import json
+
 import pytest
 
 from cosmoner import AsyncCosmoner, Cosmoner, NotFoundError
 
 BASE = "https://api.test.dev/v1/projects/proj-1/redis"
+
+PREVIEW = {
+    "subtotal": 1000,
+    "tax": None,
+    "creditApplied": 0,
+    "dueToday": 1000,
+    "monthly": 1000,
+    "currency": "USD",
+    "nextBillingDate": "2026-11-01T00:00:00.000Z",
+}
 
 REDIS = {
     "id": "rds-1",
@@ -206,5 +218,143 @@ class TestAsyncRedisDelete:
         ) as client:
             with pytest.raises(ValueError, match="redis_id is required"):
                 await client.redis.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestRedisPreview:
+    """Tests for pricing a Redis database before creating it."""
+
+    def test_sends_the_plan_as_plan_slug(self, client, httpx_mock):
+        envelope = {"success": True, "data": PREVIEW}
+        httpx_mock.add_response(url=f"{BASE}/preview?planSlug=redis-256", json=envelope)
+
+        result = client.redis.preview(plan="redis-256")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "GET"
+        assert request.url.query == b"planSlug=redis-256"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/redis/preview?planSlug=redis-256",
+            json={"success": True, "data": PREVIEW},
+        )
+
+        client.redis.preview(plan="redis-256", project_id="proj-2")
+
+        assert "proj-2" in str(httpx_mock.get_request().url)
+
+    def test_requires_a_plan_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="plan is required"):
+            client.redis.preview(plan="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestRedisCreate:
+    """Tests for creating a Redis database via mocked HTTP."""
+
+    def test_sends_only_the_required_fields(self, client, httpx_mock):
+        envelope = {"success": True, "data": {"deployed": True}}
+        httpx_mock.add_response(url=BASE, method="POST", json=envelope)
+
+        result = client.redis.create(name="cache", plan="redis-256", region="eu-west-1")
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "cache",
+            "planSlug": "redis-256",
+            "region": "eu-west-1",
+        }
+
+    def test_sends_persistence_as_data_persistence(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/redis",
+            method="POST",
+            json={"success": True, "data": {"deployed": True}},
+        )
+
+        client.redis.create(
+            name="cache",
+            plan="redis-256",
+            region="eu-west-1",
+            persistence="AOF_EVERY_1_SECOND",
+            project_id="proj-2",
+        )
+
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "cache",
+            "planSlug": "redis-256",
+            "region": "eu-west-1",
+            "dataPersistence": "AOF_EVERY_1_SECOND",
+        }
+
+    @pytest.mark.parametrize(
+        ("fields", "message"),
+        [
+            ({"name": "", "plan": "p", "region": "r"}, "name is required"),
+            ({"name": "n", "plan": "", "region": "r"}, "plan is required"),
+            ({"name": "n", "plan": "p", "region": ""}, "region is required"),
+        ],
+    )
+    def test_requires_each_field_before_any_request(
+        self, client, httpx_mock, fields, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            client.redis.create(**fields)
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncRedisCreate:
+    """Tests for pricing and creating a Redis database through the async client."""
+
+    async def test_previews_a_redis_database(self, httpx_mock):
+        envelope = {"success": True, "data": PREVIEW}
+        httpx_mock.add_response(url=f"{BASE}/preview?planSlug=redis-256", json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.redis.preview(plan="redis-256") == envelope
+
+    async def test_creates_a_redis_database(self, httpx_mock):
+        envelope = {"success": True, "data": {"deployed": True}}
+        httpx_mock.add_response(url=BASE, method="POST", json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.redis.create(
+                name="cache", plan="redis-256", region="eu-west-1", persistence="NONE"
+            )
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "cache",
+            "planSlug": "redis-256",
+            "region": "eu-west-1",
+            "dataPersistence": "NONE",
+        }
+
+    async def test_requires_a_plan_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="plan is required"):
+                await client.redis.preview(plan="")
+            with pytest.raises(ValueError, match="plan is required"):
+                await client.redis.create(name="cache", plan="", region="eu-west-1")
 
         assert httpx_mock.get_requests() == []

@@ -6,6 +6,7 @@
 /** Registries service namespace — a project's container registries. */
 
 import { resolveProjectId, type ResolvedConfig } from "../config";
+import type { CheckoutPreview } from "./preview";
 import type { Transport } from "../transport";
 
 /** One repository in a registry. */
@@ -46,6 +47,28 @@ export type GetRegistryResponse = Envelope<Registry>;
 
 export type DeleteRegistryResponse = Envelope<Record<string, never>>;
 
+/** A registry provider and the regions it offers. */
+export interface RegistryProvider {
+  value: string;
+  label: string;
+  description: string;
+  regions: Array<{ value: string; label: string }>;
+}
+
+/** Arguments accepted by `client.registries.create()`. */
+export interface CreateRegistryParams extends ProjectScopedParams {
+  /** 3–33 lowercase letters, digits and hyphens; unique in the project. */
+  name: string;
+  /** A region from `providers()`. */
+  region: string;
+  /** A provider from `providers()`. Defaults to `AWS_ECR` server-side. */
+  provider?: string;
+}
+
+export type PreviewRegistryResponse = Envelope<CheckoutPreview>;
+export type ListRegistryProvidersResponse = Envelope<RegistryProvider[]>;
+export type CreateRegistryResponse = Envelope<{ deployed: true; id: string }>;
+
 /** Read operations on a project's container registries. */
 export class RegistriesService {
   constructor(
@@ -73,5 +96,34 @@ export class RegistriesService {
   async delete(registryId: string, params: ProjectScopedParams = {}): Promise<DeleteRegistryResponse> {
     if (!registryId) throw new Error("registryId is required");
     return this.transport.request<DeleteRegistryResponse>("DELETE", `${this.basePath(params.projectId)}/${registryId}`);
+  }
+
+  /**
+   * Prices a registry's base fee before ordering it. Storage and egress are
+   * metered and not included. `monthly` is exact; `dueToday` is an estimate
+   * once the project has a subscription.
+   */
+  async preview(params: ProjectScopedParams = {}): Promise<PreviewRegistryResponse> {
+    return this.transport.request<PreviewRegistryResponse>("GET", `${this.basePath(params.projectId)}/preview`);
+  }
+
+  /** Lists the providers a registry can be created with, and their regions. */
+  async providers(params: ProjectScopedParams = {}): Promise<ListRegistryProvidersResponse> {
+    return this.transport.request<ListRegistryProvidersResponse>("GET", `${this.basePath(params.projectId)}/providers`);
+  }
+
+  /**
+   * Orders a registry. It is ready when this returns.
+   *
+   * Charges the project's saved card immediately, with a prorated invoice. It
+   * is refused with 402 before anything is created when the project cannot be
+   * billed.
+   */
+  async create(params: CreateRegistryParams): Promise<CreateRegistryResponse> {
+    if (!params?.name) throw new Error("name is required");
+    if (!params.region) throw new Error("region is required");
+    return this.transport.request<CreateRegistryResponse>("POST", this.basePath(params.projectId), {
+      body: { name: params.name, region: params.region, provider: params.provider },
+    });
   }
 }

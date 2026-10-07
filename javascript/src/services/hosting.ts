@@ -6,6 +6,7 @@
 /** Hosting service namespace — shared web hosting sites and how to reach their files. */
 
 import { resolveProjectId, type ResolvedConfig } from "../config";
+import type { CheckoutPreview } from "./preview";
 import type { Transport } from "../transport";
 
 /** Lifecycle state of a hosting site. */
@@ -80,6 +81,46 @@ export type GetHostingAccessResponse = Envelope<HostingAccess>;
 
 export type DeleteHostingSiteResponse = Envelope<Record<string, never>>;
 
+/** A hosting plan. */
+export type HostingTier = "STARTER" | "GROWTH" | "SCALE";
+
+/** A hosting plan's price. `monthly` is in minor units. */
+export interface HostingPrice {
+  tier: HostingTier;
+  monthly: number;
+  currency: string;
+}
+
+/** Arguments accepted by `client.hosting.preview()`. */
+export interface PreviewHostingSiteParams extends ProjectScopedParams {
+  tier: HostingTier;
+  /** Extra storage in 10 GB blocks, up to 50. */
+  extraStorageGb?: number;
+}
+
+/** Arguments accepted by `client.hosting.create()`. */
+export interface CreateHostingSiteParams extends ProjectScopedParams {
+  /** 3–40 characters: a lowercase letter, then lowercase letters, digits and underscores. */
+  siteName: string;
+  /** Defaults to `STARTER` server-side. */
+  tier?: HostingTier;
+  /** `8.1`, `8.2` or `8.3`; defaults to `8.3` server-side. */
+  phpVersion?: string;
+  /** Creates a MySQL database with this name alongside the site. */
+  database?: string;
+  extraStorageGb?: number;
+}
+
+export type ListHostingPricesResponse = Envelope<HostingPrice[]>;
+export type PreviewHostingSiteResponse = Envelope<CheckoutPreview>;
+export type CreateHostingSiteResponse = Envelope<{
+  tenantId: string;
+  status: HostingSiteStatus;
+  database?: { id: string; name: string; status: string };
+  /** Set when the site was created but its database was not. */
+  databaseError?: string;
+}>;
+
 /** Read operations on a project's shared hosting sites. */
 export class HostingService {
   constructor(
@@ -130,5 +171,38 @@ export class HostingService {
   async delete(siteId: string, params: ProjectScopedParams = {}): Promise<DeleteHostingSiteResponse> {
     if (!siteId) throw new Error("siteId is required");
     return this.transport.request<DeleteHostingSiteResponse>("DELETE", `${this.basePath(params.projectId)}/${siteId}`);
+  }
+
+  /** Lists hosting plans and their monthly prices. */
+  async prices(params: ProjectScopedParams = {}): Promise<ListHostingPricesResponse> {
+    return this.transport.request<ListHostingPricesResponse>("GET", `${this.basePath(params.projectId)}/prices`);
+  }
+
+  /** Prices a site before ordering it. `monthly` is exact; `dueToday` is an estimate once the project has a subscription. */
+  async preview(params: PreviewHostingSiteParams): Promise<PreviewHostingSiteResponse> {
+    if (!params?.tier) throw new Error("tier is required");
+    return this.transport.request<PreviewHostingSiteResponse>("GET", `${this.basePath(params.projectId)}/preview`, {
+      query: { tier: params.tier, extraStorageGb: params.extraStorageGb ?? 0 },
+    });
+  }
+
+  /**
+   * Orders a hosting site, and its database when one is named.
+   *
+   * Charges the project's saved card immediately, with a prorated invoice. It
+   * is refused with 402 before anything is created when the project cannot be
+   * billed.
+   */
+  async create(params: CreateHostingSiteParams): Promise<CreateHostingSiteResponse> {
+    if (!params?.siteName) throw new Error("siteName is required");
+    return this.transport.request<CreateHostingSiteResponse>("POST", this.basePath(params.projectId), {
+      body: {
+        siteName: params.siteName,
+        tier: params.tier,
+        phpVersion: params.phpVersion,
+        database: params.database === undefined ? undefined : { name: params.database },
+        extraStorageGb: params.extraStorageGb,
+      },
+    });
   }
 }

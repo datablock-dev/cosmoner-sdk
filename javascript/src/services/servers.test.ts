@@ -120,3 +120,51 @@ describe("ServersService writes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("ServersService paid creates", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("preview prices a size, defaulting the provider", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" }, 200));
+
+    const result = await client.servers.preview({ size: "s-1vcpu-1gb" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/servers/preview?provider=digitalocean&slug=s-1vcpu-1gb`, body: undefined });
+    expect(result).toEqual({ success: true, data: { subtotal: 1200, tax: null, creditApplied: 0, dueToday: 400, monthly: 1200, currency: "USD", nextBillingDate: "2026-10-25T00:00:00.000Z" } });
+  });
+
+  it("create sends the API's field names and the default provider", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ deployed: true }, 200));
+
+    const result = await client.servers.create({ name: "box", size: "s-1vcpu-1gb", region: "ams3", image: "docker-20-04", sshKeyIds: ["key-1"] });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/servers`, body: { name: "box", slug: "s-1vcpu-1gb", provider: "digitalocean", region: "ams3", template: "docker-20-04", sshKeyIds: ["key-1"] } });
+    expect(result).toEqual({ success: true, data: { deployed: true } });
+  });
+
+  it("create leaves out what it was not given and honours a per-call project", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ deployed: true }, 200));
+
+    const result = await client.servers.create({ name: "box", size: "s-1", region: "ams3", projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `https://api.test.dev/v1/projects/proj-2/servers`, body: { name: "box", slug: "s-1", provider: "digitalocean", region: "ams3" } });
+    expect(result).toEqual({ success: true, data: { deployed: true } });
+  });
+
+  it("requires a name, size and region before any request", async () => {
+    await expect(client.servers.create({ name: "", size: "s", region: "r" })).rejects.toThrow("is required");
+    await expect(client.servers.preview({ size: "" })).rejects.toThrow("is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
