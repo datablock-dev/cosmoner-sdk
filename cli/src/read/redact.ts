@@ -18,10 +18,13 @@
 export const HIDDEN = "[hidden]";
 
 /** Field names whose string values are credentials. */
-const CREDENTIAL_FIELD = /password|passwd|passphrase|secret|token|credential|private_?key|access_?key|api_?key|connection_?string|^dsn$/i;
+const CREDENTIAL_FIELD = /password|passwd|passphrase|secret|token|credential|private_?key|access_?key|api_?key|connection_?(string|uri|url)|^dsn$/i;
 
-/** A URL carrying a password in its userinfo: `scheme://user:password@host`. */
-const URL_WITH_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[^:@/\s]+):[^@/\s]+@/gi;
+/**
+ * A URL carrying a password in its userinfo: `scheme://user:password@host`, or
+ * `scheme://:password@host` with no user, as Redis URLs usually are.
+ */
+const URL_WITH_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[^:@/\s]*):[^@/\s]+@/gi;
 
 /**
  * Returns a copy of `value` with every credential hidden.

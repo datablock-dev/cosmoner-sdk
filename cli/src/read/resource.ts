@@ -65,7 +65,7 @@ type ReadFormat = (typeof FORMATS)[number];
 const VERBS = ["get", "list"] as const;
 
 /** The help text for a product's read command. */
-export function readHelp(resource: ReadableResource<unknown>): string {
+export function readHelp<T>(resource: ReadableResource<T>): string {
   const project = resource.projectScoped
     ? `  --project <project>  Project to read, by slug or id. Defaults to
                        COSMONER_PROJECT_ID, then the one set with cosmoner use.\n`
