@@ -467,6 +467,15 @@ $ cosmoner variables set LOG_LEVEL --value debug --environment development
 
 Anything worth hiding belongs in `cosmoner secrets` instead.
 
+## Update notices
+
+When a newer CLI is out, a one-line notice follows a command's output — at
+most once a day, on stderr. The CLI asks npm for the latest version at most
+once a day too, and gives up after a second and a half rather than hold a
+command up. There is no notice, and no lookup, in CI, when stderr is not a
+terminal, for the offline file commands, or when `COSMONER_NO_UPDATE_CHECK`
+is set.
+
 ## Same answer as the SDKs
 
 The rules live in the SDK, not here. `@cosmoner/sdk`, `cosmoner-sdk` (Python)
