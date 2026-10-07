@@ -314,7 +314,7 @@ describe("secrets usage errors", () => {
     const result = await secrets([]);
 
     expect(result.code).toBe(2);
-    expect(result.stderr).toContain("Name what to do: list, set, rm");
+    expect(result.stderr).toContain("Name what to do: get, list, set, rm");
   });
 
   it("rejects an unknown subcommand", async () => {

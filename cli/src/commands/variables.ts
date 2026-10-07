@@ -23,13 +23,14 @@ import {
 } from "./config-entries";
 import { makeClient } from "../credentials";
 
-export const VARIABLES_HELP = `cosmoner variables <list|set|rm> [name] [options]
+export const VARIABLES_HELP = `cosmoner variables <get|list|set|rm> [name] [options]
 
 Manages a project's variables — the non-sensitive values a deployment file
 refers to with from_variable. A variable's value is held in plaintext and is
 shown in full by list; put anything worth hiding in cosmoner secrets instead.
 
-  cosmoner variables list
+  cosmoner variables get
+  cosmoner variables get LOG_LEVEL
   cosmoner variables set LOG_LEVEL --value debug --environment development
   cosmoner variables rm LOG_LEVEL --environment development
 
@@ -98,7 +99,12 @@ export async function runVariables(
       const { data } = await client.variables.list({
         environment: environmentGiven ? environment : undefined,
       });
-      report(data, format);
+      const shown = name === undefined ? data : data.filter((entry) => entry.name === name);
+      if (name !== undefined && shown.length === 0) {
+        console.error(`No variable named ${name}`);
+        return 1;
+      }
+      report(shown, format);
       return 0;
     }
 

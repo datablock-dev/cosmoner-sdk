@@ -139,6 +139,33 @@ const { data: access } = await client.hosting.access(sites[0].id);
 `sftpPassword`. It needs no scope beyond `hosting:read`, so guard the key
 accordingly.
 
+## Read-only namespaces
+
+Each of these reads one kind of resource and returns the API envelope. Every
+method takes `{ projectId }` to override the client default, except
+`projects`, which reads across the account and never uses the default project.
+A method taking an id rejects an empty one before sending anything.
+
+| Namespace | Methods |
+| --- | --- |
+| `projects` | `list()`, `get(project)` — by id or slug |
+| `apps` | `get(appId)`, `logs(appId, { type: "BUILD" \| "RUN" })`, alongside `list()` and the deploy methods |
+| `servers` | `list()`, `get(serverId)` — adds the installed `sshKeys` |
+| `sshKeys` | `list()` |
+| `databases` | `list()` (every kind), `listDedicated()`, `getDedicated(databaseId)`, `listShared()`, `getShared(tenantId)` |
+| `redis` | `list()`, `get(redisId)` |
+| `domains` | `list()`, `get(domain)` — by id or name, such as `example.com` |
+| `buckets` | `list()` — there is no single-bucket read |
+| `registries` | `list()`, `get(registryId)` |
+| `iam` | `list()`, `get(iamUserName)` — the list holds `credentials` plus partial-failure `errors` |
+| `members` | `list()` — members and pending invitations |
+| `email` | `listDomains()`, `getDomain(emailDomainId)`, alongside `send()` |
+
+Two of these return a credential, and each needs only the namespace's read
+scope, so guard keys that carry it: `databases.getDedicated` always includes
+`connectionUri`, a full connection URI with the password, and `redis.get`
+always includes the plaintext `password`.
+
 ## Secrets
 
 Stores the values a deployment file refers to with `from_secret`. Needs an API

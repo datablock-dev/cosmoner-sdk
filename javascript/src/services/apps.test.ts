@@ -204,3 +204,48 @@ describe("AppsService", () => {
     });
   });
 });
+
+/** A client for the read tests below, pointed at the mocked host. */
+function readClient() {
+  return new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+}
+
+/** A 200 response carrying the API's success envelope. */
+function envelope(data: unknown) {
+  return new Response(JSON.stringify({ success: true, data }), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
+describe("AppsService reads", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("fetches one app by id", async () => {
+    fetchSpy.mockResolvedValueOnce(envelope({ id: "app-1" }));
+
+    await readClient().apps.get("app-1");
+
+    expect(fetchSpy.mock.calls[0][0]).toBe("https://api.test.dev/v1/projects/proj-1/apps/app-1");
+  });
+
+  it("reads one log stream", async () => {
+    fetchSpy.mockResolvedValueOnce(envelope({ lines: [{ message: "ready", timestamp: "2026-10-07T12:00:00Z" }] }));
+
+    const { data } = await readClient().apps.logs("app-1", { type: "RUN" });
+
+    expect(fetchSpy.mock.calls[0][0]).toBe("https://api.test.dev/v1/projects/proj-1/apps/app-1/logs?type=RUN");
+    expect(data.lines[0].message).toBe("ready");
+  });
+
+  it("rejects a missing id or an unknown log type without a request", async () => {
+    await expect(readClient().apps.get("")).rejects.toThrow("appId is required");
+    await expect(readClient().apps.logs("app-1", { type: "DEPLOY" as never })).rejects.toThrow('type must be "BUILD" or "RUN"');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

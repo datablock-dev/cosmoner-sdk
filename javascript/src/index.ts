@@ -46,17 +46,46 @@ export {
   FINISHED_DEPLOYMENT_PHASES,
   type App,
   type AppDeployment,
+  type AppLogLine,
+  type AppLogType,
+  type AppLogsParams,
+  type AppLogsResponse,
   type AppStatus,
   type DeployAppParams,
   type DeployAppResponse,
   type DeploymentPhase,
+  type GetAppResponse,
   type GetDeploymentResponse,
   type ImageDeployPolicy,
   type ListAppsResponse,
   type WaitForDeploymentParams,
 } from "./services/apps";
+export { BucketsService, type Bucket, type ListBucketsResponse } from "./services/buckets";
+export {
+  DatabasesService,
+  type DatabaseSummary,
+  type DedicatedDatabase,
+  type DedicatedDatabaseDetail,
+  type GetDedicatedDatabaseResponse,
+  type GetSharedDatabaseResponse,
+  type ListDatabasesResponse,
+  type ListDedicatedDatabasesResponse,
+  type ListSharedDatabasesResponse,
+  type SharedDatabase,
+} from "./services/databases";
+export {
+  DomainsService,
+  type DnsRecord,
+  type Domain,
+  type GetDomainResponse,
+  type ListDomainsResponse,
+} from "./services/domains";
 export {
   EmailService,
+  type EmailDomain,
+  type EmailDomainDetail,
+  type GetEmailDomainResponse,
+  type ListEmailDomainsResponse,
   type SendEmailParams,
   type SendEmailResponse,
 } from "./services/email";
@@ -72,6 +101,38 @@ export {
   type HostingSiteWithCredentials,
   type ListHostingSitesResponse,
 } from "./services/hosting";
+export {
+  IamService,
+  type GetIamCredentialResponse,
+  type IamCredential,
+  type IamCredentialList,
+  type ListIamCredentialsResponse,
+} from "./services/iam";
+export { MembersService, type ListMembersResponse, type ProjectMember, type ProjectMembers } from "./services/members";
+export { ProjectsService, type GetProjectResponse, type ListProjectsResponse, type Project } from "./services/projects";
+export {
+  RedisService,
+  type GetRedisDatabaseResponse,
+  type ListRedisDatabasesResponse,
+  type RedisDatabase,
+  type RedisDatabaseDetail,
+} from "./services/redis";
+export {
+  RegistriesService,
+  type GetRegistryResponse,
+  type ListRegistriesResponse,
+  type Registry,
+  type RegistryRepository,
+} from "./services/registries";
+export {
+  ServersService,
+  type GetServerResponse,
+  type ListServersResponse,
+  type Server,
+  type ServerDetail,
+  type ServerStatus,
+} from "./services/servers";
+export { SshKeysService, type ListSshKeysResponse, type SshKey } from "./services/ssh-keys";
 export {
   PROJECT_ENVIRONMENTS,
   type Actor,

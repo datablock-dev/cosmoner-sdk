@@ -21,6 +21,49 @@ export interface SendEmailResponse {
   data: { messageId: string };
 }
 
+/** A project's sending domain. SMTP passwords and the DKIM private key are never returned. */
+export interface EmailDomain {
+  id: string;
+  domainId: string;
+  status: "DNS_PENDING" | "ACTIVE" | "SUSPENDED";
+  verifiedAt: string | null;
+  domain: { id: string; name: string; status: string; type: string };
+  credentials: Array<{
+    id: string;
+    label: string;
+    fromAddress: string | null;
+    smtpUsername: string;
+    sentCount: number;
+    lastUsedAt: string | null;
+  }>;
+  /** The records to publish before the domain can send. */
+  dnsRecords: Array<{ type: "TXT"; name: string; value: string; purpose: "DKIM" | "SPF" | "DMARC"; description: string }>;
+  createdAt: string;
+}
+
+/** A sending domain read on its own, with whether it can send yet. */
+export interface EmailDomainDetail extends EmailDomain {
+  sending: { identity: "VERIFIED" | "PENDING" | "FAILED" | "MISSING" | null; billingRequired: boolean };
+}
+
+/** Options accepted by the domain reads, for working across projects. */
+export interface ProjectScopedParams {
+  /** Overrides the client-level default project for this call. */
+  projectId?: string;
+}
+
+/** Envelope returned by `client.email.listDomains()`. */
+export interface ListEmailDomainsResponse {
+  success: true;
+  data: EmailDomain[];
+}
+
+/** Envelope returned by `client.email.getDomain()`. */
+export interface GetEmailDomainResponse {
+  success: true;
+  data: EmailDomainDetail;
+}
+
 /** Email operations for a project. */
 export class EmailService {
   constructor(
@@ -56,6 +99,25 @@ export class EmailService {
           replyTo: params.replyTo,
         },
       }
+    );
+  }
+
+  /** Lists the project's sending domains, with their SMTP credentials and DNS records. */
+  // eslint-disable-next-line require-await -- kept `async` like every method here, so callers get one promise contract.
+  async listDomains(params: ProjectScopedParams = {}): Promise<ListEmailDomainsResponse> {
+    return this.transport.request<ListEmailDomainsResponse>(
+      "GET",
+      `/v1/projects/${resolveProjectId(this.config, params.projectId)}/email`
+    );
+  }
+
+  /** Fetches one sending domain by its id (not its domain name). */
+  // eslint-disable-next-line require-await -- `async` makes the validation below reject rather than throw synchronously.
+  async getDomain(emailDomainId: string, params: ProjectScopedParams = {}): Promise<GetEmailDomainResponse> {
+    if (!emailDomainId) throw new Error("emailDomainId is required");
+    return this.transport.request<GetEmailDomainResponse>(
+      "GET",
+      `/v1/projects/${resolveProjectId(this.config, params.projectId)}/email/${emailDomainId}`
     );
   }
 }

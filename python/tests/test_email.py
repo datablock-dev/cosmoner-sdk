@@ -5,6 +5,40 @@ import pytest
 from cosmoner import AsyncCosmoner, Cosmoner, CosmonerError, RateLimitError
 
 URL = "https://api.test.dev/v1/projects/proj-1/email/send"
+DOMAINS = "https://api.test.dev/v1/projects/proj-1/email"
+
+EMAIL_DOMAIN = {
+    "id": "ed-1",
+    "domainId": "dom-1",
+    "status": "ACTIVE",
+    "verifiedAt": "2026-09-02T12:00:00.000Z",
+    "domain": {
+        "id": "dom-1",
+        "name": "acme.test",
+        "status": "ACTIVE",
+        "type": "EXTERNAL",
+    },
+    "credentials": [
+        {
+            "id": "cred-1",
+            "label": "Receipts",
+            "fromAddress": "receipts@acme.test",
+            "smtpUsername": "smtp_acme",
+            "sentCount": 12,
+            "lastUsedAt": None,
+        }
+    ],
+    "dnsRecords": [
+        {
+            "type": "TXT",
+            "name": "acme.test",
+            "value": "v=spf1 include:cosmoner.com ~all",
+            "purpose": "SPF",
+            "description": "Authorises Cosmoner to send for the domain",
+        }
+    ],
+    "createdAt": "2026-09-01T12:00:00.000Z",
+}
 
 
 @pytest.fixture()
@@ -221,3 +255,86 @@ class TestAsyncEmailSend:
                 )
 
         assert exc_info.value.status == 401
+
+
+class TestEmailDomains:
+    """Tests for sending-domain reads via mocked HTTP."""
+
+    def test_requires_an_email_domain_id(self, client):
+        with pytest.raises(ValueError, match="email_domain_id is required"):
+            client.email.get_domain("")
+
+    def test_lists_domains(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=DOMAINS, json={"success": True, "data": [EMAIL_DOMAIN]}
+        )
+
+        result = client.email.list_domains()
+
+        assert result["data"] == [EMAIL_DOMAIN]
+        assert httpx_mock.get_request().method == "GET"
+
+    def test_fetches_a_domain_with_its_sending_state(self, client, httpx_mock):
+        sending = {"identity": "acme.test", "billingRequired": False}
+        httpx_mock.add_response(
+            url=f"{DOMAINS}/ed-1",
+            json={"success": True, "data": {**EMAIL_DOMAIN, "sending": sending}},
+        )
+
+        result = client.email.get_domain("ed-1")
+
+        assert result["data"]["sending"] == sending
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email",
+            json={"success": True, "data": []},
+        )
+
+        client.email.list_domains(project_id="proj-2")
+
+        assert "proj-2" in str(httpx_mock.get_request().url)
+
+
+class TestAsyncEmailDomains:
+    """Tests for the async sending-domain reads."""
+
+    async def test_lists_domains(self, httpx_mock):
+        httpx_mock.add_response(
+            url=DOMAINS, json={"success": True, "data": [EMAIL_DOMAIN]}
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.email.list_domains()
+
+        assert result["data"] == [EMAIL_DOMAIN]
+
+    async def test_fetches_a_domain(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{DOMAINS}/ed-1", json={"success": True, "data": EMAIL_DOMAIN}
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.email.get_domain("ed-1")
+
+        assert result["data"] == EMAIL_DOMAIN
+
+    async def test_validates_the_id_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="email_domain_id is required"):
+                await client.email.get_domain("")

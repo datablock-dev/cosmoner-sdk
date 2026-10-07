@@ -24,13 +24,14 @@ import {
 } from "./config-entries";
 import { makeClient } from "../credentials";
 
-export const SECRETS_HELP = `cosmoner secrets <list|set|rm> [name] [options]
+export const SECRETS_HELP = `cosmoner secrets <get|list|set|rm> [name] [options]
 
 Manages a project's secrets — the values a deployment file refers to with
 from_secret. A secret's value is encrypted and returned only as it is set, so
 this command never prints one back.
 
-  cosmoner secrets list
+  cosmoner secrets get
+  cosmoner secrets get DB_PASSWORD
   cosmoner secrets set DB_PASSWORD --environment production < password.txt
   cosmoner secrets rm DB_PASSWORD --environment production
 
@@ -101,7 +102,12 @@ export async function runSecrets(
       const { data } = await client.secrets.list({
         environment: environmentGiven ? environment : undefined,
       });
-      report(data, format);
+      const shown = name === undefined ? data : data.filter((entry) => entry.name === name);
+      if (name !== undefined && shown.length === 0) {
+        console.error(`No secret named ${name}`);
+        return 1;
+      }
+      report(shown, format);
       return 0;
     }
 

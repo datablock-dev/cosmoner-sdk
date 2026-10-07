@@ -1,4 +1,4 @@
-"""Apps service namespace — finding apps and rolling image apps onto a new image."""
+"""Apps service namespace — reading apps and their logs, and rolling out new images."""
 
 from __future__ import annotations
 
@@ -6,13 +6,16 @@ import asyncio
 import re
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from ._config import ClientConfig, resolve_project_id
 from ._transport import AsyncTransport, Transport
 
 #: Phases after which a deployment will not change again.
 FINISHED_DEPLOYMENT_PHASES = ("ACTIVE", "ERROR", "CANCELED", "SUPERSEDED")
+
+#: The log streams an app exposes: the image build, and the running container.
+_LOG_TYPES = ("BUILD", "RUN")
 
 DEFAULT_POLL_INTERVAL = 3.0
 DEFAULT_WAIT_TIMEOUT = 600.0
@@ -46,6 +49,12 @@ def _require_app_id(app_id: str) -> None:
     """Rejects an empty app id before it becomes a malformed route."""
     if not app_id:
         raise ValueError("app_id is required")
+
+
+def _require_log_type(log_type: str) -> None:
+    """Rejects a log stream the API does not have before spending a request on it."""
+    if log_type not in _LOG_TYPES:
+        raise ValueError('type must be "BUILD" or "RUN"')
 
 
 def _require_deployment_ids(app_id: str, deployment_id: str) -> None:
@@ -86,6 +95,37 @@ class AppsService:
         """Lists every app in the project, newest first."""
         result: dict[str, Any] = self._transport.request(
             "GET", self._base_path(project_id)
+        )
+        return result
+
+    def get(self, app_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Fetches one app by id."""
+        _require_app_id(app_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{app_id}"
+        )
+        return result
+
+    def logs(
+        self,
+        app_id: str,
+        *,
+        type: Literal["BUILD", "RUN"],
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetches an app's recent log lines, each with ``message`` and ``timestamp``.
+
+        ``type`` picks the stream: ``BUILD`` for the image build, ``RUN`` for the
+        running container. Anything else raises ``ValueError``.
+        """
+        _require_app_id(app_id)
+        _require_log_type(type)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET",
+            f"{self._base_path(project_id)}/{app_id}/logs",
+            params={"type": type},
         )
         return result
 
@@ -174,6 +214,37 @@ class AsyncAppsService:
         """Lists every app in the project, newest first."""
         result: dict[str, Any] = await self._transport.request(
             "GET", self._base_path(project_id)
+        )
+        return result
+
+    async def get(self, app_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Fetches one app by id."""
+        _require_app_id(app_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{app_id}"
+        )
+        return result
+
+    async def logs(
+        self,
+        app_id: str,
+        *,
+        type: Literal["BUILD", "RUN"],
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetches an app's recent log lines, each with ``message`` and ``timestamp``.
+
+        ``type`` picks the stream: ``BUILD`` for the image build, ``RUN`` for the
+        running container. Anything else raises ``ValueError``.
+        """
+        _require_app_id(app_id)
+        _require_log_type(type)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET",
+            f"{self._base_path(project_id)}/{app_id}/logs",
+            params={"type": type},
         )
         return result
 

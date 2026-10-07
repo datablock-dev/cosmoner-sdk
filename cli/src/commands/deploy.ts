@@ -90,7 +90,7 @@ export async function runDeploy(args: ParsedArgs, env: NodeJS.ProcessEnv): Promi
 
   const windowMs = usesSession(env) ? SESSION_WAIT_WINDOW_MS : Number.POSITIVE_INFINITY;
   const firstWindowMs = wait ? Math.min(timeoutSeconds * 1000, windowMs) : 0;
-  let client = await makeClient(args, env, SCOPE, firstWindowMs + TOKEN_MARGIN_MS);
+  let client = await makeClient(args, env, SCOPE, { forMs: firstWindowMs + TOKEN_MARGIN_MS });
   const say = format === "text" ? (line: string) => console.log(line) : () => {};
 
   try {
@@ -134,7 +134,7 @@ export async function runDeploy(args: ParsedArgs, env: NodeJS.ProcessEnv): Promi
         if (windowEnd >= deadline) {
           throw new Error(`Deployment ${started.id} was still ${lastPhase} after ${timeoutSeconds}s`, { cause: err });
         }
-        client = await makeClient(args, env, SCOPE, Math.min(deadline - Date.now(), windowMs) + TOKEN_MARGIN_MS);
+        client = await makeClient(args, env, SCOPE, { forMs: Math.min(deadline - Date.now(), windowMs) + TOKEN_MARGIN_MS });
       }
     }
 

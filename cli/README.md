@@ -186,6 +186,58 @@ Using Acme Web (acme-web) by default.
 the default project, after checking the login still works. `cosmoner logout`
 signs this machine out and deletes the saved login.
 
+### `cosmoner <product> get [<name>]`
+
+Reads what a project has. With no name it lists everything; with one it shows
+that item. `list` is the same as `get` with no name.
+
+```
+$ cosmoner apps get
+NAME  STATUS  URL                       SOURCE                              CREATED
+web   ACTIVE  https://web.cosmoner.app  registry.cosmoner.com/acme/web:v2   2026-09-01
+api   ACTIVE  -                         acme/api                            2026-08-14
+
+$ cosmoner databases get main --format json
+```
+
+Products: `projects`, `apps`, `servers`, `ssh-keys`, `databases`, `redis`,
+`domains`, `buckets`, `registries`, `email`, `iam`, `members`, `hosting`,
+`webhooks`, `secrets` and `variables`. `cosmoner projects get` lists every
+project you can reach and needs no project; the rest read the project from
+`--project`, `COSMONER_PROJECT_ID` or `cosmoner use`.
+
+`--format json` prints the API's own objects — an array for a listing, one
+object for a single item — so scripts and AI agents can rely on the shape the
+API documents rather than on the table layout.
+
+Credentials are never printed, in either format. A database's connection URI,
+a Redis password, or a password inside any URL shows as `[hidden]`; fetch one
+on purpose from the control panel or the SDK when you need it.
+
+`cosmoner apps logs <app> [--type run|build]` prints an app's recent log lines,
+with the same masking.
+
+### `cosmoner get --all`
+
+Everything a project has in one command: every product's listing, read in
+parallel. In text it prints a section per product; `--format json` prints one
+object, with `project`, a key per product holding its listing, and `errors`.
+
+```json
+{
+  "project": { "id": "…", "name": "Acme", "slug": "acme" },
+  "apps": [ … ],
+  "servers": [],
+  "iam": null,
+  "errors": { "iam": "Missing scope iam:read (FORBIDDEN)" }
+}
+```
+
+A product the credential may not read — an API key without that product's read
+scope — is `null`, with the reason under `errors`, and the command still
+succeeds. It exits 1 only when nothing could be read. A CLI login reads every
+product its user can see.
+
 ### `cosmoner deploy <app>`
 
 Deploys an image app — one that runs an image from a Cosmoner registry — and

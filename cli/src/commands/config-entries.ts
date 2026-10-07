@@ -41,12 +41,19 @@ export const ENTRY_VALUE_FLAGS = [
 /** Flags both commands understand. Anything else is a typo worth refusing. */
 export const ENTRY_FLAGS = [...ENTRY_VALUE_FLAGS, "help"];
 
-/** Reads the subcommand, rejecting a missing or unknown one. */
+/**
+ * Reads the subcommand, rejecting a missing or unknown one.
+ *
+ * `get` is read as `list`, so these commands answer the same verb as every
+ * other product's (`cosmoner <product> get [<name>]`); a name narrows the
+ * listing to that entry.
+ */
 export function readSubcommand(positional: string[], command: string): Subcommand {
   const [sub] = positional;
   if (sub === undefined) {
-    throw new UsageError(`Name what to do: ${SUBCOMMANDS.join(", ")}`);
+    throw new UsageError(`Name what to do: get, ${SUBCOMMANDS.join(", ")}`);
   }
+  if (sub === "get") return "list";
   if (!(SUBCOMMANDS as readonly string[]).includes(sub)) {
     throw new UsageError(`Unknown subcommand "cosmoner ${command} ${sub}"`);
   }

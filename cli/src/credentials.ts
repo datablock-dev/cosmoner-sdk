@@ -315,8 +315,20 @@ export async function freshSession(env: NodeJS.ProcessEnv, login: SessionLogin, 
 /** A credential and project for a command, and where the credential came from. */
 export interface ResolvedCredentials {
   apiKey: string;
-  projectId: string;
+  /** Undefined only when the caller passed `requireProject: false` and none was named. */
+  projectId: string | undefined;
   source: "env" | "login" | "session";
+}
+
+/** How a command wants its credential resolved. */
+export interface CredentialOptions {
+  /** How long the credential must stay valid. Defaults to `DEFAULT_TOKEN_VALIDITY_MS`. */
+  forMs?: number;
+  /**
+   * False for a command that works across the account rather than in one
+   * project — `cosmoner projects get` — so a missing project is not an error.
+   */
+  requireProject?: boolean;
 }
 
 /**
@@ -336,13 +348,15 @@ export async function resolveCredentials(
   args: ParsedArgs,
   env: NodeJS.ProcessEnv,
   scope: string,
-  forMs = DEFAULT_TOKEN_VALIDITY_MS
+  options: CredentialOptions = {}
 ): Promise<ResolvedCredentials> {
+  const forMs = options.forMs ?? DEFAULT_TOKEN_VALIDITY_MS;
+  const requireProject = options.requireProject ?? true;
   const flagProject = readValue(args, "project");
 
   if (env.COSMONER_API_KEY) {
     const projectId = flagProject ?? env.COSMONER_PROJECT_ID;
-    if (!projectId) throw new UsageError("Pass --project or set COSMONER_PROJECT_ID");
+    if (!projectId && requireProject) throw new UsageError("Pass --project or set COSMONER_PROJECT_ID");
     return { apiKey: env.COSMONER_API_KEY, projectId, source: "env" };
   }
 
@@ -365,7 +379,7 @@ export async function resolveCredentials(
   }
 
   const projectId = flagProject ?? env.COSMONER_PROJECT_ID ?? login.defaultProject?.id;
-  if (!projectId) {
+  if (!projectId && requireProject) {
     throw new UsageError("Pass --project <project>, or set a default with cosmoner use <project>");
   }
 
@@ -378,10 +392,10 @@ export async function makeClient(
   args: ParsedArgs,
   env: NodeJS.ProcessEnv,
   scope: string,
-  forMs = DEFAULT_TOKEN_VALIDITY_MS
+  options: CredentialOptions = {}
 ): Promise<Cosmoner> {
-  const { apiKey, projectId } = await resolveCredentials(args, env, scope, forMs);
-  return new Cosmoner({ apiKey, projectId, baseUrl: env.COSMONER_API_URL || undefined });
+  const { apiKey, projectId } = await resolveCredentials(args, env, scope, options);
+  return new Cosmoner({ apiKey, projectId: projectId || undefined, baseUrl: env.COSMONER_API_URL || undefined });
 }
 
 /** True when the command would run on a saved session, whose access token lapses within the hour. */

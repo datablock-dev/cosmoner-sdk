@@ -241,3 +241,46 @@ describe("EmailService", () => {
     });
   });
 });
+
+/** A client for the read tests below, pointed at the mocked host. */
+function readClient() {
+  return new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+}
+
+/** A 200 response carrying the API's success envelope. */
+function envelope(data: unknown) {
+  return new Response(JSON.stringify({ success: true, data }), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
+describe("EmailService domain reads", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("lists sending domains", async () => {
+    fetchSpy.mockResolvedValueOnce(envelope([]));
+
+    await readClient().email.listDomains();
+
+    expect(fetchSpy.mock.calls[0][0]).toBe("https://api.test.dev/v1/projects/proj-1/email");
+  });
+
+  it("fetches one sending domain, honouring a per-call project", async () => {
+    fetchSpy.mockResolvedValueOnce(envelope({ id: "ed-1" }));
+
+    await readClient().email.getDomain("ed-1", { projectId: "proj-2" });
+
+    expect(fetchSpy.mock.calls[0][0]).toBe("https://api.test.dev/v1/projects/proj-2/email/ed-1");
+  });
+
+  it("rejects an empty id without a request", async () => {
+    await expect(readClient().email.getDomain("")).rejects.toThrow("emailDomainId is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

@@ -95,6 +95,19 @@ class TestAppValidation:
         with pytest.raises(ValueError, match="timeout must be greater than 0"):
             client.apps.wait_for_deployment("app-1", "dep-1", timeout=0)
 
+    def test_requires_an_app_id_on_get(self, client):
+        with pytest.raises(ValueError, match="app_id is required"):
+            client.apps.get("")
+
+    def test_requires_an_app_id_on_logs(self, client):
+        with pytest.raises(ValueError, match="app_id is required"):
+            client.apps.logs("", type="RUN")
+
+    @pytest.mark.parametrize("log_type", ["", "run", "DEPLOY", "BUILD "])
+    def test_rejects_an_unknown_log_type(self, client, log_type):
+        with pytest.raises(ValueError, match='type must be "BUILD" or "RUN"'):
+            client.apps.logs("app-1", type=log_type)
+
     def test_requires_a_project_id_when_the_client_has_no_default(self):
         scopeless = Cosmoner(api_key="key-123", max_retries=0)
 
@@ -112,6 +125,39 @@ class TestApps:
 
         assert result["data"] == [APP]
         assert httpx_mock.get_request().method == "GET"
+
+    def test_fetches_an_app(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/app-1", json={"success": True, "data": APP})
+
+        result = client.apps.get("app-1")
+
+        assert result["data"] == APP
+        assert httpx_mock.get_request().method == "GET"
+
+    @pytest.mark.parametrize("log_type", ["BUILD", "RUN"])
+    def test_fetches_logs_of_the_requested_type(self, client, httpx_mock, log_type):
+        lines = [{"message": "listening on :8080", "timestamp": "2026-09-16T12:00:00Z"}]
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/logs?type={log_type}",
+            json={"success": True, "data": {"lines": lines}},
+        )
+
+        result = client.apps.logs("app-1", type=log_type)
+
+        assert result["data"]["lines"] == lines
+        request = httpx_mock.get_request()
+        assert request.method == "GET"
+        assert dict(request.url.params) == {"type": log_type}
+
+    def test_fetches_an_app_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/apps/app-1",
+            json={"success": True, "data": APP},
+        )
+
+        client.apps.get("app-1", project_id="proj-2")
+
+        assert "proj-2" in str(httpx_mock.get_request().url)
 
     def test_deploys_a_tag(self, client, httpx_mock):
         httpx_mock.add_response(
@@ -294,6 +340,45 @@ class TestAsyncApps:
 
         assert result["data"]["id"] == "dep-1"
         assert json.loads(httpx_mock.get_request().content) == {"tag": "1.1.0"}
+
+    async def test_fetches_an_app(self, httpx_mock):
+        httpx_mock.add_response(url=f"{BASE}/app-1", json={"success": True, "data": APP})
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.apps.get("app-1")
+
+        assert result["data"] == APP
+
+    async def test_fetches_logs(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/logs?type=BUILD",
+            json={"success": True, "data": {"lines": []}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.apps.logs("app-1", type="BUILD")
+
+        assert result["data"] == {"lines": []}
+
+    async def test_rejects_an_unknown_log_type_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match='type must be "BUILD" or "RUN"'):
+                await client.apps.logs("app-1", type="STDOUT")
 
     async def test_validates_arguments_before_any_request(self, httpx_mock):
         async with AsyncCosmoner(

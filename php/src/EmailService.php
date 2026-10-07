@@ -6,7 +6,52 @@ namespace Cosmoner\Sdk;
 
 use InvalidArgumentException;
 
-/** Email operations for a project. */
+/**
+ * Email operations for a project.
+ *
+ * The API returns more fields than the shapes below declare.
+ *
+ * @phpstan-type EmailCredential array{
+ *     id: string,
+ *     label: ?string,
+ *     fromAddress: ?string,
+ *     smtpUsername: string,
+ *     sentCount: int,
+ *     lastUsedAt: ?string,
+ *     ...
+ * }
+ * @phpstan-type EmailDnsRecord array{
+ *     type: string,
+ *     name: string,
+ *     value: string,
+ *     purpose: string,
+ *     description: string,
+ *     ...
+ * }
+ * @phpstan-type EmailDomain array{
+ *     id: string,
+ *     domainId: string,
+ *     status: 'DNS_PENDING'|'ACTIVE'|'SUSPENDED',
+ *     verifiedAt: ?string,
+ *     domain: array{id: string, name: string, status: string, type: string, ...},
+ *     credentials: list<EmailCredential>,
+ *     dnsRecords: list<EmailDnsRecord>,
+ *     createdAt: string,
+ *     ...
+ * }
+ * @phpstan-type EmailDomainDetail array{
+ *     id: string,
+ *     domainId: string,
+ *     status: 'DNS_PENDING'|'ACTIVE'|'SUSPENDED',
+ *     verifiedAt: ?string,
+ *     domain: array{id: string, name: string, status: string, type: string, ...},
+ *     credentials: list<EmailCredential>,
+ *     dnsRecords: list<EmailDnsRecord>,
+ *     sending: array{identity: mixed, billingRequired: bool, ...},
+ *     createdAt: string,
+ *     ...
+ * }
+ */
 class EmailService
 {
     public function __construct(
@@ -64,5 +109,47 @@ class EmailService
 
         /** @var array{success: true, data: array{messageId: string}} */
         return $this->transport->request('POST', "/v1/projects/{$project}/email/send", $payload);
+    }
+
+    /**
+     * Lists the project's email domains with their SMTP credentials and DNS records.
+     *
+     * Credentials carry no passwords.
+     *
+     * @param string|null $projectId Overrides the client-level default project.
+     *
+     * @return array{success: true, data: list<EmailDomain>}
+     *
+     * @throws CosmonerError On API errors.
+     */
+    public function listDomains(?string $projectId = null): array
+    {
+        $project = $this->config->resolveProjectId($projectId);
+
+        /** @var array{success: true, data: list<EmailDomain>} */
+        return $this->transport->request('GET', "/v1/projects/{$project}/email");
+    }
+
+    /**
+     * Fetches one email domain, adding its `sending` status to the list shape.
+     *
+     * `sending.billingRequired` is true while the organization cannot be billed
+     * for sending; `sending.identity` is null when the status could not be read.
+     *
+     * @return array{success: true, data: EmailDomainDetail}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function getDomain(string $emailDomainId, ?string $projectId = null): array
+    {
+        if ($emailDomainId === '') {
+            throw new InvalidArgumentException('emailDomainId is required');
+        }
+
+        $project = $this->config->resolveProjectId($projectId);
+
+        /** @var array{success: true, data: EmailDomainDetail} */
+        return $this->transport->request('GET', "/v1/projects/{$project}/email/{$emailDomainId}");
     }
 }
