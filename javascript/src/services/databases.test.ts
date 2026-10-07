@@ -213,3 +213,36 @@ describe("DatabasesService paid creates", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("DatabasesService password rotation", () => {
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = makeClient();
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("rotateSharedPassword posts and returns the new password", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ password: "new-pw", connectionUri: "postgresql://u:new-pw@h/db" }));
+
+    const result = await client.databases.rotateSharedPassword("tenant-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${API}/v1/projects/proj-1/databases/shared/tenant-1/rotate-password`, body: undefined });
+    expect(result).toEqual({ success: true, data: { password: "new-pw", connectionUri: "postgresql://u:new-pw@h/db" } });
+  });
+
+  it("rotateSharedPassword honours a per-call project and requires an id", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ password: "p", connectionUri: "u" }));
+
+    await client.databases.rotateSharedPassword("tenant-1", { projectId: "proj-2" });
+    await expect(client.databases.rotateSharedPassword("")).rejects.toThrow("tenantId is required");
+
+    expect(writeSent(fetchSpy).url).toBe(`${API}/v1/projects/proj-2/databases/shared/tenant-1/rotate-password`);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});

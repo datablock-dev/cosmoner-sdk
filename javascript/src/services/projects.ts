@@ -37,8 +37,17 @@ interface Envelope<T> {
 export type ListProjectsResponse = Envelope<Project[]>;
 export type GetProjectResponse = Envelope<Project>;
 
+/** Arguments accepted by `client.projects.update()`. */
+export interface UpdateProjectParams {
+  /** 1–100 characters, unique among the caller's projects. */
+  name: string;
+}
+
+export type UpdateProjectResponse = Envelope<Pick<Project, "id" | "name" | "slug" | "billingEmail">>;
+export type DeleteProjectResponse = Envelope<null>;
+
 /**
- * Reads the projects the credential can reach.
+ * The projects the credential can reach.
  *
  * Account-level: it never uses the client's default project. An API key sees
  * the one project it was issued for; a `cosmoner login` session sees every
@@ -56,5 +65,24 @@ export class ProjectsService {
   async get(project: string): Promise<GetProjectResponse> {
     if (!project) throw new Error("project is required");
     return this.transport.request<GetProjectResponse>("GET", `/v1/projects/${encodeURIComponent(project)}`);
+  }
+
+  /** Renames a project. Owners and admins only; 409 when the caller already has a project of that name. */
+  async update(project: string, params: UpdateProjectParams): Promise<UpdateProjectResponse> {
+    if (!project) throw new Error("project is required");
+    if (!params?.name) throw new Error("name is required");
+    return this.transport.request<UpdateProjectResponse>("PATCH", `/v1/projects/${encodeURIComponent(project)}`, {
+      body: { name: params.name },
+    });
+  }
+
+  /**
+   * Permanently deletes a project. Owner only, and refused with 409 while it
+   * still holds resources — servers, apps, databases and the rest have to be
+   * deleted first, so nothing is left running and billed with no project.
+   */
+  async delete(project: string): Promise<DeleteProjectResponse> {
+    if (!project) throw new Error("project is required");
+    return this.transport.request<DeleteProjectResponse>("DELETE", `/v1/projects/${encodeURIComponent(project)}`);
   }
 }

@@ -551,3 +551,96 @@ class TestAsyncDedicatedDatabaseCreate:
                 await client.databases.preview_dedicated(size="")
 
         assert httpx_mock.get_requests() == []
+
+
+ROTATED = {
+    "password": "n3w-pa55",
+    "connectionUri": "postgresql://tenant_1:n3w-pa55@shared-1.db.cosmoner.dev:6432/tenant_1",
+}
+
+
+class TestSharedDatabasePasswordRotate:
+    """Tests for rotating a shared tenant's password via mocked HTTP."""
+
+    def test_rotates_returning_the_new_password_once(self, client, httpx_mock):
+        envelope = {"success": True, "data": ROTATED}
+        httpx_mock.add_response(
+            url=f"{BASE}/shared/tenant-1/rotate-password", method="POST", json=envelope
+        )
+
+        assert client.databases.rotate_shared_password("tenant-1") == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert request.content == b""
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=(
+                "https://api.test.dev/v1/projects/proj-2/databases/shared/tenant-1"
+                "/rotate-password"
+            ),
+            method="POST",
+            json={"success": True, "data": ROTATED},
+        )
+
+        client.databases.rotate_shared_password("tenant-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "POST"
+
+    def test_requires_tenant_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="tenant_id is required"):
+            client.databases.rotate_shared_password("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncSharedDatabasePasswordRotate:
+    """Tests for rotating a shared tenant's password through the async client."""
+
+    async def test_rotates_returning_the_new_password_once(self, httpx_mock):
+        envelope = {"success": True, "data": ROTATED}
+        httpx_mock.add_response(
+            url=f"{BASE}/shared/tenant-1/rotate-password", method="POST", json=envelope
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.databases.rotate_shared_password("tenant-1") == envelope
+
+        assert httpx_mock.get_request().content == b""
+
+    async def test_targets_another_project_per_call(self, httpx_mock):
+        httpx_mock.add_response(
+            url=(
+                "https://api.test.dev/v1/projects/proj-2/databases/shared/tenant-1"
+                "/rotate-password"
+            ),
+            method="POST",
+            json={"success": True, "data": ROTATED},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.databases.rotate_shared_password("tenant-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "POST"
+
+    async def test_requires_tenant_id_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="tenant_id is required"):
+                await client.databases.rotate_shared_password("")
+
+        assert httpx_mock.get_requests() == []

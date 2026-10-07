@@ -612,3 +612,290 @@ class TestAsyncEmailCredentials:
                 await client.email.delete_credential("ed-1", "")
 
         assert httpx_mock.get_requests() == []
+
+
+VERIFICATION = {
+    "status": "ACTIVE",
+    "verifiedAt": "2026-09-02T12:00:00.000Z",
+    "records": [
+        {
+            "type": "TXT",
+            "name": "acme.test",
+            "value": "v=spf1 include:cosmoner.com ~all",
+            "purpose": "SPF",
+            "description": "Authorises Cosmoner to send for the domain",
+            "verified": True,
+            "error": None,
+        }
+    ],
+}
+
+LIMITS = {
+    "plan": "STARTER",
+    "includedEmails": 10000,
+    "monthlyQuota": 10000,
+    "hourlyLimit": 500,
+    "dailyLimit": 2000,
+    "sentThisMonth": 120,
+    "sentLastDay": 30,
+    "sentLastHour": 4,
+    "periodStart": "2026-10-01T00:00:00.000Z",
+    "pausedUntil": None,
+    "pauseReason": None,
+    "pendingRequest": None,
+}
+
+
+class TestEmailDomainCreate:
+    """Tests for setting up email on a domain via mocked HTTP."""
+
+    def test_sets_up_email_on_a_project_domain(self, client, httpx_mock):
+        envelope = {"success": True, "data": EMAIL_DOMAIN}
+        httpx_mock.add_response(
+            url=DOMAINS, method="POST", status_code=201, json=envelope
+        )
+
+        result = client.email.create_domain(domain_id="dom-1")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"domainId": "dom-1"}
+
+    def test_sets_up_email_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email",
+            method="POST",
+            status_code=201,
+            json={"success": True, "data": EMAIL_DOMAIN},
+        )
+
+        client.email.create_domain(domain_id="dom-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "POST"
+
+    def test_requires_a_domain_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="domain_id is required"):
+            client.email.create_domain(domain_id="")
+
+        assert httpx_mock.get_requests() == []
+
+    def test_sets_up_email_on_an_external_domain(self, client, httpx_mock):
+        envelope = {"success": True, "data": EMAIL_DOMAIN}
+        httpx_mock.add_response(
+            url=f"{DOMAINS}/external", method="POST", status_code=201, json=envelope
+        )
+
+        result = client.email.create_external_domain(domain_name="acme.test")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"domainName": "acme.test"}
+
+    def test_sets_up_an_external_domain_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/external",
+            method="POST",
+            status_code=201,
+            json={"success": True, "data": EMAIL_DOMAIN},
+        )
+
+        client.email.create_external_domain(domain_name="acme.test", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "POST"
+
+    def test_requires_a_domain_name_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="domain_name is required"):
+            client.email.create_external_domain(domain_name="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestEmailDomainVerify:
+    """Tests for verifying a sending domain's DNS records via mocked HTTP."""
+
+    def test_verifies_a_domain_without_a_body(self, client, httpx_mock):
+        envelope = {"success": True, "data": VERIFICATION}
+        httpx_mock.add_response(
+            url=f"{DOMAINS}/ed-1/verify", method="POST", json=envelope
+        )
+
+        result = client.email.verify_domain("ed-1")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert request.content == b""
+
+    def test_verifies_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/ed-1/verify",
+            method="POST",
+            json={"success": True, "data": VERIFICATION},
+        )
+
+        client.email.verify_domain("ed-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "POST"
+
+    def test_requires_an_email_domain_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="email_domain_id is required"):
+            client.email.verify_domain("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestEmailLimits:
+    """Tests for reading the project's email plan and sending limits."""
+
+    def test_reads_the_limits(self, client, httpx_mock):
+        envelope = {"success": True, "data": LIMITS}
+        httpx_mock.add_response(url=f"{DOMAINS}/limits", method="GET", json=envelope)
+
+        assert client.email.limits() == envelope
+        assert httpx_mock.get_request().method == "GET"
+
+    def test_reads_another_projects_limits(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/limits",
+            method="GET",
+            json={"success": True, "data": LIMITS},
+        )
+
+        client.email.limits(project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "GET"
+
+    def test_requires_a_project_id_when_the_client_has_no_default(self, httpx_mock):
+        scopeless = Cosmoner(api_key="key-123", max_retries=0)
+
+        with pytest.raises(ValueError, match="project_id is required"):
+            scopeless.email.limits()
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncEmailDomainLifecycle:
+    """Tests for creating, verifying and reading limits through the async client."""
+
+    async def test_sets_up_email_on_a_project_domain(self, httpx_mock):
+        envelope = {"success": True, "data": EMAIL_DOMAIN}
+        httpx_mock.add_response(
+            url=DOMAINS, method="POST", status_code=201, json=envelope
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.email.create_domain(domain_id="dom-1")
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {"domainId": "dom-1"}
+
+    async def test_sets_up_email_in_another_project(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email",
+            method="POST",
+            status_code=201,
+            json={"success": True, "data": EMAIL_DOMAIN},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.email.create_domain(domain_id="dom-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "POST"
+
+    async def test_sets_up_email_on_an_external_domain(self, httpx_mock):
+        envelope = {"success": True, "data": EMAIL_DOMAIN}
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/external",
+            method="POST",
+            status_code=201,
+            json=envelope,
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.email.create_external_domain(
+                domain_name="acme.test", project_id="proj-2"
+            )
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {"domainName": "acme.test"}
+
+    async def test_verifies_a_domain(self, httpx_mock):
+        envelope = {"success": True, "data": VERIFICATION}
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/ed-1/verify",
+            method="POST",
+            json=envelope,
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.email.verify_domain("ed-1", project_id="proj-2")
+
+        assert result == envelope
+        assert httpx_mock.get_request().content == b""
+
+    async def test_reads_the_limits(self, httpx_mock):
+        envelope = {"success": True, "data": LIMITS}
+        httpx_mock.add_response(url=f"{DOMAINS}/limits", method="GET", json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.email.limits() == envelope
+
+    async def test_reads_another_projects_limits(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/limits",
+            method="GET",
+            json={"success": True, "data": LIMITS},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.email.limits(project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "GET"
+
+    async def test_rejects_empty_arguments_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="domain_id is required"):
+                await client.email.create_domain(domain_id="")
+            with pytest.raises(ValueError, match="domain_name is required"):
+                await client.email.create_external_domain(domain_name="")
+            with pytest.raises(ValueError, match="email_domain_id is required"):
+                await client.email.verify_domain("")
+
+        assert httpx_mock.get_requests() == []

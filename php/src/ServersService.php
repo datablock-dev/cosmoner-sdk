@@ -7,7 +7,7 @@ namespace Cosmoner\Sdk;
 use InvalidArgumentException;
 
 /**
- * Prices, creates, reads and deletes a project's servers.
+ * Prices, creates, reads, renames, powers and deletes a project's servers.
  *
  * Sizes, regions and one-click images to create one with come from `catalog`.
  * The API returns more fields than the shapes below declare.
@@ -192,10 +192,107 @@ class ServersService
         return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$serverId}");
     }
 
+    /**
+     * Renames a server.
+     *
+     * @param array{name: string} $params `name` is 1–63 lowercase letters, digits
+     *     and hyphens.
+     *
+     * @return array{success: true, data: Server}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function update(string $serverId, array $params, ?string $projectId = null): array
+    {
+        self::requireServerId($serverId);
+        Params::check($params, ['name'], ['name']);
+
+        /** @var array{success: true, data: Server} */
+        return $this->transport->request(
+            'PATCH',
+            $this->basePath($projectId) . "/{$serverId}",
+            ['name' => $params['name']],
+        );
+    }
+
+    /**
+     * Starts a stopped server.
+     *
+     * Asynchronous: the server comes back `PROVISIONING` while the action runs;
+     * read it with `get()` to see where it settles. Refused with a 409 while the
+     * server is still being provisioned or is already running.
+     *
+     * @return array{success: true, data: Server}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function powerOn(string $serverId, ?string $projectId = null): array
+    {
+        return $this->action($serverId, 'power_on', $projectId);
+    }
+
+    /**
+     * Cuts a running server's power, like pulling the plug: nothing is shut down cleanly.
+     *
+     * Asynchronous: the server comes back `PROVISIONING` while the action runs;
+     * read it with `get()` to see where it settles. Refused with a 409 while the
+     * server is still being provisioned or is not running.
+     *
+     * @return array{success: true, data: Server}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function powerOff(string $serverId, ?string $projectId = null): array
+    {
+        return $this->action($serverId, 'power_off', $projectId);
+    }
+
+    /**
+     * Reboots a running server.
+     *
+     * Asynchronous: the server comes back `PROVISIONING` while the action runs;
+     * read it with `get()` to see where it settles. Refused with a 409 while the
+     * server is still being provisioned or is not running.
+     *
+     * @return array{success: true, data: Server}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function reboot(string $serverId, ?string $projectId = null): array
+    {
+        return $this->action($serverId, 'reboot', $projectId);
+    }
+
     /** Builds the collection route for the resolved project. */
     private function basePath(?string $projectId): string
     {
         return '/v1/projects/' . $this->config->resolveProjectId($projectId) . '/servers';
+    }
+
+    /**
+     * Sends one power action to a server.
+     *
+     * @param 'power_on'|'power_off'|'reboot' $action
+     *
+     * @return array{success: true, data: Server}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    private function action(string $serverId, string $action, ?string $projectId): array
+    {
+        self::requireServerId($serverId);
+
+        /** @var array{success: true, data: Server} */
+        return $this->transport->request(
+            'POST',
+            $this->basePath($projectId) . "/{$serverId}/actions",
+            ['action' => $action],
+        );
     }
 
     /** Rejects an empty server id before it becomes a malformed route. */

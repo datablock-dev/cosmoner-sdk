@@ -202,7 +202,7 @@ one before sending anything.
 | `registries` | `list()`, `get($registryId)` |
 | `iam` | `list()`, `get($iamUserName)` — the list holds `credentials` plus partial-failure `errors` |
 | `members` | `list()` — members and pending invitations |
-| `email` | `listDomains()`, `getDomain($emailDomainId)`, alongside `send()` |
+| `email` | `listDomains()`, `getDomain($emailDomainId)`, `limits()` — plan, sending limits and usage, alongside `send()` |
 
 Two of these return a credential, and each needs only the namespace's read
 scope, so guard keys that carry it: `databases->getDedicated` always includes
@@ -221,12 +221,13 @@ Every delete is permanent.
 | `sshKeys` | `create($name, $publicKey)`, `generate($name)`, `delete($sshKeyId)` |
 | `domains` | `create($name)`, `verify($domain)`, `delete($domain)` — by id or name |
 | `redis` | `delete($redisId)` |
-| `databases` | `deleteDedicated($databaseId)`, `deleteShared($tenantId)` |
-| `servers` | `delete($serverId)` |
+| `projects` | `update($project, ['name' => …])`, `delete($project)` — by id or slug; never the default project |
+| `databases` | `deleteDedicated($databaseId)`, `deleteShared($tenantId)`, `rotateSharedPassword($tenantId)` |
+| `servers` | `update($serverId, ['name' => …])`, `powerOn($serverId)`, `powerOff($serverId)`, `reboot($serverId)`, `delete($serverId)` |
 | `buckets` | `delete($bucketId)` — with every object in it and its access credentials |
 | `registries` | `delete($registryId)` — with every repository and image in it |
 | `hosting` | `delete($siteId)` |
-| `email` | `createCredential($emailDomainId, ['label' => …, 'fromAddress' => …])`, `deleteCredential($emailDomainId, $credentialId)` — returns nothing, `deleteDomain($emailDomainId)` — returns nothing |
+| `email` | `createDomain($domainId)`, `createExternalDomain($domainName)`, `verifyDomain($emailDomainId)`, `createCredential($emailDomainId, ['label' => …, 'fromAddress' => …])`, `deleteCredential($emailDomainId, $credentialId)` — returns nothing, `deleteDomain($emailDomainId)` — returns nothing |
 | `iam` | `create(['label' => …, 'storage' => […], 'registry' => […]])`, `delete($iamUserName)` — returns nothing |
 
 `apps->update()` sends only the keys in `$changes`, under the API's camelCase
@@ -245,13 +246,14 @@ domain an app or email domain still uses fails with `ConflictError`.
 `sshKeys->delete()` does not remove the key from servers it was already
 installed on; `stillAuthorisedOn` in the response counts them.
 
-Three of these return a credential **exactly once** — the API keeps only a
+Four of these return a credential **exactly once** — the API keeps only a
 hash or nothing at all, and no later read returns it, so store it now:
 
 | Method | Credential |
 | --- | --- |
 | `iam->create()` | `secretAccessKey` |
 | `email->createCredential()` | `smtpPassword` |
+| `databases->rotateSharedPassword()` | `password`, and the `connectionUri` carrying it — the old password stops working at once |
 | `sshKeys->generate()` | `privateKey` — RSA 4096 in PEM (PKCS#1, `-----BEGIN RSA PRIVATE KEY-----`) |
 
 `iam->create()` takes a `label` of 1–20 characters and at least one of
@@ -271,6 +273,28 @@ $key = $client->iam->create([
 
 `email->createCredential()` sends from `fromAddress`, which must be an address
 on the email domain. Deleting a credential stops anything still sending with it.
+
+`servers->update()` renames a server; the name is 1–63 lowercase letters,
+digits and hyphens. `powerOn()`, `powerOff()` and `reboot()` are asynchronous:
+each returns the server `PROVISIONING` while the action runs, so read it with
+`get()` to see where it settles. `powerOff()` is a hard power cut, like pulling
+the plug. A server still being provisioned, already running (`powerOn()`) or
+not running (`powerOff()`, `reboot()`) is refused with `ConflictError`.
+
+`projects->update()` takes a `name` of 1–100 characters and needs an owner or
+admin; a name the caller already uses fails with `ConflictError`.
+`projects->delete()` needs the owner, is irreversible, and fails with
+`ConflictError` while the project still holds servers, apps, databases or any
+other resource — delete those first.
+
+`email->createDomain()` sets up email on a domain already in the project, by
+its id from `domains`. `createExternalDomain()` takes the name of a domain whose
+DNS is managed elsewhere and adds it to the project as `PENDING`; a domain the
+project already has fails with `ConflictError`, so use `createDomain()` for it.
+Either returns the email domain with the `dnsRecords` to publish; then call
+`verifyDomain()`, which checks each record and turns the domain `ACTIVE` once
+all of them resolve. The first activation puts the project's email plan on its
+subscription, so a project that cannot be billed is refused with a 402.
 
 ## Ordering paid resources
 

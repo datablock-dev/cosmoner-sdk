@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Cosmoner\Sdk\Tests;
 
+use Cosmoner\Sdk\ConflictError;
 use Cosmoner\Sdk\Cosmoner;
 use Cosmoner\Sdk\HttpResponse;
 use Cosmoner\Sdk\NotFoundError;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class ServersServiceTest extends TestCase
@@ -308,5 +310,115 @@ class ServersServiceTest extends TestCase
         }
 
         $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testRenamesAServer(): void
+    {
+        $renamed = [...$this->serverFixture(), 'name' => 'web-2'];
+        $this->http->queueJson(200, ['success' => true, 'data' => $renamed]);
+
+        $result = $this->client->servers->update('srv-1', ['name' => 'web-2']);
+
+        $this->assertSame(['success' => true, 'data' => $renamed], $result);
+        $this->assertSame('PATCH', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/srv-1', $this->http->requests[0]['url']);
+        $this->assertSame('{"name":"web-2"}', $this->http->requests[0]['body']);
+    }
+
+    public function testRenamesAServerInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->serverFixture()]);
+
+        $this->client->servers->update('srv-1', ['name' => 'web-2'], 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/servers/srv-1',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testRejectsInvalidUpdateInputWithoutSendingARequest(): void
+    {
+        $cases = [
+            'serverId is required' => fn () => $this->client->servers->update('', ['name' => 'web-2']),
+            'name is required' => fn () => $this->client->servers->update('srv-1', ['name' => '']),
+            'Unknown field "size"' => fn () => $this->client->servers->update(
+                'srv-1',
+                ['name' => 'web-2', 'size' => 's-2vcpu-2gb'],
+            ),
+        ];
+
+        foreach ($cases as $message => $call) {
+            try {
+                $call();
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function powerActions(): array
+    {
+        return [
+            'powerOn' => ['powerOn', 'power_on'],
+            'powerOff' => ['powerOff', 'power_off'],
+            'reboot' => ['reboot', 'reboot'],
+        ];
+    }
+
+    #[DataProvider('powerActions')]
+    public function testSendsAPowerAction(string $method, string $action): void
+    {
+        $provisioning = [...$this->serverFixture(), 'status' => 'PROVISIONING'];
+        $this->http->queueJson(200, ['success' => true, 'data' => $provisioning]);
+
+        $result = $this->client->servers->{$method}('srv-1');
+
+        $this->assertSame(['success' => true, 'data' => $provisioning], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/srv-1/actions', $this->http->requests[0]['url']);
+        $this->assertSame('{"action":"' . $action . '"}', $this->http->requests[0]['body']);
+    }
+
+    #[DataProvider('powerActions')]
+    public function testSendsAPowerActionInAnotherProject(string $method): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->serverFixture()]);
+
+        $this->client->servers->{$method}('srv-1', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/servers/srv-1/actions',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    #[DataProvider('powerActions')]
+    public function testRejectsAnEmptyServerIdOnAPowerActionWithoutSendingARequest(string $method): void
+    {
+        try {
+            $this->client->servers->{$method}('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('serverId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testMapsA409OnAPowerActionOntoConflictError(): void
+    {
+        $this->http->queueJson(409, [
+            'success' => false,
+            'error' => ['code' => 'CONFLICT', 'message' => 'Server is already running'],
+        ]);
+
+        $this->expectException(ConflictError::class);
+
+        $this->client->servers->powerOn('srv-1');
     }
 }

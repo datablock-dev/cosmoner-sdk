@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Cosmoner\Sdk\Tests;
 
+use Cosmoner\Sdk\ConflictError;
 use Cosmoner\Sdk\Cosmoner;
+use Cosmoner\Sdk\HttpResponse;
 use Cosmoner\Sdk\NotFoundError;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
@@ -121,5 +123,96 @@ class ProjectsServiceTest extends TestCase
         $this->expectException(NotFoundError::class);
 
         $this->client->projects->get('missing');
+    }
+
+    public function testRenamesTheNamedProjectRatherThanTheDefault(): void
+    {
+        $updated = ['id' => 'proj-2', 'name' => 'Acme Web', 'slug' => 'acme', 'billingEmail' => null];
+        $this->http->queueJson(200, ['success' => true, 'data' => $updated]);
+
+        $result = $this->client->projects->update('acme', ['name' => 'Acme Web']);
+
+        $this->assertSame(['success' => true, 'data' => $updated], $result);
+        $this->assertSame('PATCH', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/acme', $this->http->requests[0]['url']);
+        $this->assertSame('{"name":"Acme Web"}', $this->http->requests[0]['body']);
+    }
+
+    public function testUrlEncodesTheProjectReferenceOnUpdate(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => []]);
+
+        $this->client->projects->update('acme web', ['name' => 'Acme']);
+
+        $this->assertSame(self::BASE . '/acme%20web', $this->http->requests[0]['url']);
+    }
+
+    public function testRejectsInvalidUpdateInputWithoutSendingARequest(): void
+    {
+        $cases = [
+            'project is required' => fn () => $this->client->projects->update('', ['name' => 'Acme']),
+            'name is required' => fn () => $this->client->projects->update('acme', ['name' => '']),
+            'Unknown field "slug"' => fn () => $this->client->projects->update(
+                'acme',
+                ['name' => 'Acme', 'slug' => 'acme-2'],
+            ),
+        ];
+
+        foreach ($cases as $message => $call) {
+            try {
+                $call();
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesTheNamedProjectRatherThanTheDefault(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":null}'));
+
+        $result = $this->client->projects->delete('acme');
+
+        $this->assertSame(['success' => true, 'data' => null], $result);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/acme', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesOnAClientWithNoDefaultProject(): void
+    {
+        $scopeless = new Cosmoner('key-123', null, 'https://api.test.dev', 30.0, 0, $this->http);
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":null}'));
+
+        $scopeless->projects->delete('acme web');
+
+        $this->assertSame(self::BASE . '/acme%20web', $this->http->requests[0]['url']);
+    }
+
+    public function testThrowsWhenProjectIsEmptyOnDeleteWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->projects->delete('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('project is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testMapsA409OnDeleteOntoConflictError(): void
+    {
+        $this->http->queueJson(409, [
+            'success' => false,
+            'error' => ['code' => 'CONFLICT', 'message' => 'Project still has resources'],
+        ]);
+
+        $this->expectException(ConflictError::class);
+
+        $this->client->projects->delete('acme');
     }
 }

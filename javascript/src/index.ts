@@ -114,6 +114,8 @@ export {
   type ListSharedDatabasesResponse,
   type PreviewDedicatedDatabaseParams,
   type PreviewDedicatedDatabaseResponse,
+  type RotateSharedDatabasePasswordResponse,
+  type RotatedSharedDatabasePassword,
   type SharedDatabase,
 } from "./services/databases";
 export {
@@ -129,15 +131,22 @@ export {
 } from "./services/domains";
 export {
   EmailService,
+  type CreateEmailDomainParams,
+  type CreateEmailDomainResponse,
+  type CreateExternalEmailDomainParams,
   type CreateSmtpCredentialParams,
   type CreateSmtpCredentialResponse,
   type EmailDomain,
   type EmailDomainDetail,
+  type EmailDomainVerification,
+  type EmailLimits,
   type GetEmailDomainResponse,
+  type GetEmailLimitsResponse,
   type ListEmailDomainsResponse,
   type NewSmtpCredential,
   type SendEmailParams,
   type SendEmailResponse,
+  type VerifyEmailDomainResponse,
 } from "./services/email";
 export {
   HostingService,
@@ -173,7 +182,15 @@ export {
 } from "./services/iam";
 export { MembersService, type ListMembersResponse, type ProjectMember, type ProjectMembers } from "./services/members";
 export type { CheckoutPreview, PlanChangePreview } from "./services/preview";
-export { ProjectsService, type GetProjectResponse, type ListProjectsResponse, type Project } from "./services/projects";
+export {
+  ProjectsService,
+  type DeleteProjectResponse,
+  type GetProjectResponse,
+  type ListProjectsResponse,
+  type Project,
+  type UpdateProjectParams,
+  type UpdateProjectResponse,
+} from "./services/projects";
 export {
   RedisService,
   type CreateRedisParams,
@@ -209,9 +226,12 @@ export {
   type ListServersResponse,
   type PreviewServerParams,
   type PreviewServerResponse,
+  type ServerActionResponse,
   type Server,
   type ServerDetail,
   type ServerStatus,
+  type UpdateServerParams,
+  type UpdateServerResponse,
 } from "./services/servers";
 export {
   SshKeysService,

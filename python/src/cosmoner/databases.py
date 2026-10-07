@@ -132,6 +132,21 @@ class DatabasesService:
         )
         return result
 
+    def rotate_shared_password(
+        self, tenant_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Replaces a shared tenant's password; the old one stops working at once.
+
+        The new password, in ``password`` and inside ``connectionUri``, is returned
+        exactly once: store it now; it cannot be read again.
+        """
+        _require_tenant_id(tenant_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", f"{self._base_path(project_id)}/shared/{tenant_id}/rotate-password"
+        )
+        return result
+
     def preview_dedicated(
         self, *, size: str, project_id: str | None = None
     ) -> dict[str, Any]:
@@ -258,6 +273,21 @@ class AsyncDatabasesService:
 
         result: dict[str, Any] = await self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/shared/{tenant_id}"
+        )
+        return result
+
+    async def rotate_shared_password(
+        self, tenant_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Replaces a shared tenant's password; the old one stops working at once.
+
+        The new password, in ``password`` and inside ``connectionUri``, is returned
+        exactly once: store it now; it cannot be read again.
+        """
+        _require_tenant_id(tenant_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", f"{self._base_path(project_id)}/shared/{tenant_id}/rotate-password"
         )
         return result
 

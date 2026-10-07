@@ -48,7 +48,7 @@ What a project has
                                     price and ask first.
   cosmoner <product> delete <name>  Delete one. Asks first.
   cosmoner <product> --help         Every verb a product has: update, resize,
-                                    verify, logs, sizes, plans and more.
+                                    start, stop, verify, logs, sizes and more.
 
   --project <project> picks the project; the default is set with use.
   --format json prints the API's objects, for scripts and agents.

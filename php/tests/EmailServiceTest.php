@@ -374,4 +374,169 @@ class EmailServiceTest extends TestCase
             $this->http->requests[0]['url'],
         );
     }
+
+    public function testCreatesAnEmailDomainOnAProjectDomain(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->emailDomainFixture()]);
+
+        $result = $this->client->email->createDomain('dom-1');
+
+        $this->assertSame(['success' => true, 'data' => $this->emailDomainFixture()], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame('https://api.test.dev/v1/projects/proj-1/email', $this->http->requests[0]['url']);
+        $this->assertSame('{"domainId":"dom-1"}', $this->http->requests[0]['body']);
+    }
+
+    public function testCreatesAnEmailDomainInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->emailDomainFixture()]);
+
+        $this->client->email->createDomain('dom-1', 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/email', $this->http->requests[0]['url']);
+    }
+
+    public function testCreatesAnExternalEmailDomain(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->emailDomainFixture()]);
+
+        $result = $this->client->email->createExternalDomain('example.com');
+
+        $this->assertSame(['success' => true, 'data' => $this->emailDomainFixture()], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/email/external',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertSame('{"domainName":"example.com"}', $this->http->requests[0]['body']);
+    }
+
+    public function testCreatesAnExternalEmailDomainInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->emailDomainFixture()]);
+
+        $this->client->email->createExternalDomain('example.com', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/email/external',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function verificationFixture(): array
+    {
+        return [
+            'status' => 'DNS_PENDING',
+            'verifiedAt' => null,
+            'records' => [
+                [
+                    'type' => 'TXT',
+                    'name' => 'cosmoner1._domainkey.example.com',
+                    'value' => 'v=DKIM1; k=rsa; p=abc',
+                    'purpose' => 'DKIM',
+                    'description' => 'Signs outgoing mail',
+                    'verified' => false,
+                    'error' => 'No TXT record found',
+                ],
+            ],
+        ];
+    }
+
+    public function testVerifiesAnEmailDomain(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->verificationFixture()]);
+
+        $result = $this->client->email->verifyDomain('ed-1');
+
+        $this->assertSame(['success' => true, 'data' => $this->verificationFixture()], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/email/ed-1/verify',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testVerifiesAnEmailDomainInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->verificationFixture()]);
+
+        $this->client->email->verifyDomain('ed-1', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/email/ed-1/verify',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testRejectsAnEmptyArgumentOnDomainSetupWithoutSendingARequest(): void
+    {
+        $cases = [
+            'domainId is required' => fn () => $this->client->email->createDomain(''),
+            'domainName is required' => fn () => $this->client->email->createExternalDomain(''),
+            'emailDomainId is required' => fn () => $this->client->email->verifyDomain(''),
+        ];
+
+        foreach ($cases as $message => $call) {
+            try {
+                $call();
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    /** @return array<string, mixed> */
+    private function limitsFixture(): array
+    {
+        return [
+            'plan' => 'STARTER',
+            'includedEmails' => 10000,
+            'monthlyQuota' => 10000,
+            'hourlyLimit' => 500,
+            'dailyLimit' => 2000,
+            'sentThisMonth' => 1200,
+            'sentLastDay' => 80,
+            'sentLastHour' => 5,
+            'periodStart' => '2026-10-01T00:00:00.000Z',
+            'pausedUntil' => null,
+            'pauseReason' => null,
+            'pendingRequest' => ['id' => 'req-1', 'requestedLimit' => 50000, 'createdAt' => '2026-10-02T09:00:00.000Z'],
+        ];
+    }
+
+    public function testReadsEmailLimits(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->limitsFixture()]);
+
+        $result = $this->client->email->limits();
+
+        $this->assertSame(['success' => true, 'data' => $this->limitsFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame('https://api.test.dev/v1/projects/proj-1/email/limits', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testReadsEmailLimitsInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->limitsFixture()]);
+
+        $this->client->email->limits('proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/email/limits', $this->http->requests[0]['url']);
+    }
+
+    public function testThrowsWhenNoProjectIdIsAvailableOnLimits(): void
+    {
+        $scopeless = new Cosmoner('key-123', null, 'https://api.test.dev', 30.0, 0, $this->http);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('projectId is required');
+
+        $scopeless->email->limits();
+    }
 }

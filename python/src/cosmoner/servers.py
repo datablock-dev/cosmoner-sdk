@@ -15,6 +15,14 @@ def _require_server_id(server_id: str) -> None:
         raise ValueError("server_id is required")
 
 
+def _update_payload(name: str) -> dict[str, Any]:
+    """Validates update arguments and shapes them into the API request body."""
+    if not name:
+        raise ValueError("name is required")
+
+    return {"name": name}
+
+
 _DEFAULT_PROVIDER = "digitalocean"
 
 
@@ -143,6 +151,66 @@ class ServersService:
         )
         return result
 
+    def update(
+        self, server_id: str, *, name: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Renames a server and returns the updated server.
+
+        ``name`` is lowercase letters, digits and hyphens, 1-63 characters.
+        """
+        _require_server_id(server_id)
+        payload = _update_payload(name)
+
+        result: dict[str, Any] = self._transport.request(
+            "PATCH", f"{self._base_path(project_id)}/{server_id}", json=payload
+        )
+        return result
+
+    def power_on(
+        self, server_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Starts a stopped server.
+
+        The action is asynchronous: the server comes back ``PROVISIONING`` while
+        it runs, so read the server to see where it settles. Refused with 409
+        while the server is still being provisioned or is already running.
+        """
+        return self._action(server_id, "power_on", project_id)
+
+    def power_off(
+        self, server_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Cuts power to a running server, like pulling the plug.
+
+        This is a hard power cut, not a clean shutdown. The action is
+        asynchronous: the server comes back ``PROVISIONING`` while it runs, so
+        read the server to see where it settles. Refused with 409 while the
+        server is still being provisioned or is not running.
+        """
+        return self._action(server_id, "power_off", project_id)
+
+    def reboot(self, server_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Restarts a running server.
+
+        The action is asynchronous: the server comes back ``PROVISIONING`` while
+        it runs, so read the server to see where it settles. Refused with 409
+        while the server is still being provisioned or is not running.
+        """
+        return self._action(server_id, "reboot", project_id)
+
+    def _action(
+        self, server_id: str, action: str, project_id: str | None
+    ) -> dict[str, Any]:
+        """Starts a power action on a server and returns the server row."""
+        _require_server_id(server_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST",
+            f"{self._base_path(project_id)}/{server_id}/actions",
+            json={"action": action},
+        )
+        return result
+
 
 class AsyncServersService:
     """Asynchronous counterpart to :class:`ServersService`."""
@@ -225,5 +293,67 @@ class AsyncServersService:
 
         result: dict[str, Any] = await self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/{server_id}"
+        )
+        return result
+
+    async def update(
+        self, server_id: str, *, name: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Renames a server and returns the updated server.
+
+        ``name`` is lowercase letters, digits and hyphens, 1-63 characters.
+        """
+        _require_server_id(server_id)
+        payload = _update_payload(name)
+
+        result: dict[str, Any] = await self._transport.request(
+            "PATCH", f"{self._base_path(project_id)}/{server_id}", json=payload
+        )
+        return result
+
+    async def power_on(
+        self, server_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Starts a stopped server.
+
+        The action is asynchronous: the server comes back ``PROVISIONING`` while
+        it runs, so read the server to see where it settles. Refused with 409
+        while the server is still being provisioned or is already running.
+        """
+        return await self._action(server_id, "power_on", project_id)
+
+    async def power_off(
+        self, server_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Cuts power to a running server, like pulling the plug.
+
+        This is a hard power cut, not a clean shutdown. The action is
+        asynchronous: the server comes back ``PROVISIONING`` while it runs, so
+        read the server to see where it settles. Refused with 409 while the
+        server is still being provisioned or is not running.
+        """
+        return await self._action(server_id, "power_off", project_id)
+
+    async def reboot(
+        self, server_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Restarts a running server.
+
+        The action is asynchronous: the server comes back ``PROVISIONING`` while
+        it runs, so read the server to see where it settles. Refused with 409
+        while the server is still being provisioned or is not running.
+        """
+        return await self._action(server_id, "reboot", project_id)
+
+    async def _action(
+        self, server_id: str, action: str, project_id: str | None
+    ) -> dict[str, Any]:
+        """Starts a power action on a server and returns the server row."""
+        _require_server_id(server_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST",
+            f"{self._base_path(project_id)}/{server_id}/actions",
+            json={"action": action},
         )
         return result

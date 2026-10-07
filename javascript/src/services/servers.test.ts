@@ -168,3 +168,57 @@ describe("ServersService paid creates", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("ServersService rename and power", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("update sends the new name with PATCH", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ id: "srv-1", name: "web-2" }));
+
+    const result = await client.servers.update("srv-1", { name: "web-2" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "PATCH", url: `${P}/servers/srv-1`, body: { name: "web-2" } });
+    expect(result).toEqual({ success: true, data: { id: "srv-1", name: "web-2" } });
+  });
+
+  it.each([
+    ["powerOn", "power_on"],
+    ["powerOff", "power_off"],
+    ["reboot", "reboot"],
+  ] as const)("%s posts the %s action", async (method, action) => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ id: "srv-1", status: "PROVISIONING" }));
+
+    const result = await client.servers[method]("srv-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/servers/srv-1/actions`, body: { action } });
+    expect(result).toEqual({ success: true, data: { id: "srv-1", status: "PROVISIONING" } });
+  });
+
+  it("power actions honour a per-call project", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ id: "srv-1" }));
+
+    await client.servers.reboot("srv-1", { projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy).url).toBe("https://api.test.dev/v1/projects/proj-2/servers/srv-1/actions");
+  });
+
+  it("requires an id and a name before any request", async () => {
+    await expect(client.servers.update("", { name: "x" })).rejects.toThrow("serverId is required");
+    await expect(client.servers.update("srv-1", { name: "" })).rejects.toThrow("name is required");
+    await expect(client.servers.powerOn("")).rejects.toThrow("serverId is required");
+    await expect(client.servers.powerOff("")).rejects.toThrow("serverId is required");
+    await expect(client.servers.reboot("")).rejects.toThrow("serverId is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
