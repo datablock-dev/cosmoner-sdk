@@ -19,6 +19,38 @@ def _credentials_params(credentials: bool) -> dict[str, str] | None:
     return {"credentials": "true"} if credentials else None
 
 
+def _preview_params(tier: str, extra_storage_gb: int) -> dict[str, Any]:
+    """Validates preview arguments and shapes them into the query string."""
+    if not tier:
+        raise ValueError("tier is required")
+
+    return {"tier": tier, "extraStorageGb": extra_storage_gb}
+
+
+def _create_payload(
+    site_name: str,
+    tier: str | None,
+    php_version: str | None,
+    database: str | None,
+    extra_storage_gb: int | None,
+) -> dict[str, Any]:
+    """Validates create arguments and shapes them into the API request body."""
+    if not site_name:
+        raise ValueError("site_name is required")
+
+    payload: dict[str, Any] = {"siteName": site_name}
+    if tier is not None:
+        payload["tier"] = tier
+    if php_version is not None:
+        payload["phpVersion"] = php_version
+    if database is not None:
+        payload["database"] = {"name": database}
+    if extra_storage_gb is not None:
+        payload["extraStorageGb"] = extra_storage_gb
+
+    return payload
+
+
 class HostingService:
     """Synchronous operations on a project's shared hosting sites."""
 
@@ -71,6 +103,61 @@ class HostingService:
 
         result: dict[str, Any] = self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/{site_id}"
+        )
+        return result
+
+    def prices(self, *, project_id: str | None = None) -> dict[str, Any]:
+        """Lists each tier's ``monthly`` price, in minor units, with its ``currency``."""
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/prices"
+        )
+        return result
+
+    def preview(
+        self,
+        *,
+        tier: str,
+        extra_storage_gb: int = 0,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Prices a site on ``tier``, plus any extra storage, without creating it.
+
+        The ``monthly`` charge is exact. ``dueToday`` is an estimate for a project
+        that already has a subscription, because the real charge is prorated onto
+        it. Amounts are integers in minor units; ``monthly`` excludes tax.
+        """
+        params = _preview_params(tier, extra_storage_gb)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/preview", params=params
+        )
+        return result
+
+    def create(
+        self,
+        *,
+        site_name: str,
+        tier: str | None = None,
+        php_version: str | None = None,
+        database: str | None = None,
+        extra_storage_gb: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Creates a site, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. ``database`` names a database to create alongside the site.
+        The response carries ``tenantId`` and ``status``, plus ``database`` or
+        ``databaseError`` when one was asked for.
+        """
+        payload = _create_payload(
+            site_name, tier, php_version, database, extra_storage_gb
+        )
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", self._base_path(project_id), json=payload
         )
         return result
 
@@ -131,5 +218,60 @@ class AsyncHostingService:
 
         result: dict[str, Any] = await self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/{site_id}"
+        )
+        return result
+
+    async def prices(self, *, project_id: str | None = None) -> dict[str, Any]:
+        """Lists each tier's ``monthly`` price, in minor units, with its ``currency``."""
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/prices"
+        )
+        return result
+
+    async def preview(
+        self,
+        *,
+        tier: str,
+        extra_storage_gb: int = 0,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Prices a site on ``tier``, plus any extra storage, without creating it.
+
+        The ``monthly`` charge is exact. ``dueToday`` is an estimate for a project
+        that already has a subscription, because the real charge is prorated onto
+        it. Amounts are integers in minor units; ``monthly`` excludes tax.
+        """
+        params = _preview_params(tier, extra_storage_gb)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/preview", params=params
+        )
+        return result
+
+    async def create(
+        self,
+        *,
+        site_name: str,
+        tier: str | None = None,
+        php_version: str | None = None,
+        database: str | None = None,
+        extra_storage_gb: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Creates a site, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. ``database`` names a database to create alongside the site.
+        The response carries ``tenantId`` and ``status``, plus ``database`` or
+        ``databaseError`` when one was asked for.
+        """
+        payload = _create_payload(
+            site_name, tier, php_version, database, extra_storage_gb
+        )
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", self._base_path(project_id), json=payload
         )
         return result

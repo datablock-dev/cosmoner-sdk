@@ -139,6 +139,19 @@ if deployment["phase"] != "ACTIVE":
 | `deploy(app_id, *, tag=None, digest=None, project_id=None)` | Starts a deployment and returns it without waiting |
 | `get_deployment(app_id, deployment_id, *, project_id=None)` | One deployment's current phase |
 | `wait_for_deployment(app_id, deployment_id, *, interval=3.0, timeout=600.0, on_poll=None, project_id=None)` | Polls until the deployment finishes |
+| `preview(*, size, project_id=None)` | Prices an app of `size` without creating it |
+| `create_draft(*, size, region, name=None, app_type=None, git_provider=None, …, project_id=None)` | Saves the settings as a free draft and returns its `draftId` |
+| `create(*, draft_id, size, project_id=None)` | Creates the app from a draft and charges for it; returns `appId` |
+| `sizes(app_id, *, project_id=None)` | `currentSize`, whether it is `resizable`, and the `sizes` it can move to |
+| `resize_preview(app_id, *, size, project_id=None)` | Prices a resize; adds `direction`, `creditBack` and `currentMonthly` |
+| `resize(app_id, *, size, project_id=None)` | Moves the app to `size`, charging the difference immediately |
+
+A draft costs nothing and expires after 24 hours. `create_draft` takes the
+app's settings as snake_case arguments — `git_repo`, `git_branch`,
+`source_dir`, `build_strategy`, `build_command`, `run_command`, `output_dir`,
+`public_port`, `internal_port`, `auto_deploy`, `container_registry`,
+`container_image`, `container_public_port`, `image_deploy_policy`, `instances`
+— and sends only those given, under their camelCase API names.
 
 `update` sends only the arguments you pass, under their camelCase API names, and
 raises `ValueError` when you pass none. `image_deploy_policy` is `"TAG"`,
@@ -166,6 +179,9 @@ API key with `hosting:read`.
 | `get(site_id, *, credentials=False, project_id=None)` | One site; `credentials=True` adds `sftpPassword` |
 | `access(site_id, *, project_id=None)` | `username`, `host`, `sftp.port` and `ssh.port`/`ssh.enabled` |
 | `delete(site_id, *, project_id=None)` | Permanently deletes a site |
+| `prices(*, project_id=None)` | Each tier's `monthly` price in minor units, with its `currency` |
+| `preview(*, tier, extra_storage_gb=0, project_id=None)` | Prices a site without creating it |
+| `create(*, site_name, tier=None, php_version=None, database=None, extra_storage_gb=None, project_id=None)` | Creates a site and charges for it; `database` names a database to create with it |
 
 The password needs no scope beyond `hosting:read`, so guard the key accordingly.
 
@@ -173,20 +189,21 @@ The password needs no scope beyond `hosting:read`, so guard the key accordingly.
 
 Each of these manages one kind of resource and returns the API envelope, or
 `None` where the API answers 204. Every method takes `project_id=` to override
-the client default, except `projects`, which reads across the account and never
-uses the default project. A method taking an id raises `ValueError` on an empty
+the client default, except `projects` and `catalog`, which read across the
+account and never use the default project. A method taking an id raises `ValueError` on an empty
 one before sending anything. Every `delete` is permanent.
 
 | Namespace | Methods |
 | --- | --- |
 | `projects` | `list()`, `get(project)` — by id or slug |
-| `servers` | `list()`, `get(server_id)` — adds the installed `sshKeys`; `delete(server_id)` |
+| `catalog` | `server_sizes()`, `server_regions()`, `server_images()`, `redis_plans()`, `redis_regions()`, `databases()`, `app_sizes()`, `app_regions()` — what can be created; account-wide, so never uses the default project |
+| `servers` | `list()`, `get(server_id)` — adds the installed `sshKeys`; `preview(*, size, provider=None)`, `create(*, name, size, region, image=None, ssh_key_ids=None, provider=None)`, `delete(server_id)` |
 | `ssh_keys` | `list()`, `create(*, name, public_key)`, `delete(ssh_key_id)` — see below |
-| `databases` | `list()` (every kind), `list_dedicated()`, `get_dedicated(database_id)`, `delete_dedicated(database_id)`, `list_shared()`, `get_shared(tenant_id)`, `delete_shared(tenant_id)` |
-| `redis` | `list()`, `get(redis_id)`, `delete(redis_id)` |
+| `databases` | `list()` (every kind), `list_dedicated()`, `get_dedicated(database_id)`, `preview_dedicated(*, size)`, `create_dedicated(*, name, size, version, region, engine=None)`, `delete_dedicated(database_id)`, `list_shared()`, `get_shared(tenant_id)`, `delete_shared(tenant_id)` |
+| `redis` | `list()`, `get(redis_id)`, `preview(*, plan)`, `create(*, name, plan, region, persistence=None)`, `delete(redis_id)` |
 | `domains` | `list()`, `get(domain)`, `create(name)`, `verify(domain)`, `delete(domain)` — by id or name, such as `example.com` |
-| `buckets` | `list()` — there is no single-bucket read; `delete(bucket_id)` also deletes every object in it and its access credentials |
-| `registries` | `list()`, `get(registry_id)`, `delete(registry_id)` — also deletes every repository and image in it |
+| `buckets` | `list()` — there is no single-bucket read; `preview(*, tier=None)`, `create(*, name, region, tier=None, public_access=None, versioning=None, cdn_enabled=None)`, `delete(bucket_id)` also deletes every object in it and its access credentials |
+| `registries` | `list()`, `get(registry_id)`, `preview()`, `providers()`, `create(*, name, region, provider=None)`, `delete(registry_id)` — also deletes every repository and image in it |
 | `iam` | `list()`, `get(iam_user_name)` — the list holds `credentials` plus partial-failure `errors`; `delete(iam_user_name)` returns `None` |
 | `members` | `list()` — members and pending invitations |
 
@@ -199,6 +216,34 @@ always includes the plaintext `password`.
 through the SDK. Its response carries `verificationRecord`, the TXT record to
 publish before calling `domains.verify`. `domains.delete` answers 409 while an
 app or email domain still uses the domain.
+
+### Paid creates
+
+Every `create` above, and `apps.resize`, **charges the project's saved card
+immediately** with a prorated invoice. A project that cannot be billed is
+refused with a 402 (`ORG_PAYMENT_METHOD_REQUIRED`,
+`BILLER_PAYMENT_METHOD_REQUIRED` or `PAYMENT_REQUIRED`) before anything is
+created. Price it first with the matching `preview`:
+
+```python
+sizes = client.catalog.server_sizes()["data"]
+price = client.servers.preview(size="s-1vcpu-1gb")["data"]
+print(price["monthly"], price["currency"])  # 600 USD — minor units, before tax
+
+client.servers.create(name="web", size="s-1vcpu-1gb", region="fra1")
+```
+
+A preview returns `subtotal`, `tax`, `creditApplied`, `dueToday`, `monthly`,
+`currency` and `nextBillingDate`, every amount an integer in minor units.
+`monthly` is exact and excludes tax; `dueToday` is an estimate for a project
+that already has a subscription, because the real charge is prorated onto it.
+The bucket preview prices the tier fee only, since CDN traffic is metered, and
+the registry preview the base fee only, since storage and egress are metered.
+
+Server, Redis, dedicated database and bucket creates return `{"deployed": True}`
+with no id — list the namespace and match by name. Servers start
+`PROVISIONING`, Redis and databases `CREATING`. A registry create returns its
+`id`, and an app create its `appId`.
 
 `ssh_keys.delete` removes the key from the project, not from servers it was
 already installed on: `stillAuthorisedOn` in the response counts them.

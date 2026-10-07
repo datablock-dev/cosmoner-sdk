@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from ._config import ClientConfig, resolve_project_id
@@ -12,6 +13,54 @@ def _require_server_id(server_id: str) -> None:
     """Rejects an empty server id before it becomes a malformed route."""
     if not server_id:
         raise ValueError("server_id is required")
+
+
+_DEFAULT_PROVIDER = "digitalocean"
+
+
+def _require_size(size: str) -> None:
+    """Rejects an empty size slug before it spends a request."""
+    if not size:
+        raise ValueError("size is required")
+
+
+def _preview_params(size: str, provider: str | None) -> dict[str, str]:
+    """Validates preview arguments and shapes them into the query string."""
+    _require_size(size)
+
+    return {
+        "provider": _DEFAULT_PROVIDER if provider is None else provider,
+        "slug": size,
+    }
+
+
+def _create_payload(
+    name: str,
+    size: str,
+    region: str,
+    image: str | None,
+    ssh_key_ids: Sequence[str] | None,
+    provider: str | None,
+) -> dict[str, Any]:
+    """Validates create arguments and shapes them into the API request body."""
+    if not name:
+        raise ValueError("name is required")
+    _require_size(size)
+    if not region:
+        raise ValueError("region is required")
+
+    payload: dict[str, Any] = {
+        "name": name,
+        "slug": size,
+        "provider": _DEFAULT_PROVIDER if provider is None else provider,
+        "region": region,
+    }
+    if image is not None:
+        payload["template"] = image
+    if ssh_key_ids is not None:
+        payload["sshKeyIds"] = list(ssh_key_ids)
+
+    return payload
 
 
 class ServersService:
@@ -39,6 +88,49 @@ class ServersService:
 
         result: dict[str, Any] = self._transport.request(
             "GET", f"{self._base_path(project_id)}/{server_id}"
+        )
+        return result
+
+    def preview(
+        self, *, size: str, provider: str | None = None, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Prices a server of ``size`` without creating it.
+
+        The ``monthly`` charge is exact. ``dueToday`` is an estimate for a project
+        that already has a subscription, because the real charge is prorated onto
+        it. Amounts are integers in minor units; ``monthly`` excludes tax.
+        """
+        params = _preview_params(size, provider)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/preview", params=params
+        )
+        return result
+
+    def create(
+        self,
+        *,
+        name: str,
+        size: str,
+        region: str,
+        image: str | None = None,
+        ssh_key_ids: Sequence[str] | None = None,
+        provider: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Creates a server, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. ``image`` is a one-click image slug. The response carries no
+        id: list the servers and match by name. The server starts
+        ``PROVISIONING``.
+        """
+        payload = _create_payload(name, size, region, image, ssh_key_ids, provider)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", self._base_path(project_id), json=payload
         )
         return result
 
@@ -79,6 +171,49 @@ class AsyncServersService:
 
         result: dict[str, Any] = await self._transport.request(
             "GET", f"{self._base_path(project_id)}/{server_id}"
+        )
+        return result
+
+    async def preview(
+        self, *, size: str, provider: str | None = None, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Prices a server of ``size`` without creating it.
+
+        The ``monthly`` charge is exact. ``dueToday`` is an estimate for a project
+        that already has a subscription, because the real charge is prorated onto
+        it. Amounts are integers in minor units; ``monthly`` excludes tax.
+        """
+        params = _preview_params(size, provider)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/preview", params=params
+        )
+        return result
+
+    async def create(
+        self,
+        *,
+        name: str,
+        size: str,
+        region: str,
+        image: str | None = None,
+        ssh_key_ids: Sequence[str] | None = None,
+        provider: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Creates a server, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. ``image`` is a one-click image slug. The response carries no
+        id: list the servers and match by name. The server starts
+        ``PROVISIONING``.
+        """
+        payload = _create_payload(name, size, region, image, ssh_key_ids, provider)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", self._base_path(project_id), json=payload
         )
         return result
 

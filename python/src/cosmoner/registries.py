@@ -14,6 +14,20 @@ def _require_registry_id(registry_id: str) -> None:
         raise ValueError("registry_id is required")
 
 
+def _create_payload(name: str, region: str, provider: str | None) -> dict[str, Any]:
+    """Validates create arguments and shapes them into the API request body."""
+    if not name:
+        raise ValueError("name is required")
+    if not region:
+        raise ValueError("region is required")
+
+    payload: dict[str, Any] = {"name": name, "region": region}
+    if provider is not None:
+        payload["provider"] = provider
+
+    return payload
+
+
 class RegistriesService:
     """Synchronous operations on a project's container registries."""
 
@@ -54,6 +68,49 @@ class RegistriesService:
 
         result: dict[str, Any] = self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/{registry_id}"
+        )
+        return result
+
+    def preview(self, *, project_id: str | None = None) -> dict[str, Any]:
+        """Prices a registry's base fee without creating it.
+
+        Only the base fee is priced: storage and egress are metered and not
+        included. The ``monthly`` charge is exact. ``dueToday`` is an estimate for
+        a project that already has a subscription, because the real charge is
+        prorated onto it. Amounts are integers in minor units; ``monthly``
+        excludes tax.
+        """
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/preview"
+        )
+        return result
+
+    def providers(self, *, project_id: str | None = None) -> dict[str, Any]:
+        """Lists the registry providers on offer, each with the ``regions`` it has."""
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/providers"
+        )
+        return result
+
+    def create(
+        self,
+        *,
+        name: str,
+        region: str,
+        provider: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Creates a registry, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. The response carries the new registry's ``id``.
+        """
+        payload = _create_payload(name, region, provider)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", self._base_path(project_id), json=payload
         )
         return result
 
@@ -100,5 +157,48 @@ class AsyncRegistriesService:
 
         result: dict[str, Any] = await self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/{registry_id}"
+        )
+        return result
+
+    async def preview(self, *, project_id: str | None = None) -> dict[str, Any]:
+        """Prices a registry's base fee without creating it.
+
+        Only the base fee is priced: storage and egress are metered and not
+        included. The ``monthly`` charge is exact. ``dueToday`` is an estimate for
+        a project that already has a subscription, because the real charge is
+        prorated onto it. Amounts are integers in minor units; ``monthly``
+        excludes tax.
+        """
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/preview"
+        )
+        return result
+
+    async def providers(self, *, project_id: str | None = None) -> dict[str, Any]:
+        """Lists the registry providers on offer, each with the ``regions`` it has."""
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/providers"
+        )
+        return result
+
+    async def create(
+        self,
+        *,
+        name: str,
+        region: str,
+        provider: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Creates a registry, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. The response carries the new registry's ``id``.
+        """
+        payload = _create_payload(name, region, provider)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", self._base_path(project_id), json=payload
         )
         return result

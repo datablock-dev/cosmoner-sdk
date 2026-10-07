@@ -11,6 +11,7 @@ from ._config import (
 from ._transport import AsyncTransport, Transport
 from .apps import AppsService, AsyncAppsService
 from .buckets import AsyncBucketsService, BucketsService
+from .catalog import AsyncCatalogService, CatalogService
 from .databases import AsyncDatabasesService, DatabasesService
 from .domains import AsyncDomainsService, DomainsService
 from .email import AsyncEmailService, EmailService
@@ -57,6 +58,7 @@ class Cosmoner:
 
         self.apps = AppsService(self._transport, config)
         self.buckets = BucketsService(self._transport, config)
+        self.catalog = CatalogService(self._transport, config)
         self.databases = DatabasesService(self._transport, config)
         self.domains = DomainsService(self._transport, config)
         self.email = EmailService(self._transport, config)
@@ -110,6 +112,7 @@ class AsyncCosmoner:
 
         self.apps = AsyncAppsService(self._transport, config)
         self.buckets = AsyncBucketsService(self._transport, config)
+        self.catalog = AsyncCatalogService(self._transport, config)
         self.databases = AsyncDatabasesService(self._transport, config)
         self.domains = AsyncDomainsService(self._transport, config)
         self.email = AsyncEmailService(self._transport, config)

@@ -3,6 +3,7 @@
 from ._version import __version__
 from .apps import FINISHED_DEPLOYMENT_PHASES, AppsService, AsyncAppsService
 from .buckets import AsyncBucketsService, BucketsService
+from .catalog import AsyncCatalogService, CatalogService
 from .client import AsyncCosmoner, Cosmoner
 from .databases import AsyncDatabasesService, DatabasesService
 from .deployment import (
@@ -63,6 +64,7 @@ __all__ = [
     "AppsService",
     "AsyncAppsService",
     "AsyncBucketsService",
+    "AsyncCatalogService",
     "AsyncCosmoner",
     "AsyncDatabasesService",
     "AsyncDomainsService",
@@ -79,6 +81,7 @@ __all__ = [
     "AsyncWebhooksService",
     "AuthenticationError",
     "BucketsService",
+    "CatalogService",
     "ConflictError",
     "Cosmoner",
     "CosmonerConnectionError",

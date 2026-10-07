@@ -1,8 +1,20 @@
+import json
+
 import pytest
 
 from cosmoner import AsyncCosmoner, Cosmoner, NotFoundError
 
 BASE = "https://api.test.dev/v1/projects/proj-1/hosting/shared"
+
+PREVIEW = {
+    "subtotal": 1000,
+    "tax": None,
+    "creditApplied": 0,
+    "dueToday": 1000,
+    "monthly": 1000,
+    "currency": "USD",
+    "nextBillingDate": "2026-11-01T00:00:00.000Z",
+}
 
 SITE = {
     "id": "site-1",
@@ -249,5 +261,150 @@ class TestAsyncHostingSiteDelete:
         ) as client:
             with pytest.raises(ValueError, match="site_id is required"):
                 await client.hosting.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestHostingPrices:
+    """Tests for reading tier prices and pricing a site before creating it."""
+
+    def test_lists_tier_prices(self, client, httpx_mock):
+        envelope = {
+            "success": True,
+            "data": [{"tier": "shared-xs", "monthly": 500, "currency": "USD"}],
+        }
+        httpx_mock.add_response(url=f"{BASE}/prices", json=envelope)
+
+        assert client.hosting.prices() == envelope
+        assert httpx_mock.get_request().method == "GET"
+
+    def test_previews_with_no_extra_storage_by_default(self, client, httpx_mock):
+        envelope = {"success": True, "data": PREVIEW}
+        httpx_mock.add_response(
+            url=f"{BASE}/preview?tier=shared-xs&extraStorageGb=0", json=envelope
+        )
+
+        result = client.hosting.preview(tier="shared-xs")
+
+        assert result == envelope
+        assert httpx_mock.get_request().url.query == b"tier=shared-xs&extraStorageGb=0"
+
+    def test_previews_extra_storage_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=(
+                "https://api.test.dev/v1/projects/proj-2/hosting/shared/preview"
+                "?tier=shared-s&extraStorageGb=10"
+            ),
+            json={"success": True, "data": PREVIEW},
+        )
+
+        client.hosting.preview(tier="shared-s", extra_storage_gb=10, project_id="proj-2")
+
+        assert httpx_mock.get_request().url.query == b"tier=shared-s&extraStorageGb=10"
+
+    def test_requires_a_tier_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="tier is required"):
+            client.hosting.preview(tier="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestHostingCreate:
+    """Tests for creating a hosting site via mocked HTTP."""
+
+    def test_sends_only_the_site_name(self, client, httpx_mock):
+        envelope = {"success": True, "data": {"tenantId": "site-1", "status": "PENDING"}}
+        httpx_mock.add_response(url=BASE, method="POST", status_code=201, json=envelope)
+
+        result = client.hosting.create(site_name="blog")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"siteName": "blog"}
+
+    def test_sends_the_optional_fields_and_wraps_the_database(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/hosting/shared",
+            method="POST",
+            status_code=201,
+            json={"success": True, "data": {"tenantId": "site-1", "status": "PENDING"}},
+        )
+
+        client.hosting.create(
+            site_name="blog",
+            tier="shared-s",
+            php_version="8.3",
+            database="wordpress",
+            extra_storage_gb=5,
+            project_id="proj-2",
+        )
+
+        assert json.loads(httpx_mock.get_request().content) == {
+            "siteName": "blog",
+            "tier": "shared-s",
+            "phpVersion": "8.3",
+            "database": {"name": "wordpress"},
+            "extraStorageGb": 5,
+        }
+
+    def test_requires_a_site_name_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="site_name is required"):
+            client.hosting.create(site_name="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncHostingCreate:
+    """Tests for pricing and creating a hosting site through the async client."""
+
+    async def test_lists_prices_and_previews(self, httpx_mock):
+        prices = [{"tier": "shared-xs", "monthly": 500, "currency": "USD"}]
+        httpx_mock.add_response(
+            url=f"{BASE}/prices", json={"success": True, "data": prices}
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/preview?tier=shared-xs&extraStorageGb=0",
+            json={"success": True, "data": PREVIEW},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert (await client.hosting.prices())["data"] == prices
+            assert (await client.hosting.preview(tier="shared-xs"))["data"] == PREVIEW
+
+    async def test_creates_a_site(self, httpx_mock):
+        envelope = {"success": True, "data": {"tenantId": "site-1", "status": "PENDING"}}
+        httpx_mock.add_response(url=BASE, method="POST", status_code=201, json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.hosting.create(site_name="blog", database="wp")
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {
+            "siteName": "blog",
+            "database": {"name": "wp"},
+        }
+
+    async def test_requires_a_site_name_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="site_name is required"):
+                await client.hosting.create(site_name="")
+            with pytest.raises(ValueError, match="tier is required"):
+                await client.hosting.preview(tier="")
 
         assert httpx_mock.get_requests() == []

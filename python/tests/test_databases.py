@@ -1,8 +1,20 @@
+import json
+
 import pytest
 
 from cosmoner import AsyncCosmoner, Cosmoner, NotFoundError
 
 BASE = "https://api.test.dev/v1/projects/proj-1/databases"
+
+PREVIEW = {
+    "subtotal": 1000,
+    "tax": None,
+    "creditApplied": 0,
+    "dueToday": 1000,
+    "monthly": 1000,
+    "currency": "USD",
+    "nextBillingDate": "2026-11-01T00:00:00.000Z",
+}
 
 SUMMARY = {
     "kind": "DEDICATED",
@@ -386,5 +398,156 @@ class TestAsyncSharedDatabaseDelete:
         ) as client:
             with pytest.raises(ValueError, match="tenant_id is required"):
                 await client.databases.delete_shared("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestDedicatedDatabasePreview:
+    """Tests for pricing a dedicated cluster before creating it."""
+
+    def test_sends_the_size_as_slug(self, client, httpx_mock):
+        envelope = {"success": True, "data": PREVIEW}
+        httpx_mock.add_response(
+            url=f"{BASE}/dedicated/preview?slug=db-s-1vcpu-1gb", json=envelope
+        )
+
+        result = client.databases.preview_dedicated(size="db-s-1vcpu-1gb")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "GET"
+        assert request.url.query == b"slug=db-s-1vcpu-1gb"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=(
+                "https://api.test.dev/v1/projects/proj-2/databases/dedicated/preview"
+                "?slug=db-s-1vcpu-1gb"
+            ),
+            json={"success": True, "data": PREVIEW},
+        )
+
+        client.databases.preview_dedicated(size="db-s-1vcpu-1gb", project_id="proj-2")
+
+        assert "proj-2" in str(httpx_mock.get_request().url)
+
+    def test_requires_a_size_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="size is required"):
+            client.databases.preview_dedicated(size="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestDedicatedDatabaseCreate:
+    """Tests for creating a dedicated cluster via mocked HTTP."""
+
+    def test_sends_the_default_engine_and_size_as_slug(self, client, httpx_mock):
+        envelope = {"success": True, "data": {"deployed": True}}
+        httpx_mock.add_response(url=f"{BASE}/dedicated", method="POST", json=envelope)
+
+        result = client.databases.create_dedicated(
+            name="main", size="db-s-1vcpu-1gb", version="16", region="fra1"
+        )
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "main",
+            "engine": "POSTGRESQL",
+            "version": "16",
+            "slug": "db-s-1vcpu-1gb",
+            "region": "fra1",
+        }
+
+    def test_sends_a_given_engine_to_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/databases/dedicated",
+            method="POST",
+            json={"success": True, "data": {"deployed": True}},
+        )
+
+        client.databases.create_dedicated(
+            name="main",
+            size="db-s-1vcpu-1gb",
+            version="8",
+            region="fra1",
+            engine="MYSQL",
+            project_id="proj-2",
+        )
+
+        assert json.loads(httpx_mock.get_request().content)["engine"] == "MYSQL"
+
+    @pytest.mark.parametrize(
+        ("fields", "message"),
+        [
+            ({"name": "", "size": "s", "version": "16", "region": "r"}, "name is"),
+            ({"name": "n", "size": "", "version": "16", "region": "r"}, "size is"),
+            ({"name": "n", "size": "s", "version": "", "region": "r"}, "version is"),
+            ({"name": "n", "size": "s", "version": "16", "region": ""}, "region is"),
+        ],
+    )
+    def test_requires_each_field_before_any_request(
+        self, client, httpx_mock, fields, message
+    ):
+        with pytest.raises(ValueError, match=f"{message} required"):
+            client.databases.create_dedicated(**fields)
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncDedicatedDatabaseCreate:
+    """Tests for pricing and creating a dedicated cluster through the async client."""
+
+    async def test_previews_a_dedicated_cluster(self, httpx_mock):
+        envelope = {"success": True, "data": PREVIEW}
+        httpx_mock.add_response(
+            url=f"{BASE}/dedicated/preview?slug=db-s-1vcpu-1gb", json=envelope
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.databases.preview_dedicated(size="db-s-1vcpu-1gb")
+
+        assert result == envelope
+
+    async def test_creates_a_dedicated_cluster(self, httpx_mock):
+        envelope = {"success": True, "data": {"deployed": True}}
+        httpx_mock.add_response(url=f"{BASE}/dedicated", method="POST", json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.databases.create_dedicated(
+                name="main", size="db-s-1vcpu-1gb", version="16", region="fra1"
+            )
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "main",
+            "engine": "POSTGRESQL",
+            "version": "16",
+            "slug": "db-s-1vcpu-1gb",
+            "region": "fra1",
+        }
+
+    async def test_requires_a_version_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="version is required"):
+                await client.databases.create_dedicated(
+                    name="main", size="db-s-1vcpu-1gb", version="", region="fra1"
+                )
+            with pytest.raises(ValueError, match="size is required"):
+                await client.databases.preview_dedicated(size="")
 
         assert httpx_mock.get_requests() == []

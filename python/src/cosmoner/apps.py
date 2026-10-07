@@ -1,4 +1,4 @@
-"""Apps service namespace — reading, changing and deleting apps, and deploying images."""
+"""Apps service namespace — creating, changing and deleting apps, and deploying images."""
 
 from __future__ import annotations
 
@@ -31,6 +31,18 @@ _UNSET: Any = object()
 #: How an image app picks up a new image: the tag it names, the newest push, or
 #: only when told to.
 ImageDeployPolicy = Literal["TAG", "NEWEST", "MANUAL"]
+
+#: Whether an app runs a long-lived service or serves static files.
+AppType = Literal["service", "static"]
+
+#: Where an app's source repository is hosted.
+GitProvider = Literal["github", "gitlab", "bitbucket"]
+
+#: How an app built from source is turned into an image.
+BuildStrategy = Literal["nixpacks", "docker"]
+
+#: The registry an image app pulls from.
+ContainerRegistry = Literal["dockerhub", "ghcr", "cosmoner"]
 
 
 def _deploy_payload(app_id: str, tag: str | None, digest: str | None) -> dict[str, Any]:
@@ -94,6 +106,36 @@ def _require_app_id(app_id: str) -> None:
         raise ValueError("app_id is required")
 
 
+def _require_size(size: str) -> None:
+    """Rejects an empty size slug before it spends a request."""
+    if not size:
+        raise ValueError("size is required")
+
+
+def _draft_payload(fields: dict[str, Any]) -> dict[str, Any]:
+    """Validates draft fields, keyed by API name, and drops those not given.
+
+    Every draft is put on a Cosmoner domain, so ``domainType`` is always sent.
+    """
+    _require_size(fields["size"])
+    if not fields["region"]:
+        raise ValueError("region is required")
+
+    payload = {key: value for key, value in fields.items() if value is not None}
+    payload["domainType"] = "cosmoner"
+
+    return payload
+
+
+def _create_payload(draft_id: str, size: str) -> dict[str, Any]:
+    """Validates create arguments and shapes them into the API request body."""
+    if not draft_id:
+        raise ValueError("draft_id is required")
+    _require_size(size)
+
+    return {"draftId": draft_id, "size": size}
+
+
 def _require_log_type(log_type: str) -> None:
     """Rejects a log stream the API does not have before spending a request on it."""
     if log_type not in _LOG_TYPES:
@@ -123,7 +165,7 @@ def _timeout_error(deployment_id: str, phase: str, timeout: float) -> TimeoutErr
 
 
 class AppsService:
-    """Synchronous app reads, changes, deletes and image deploys for a project."""
+    """Synchronous app creates, reads, changes, deletes and image deploys."""
 
     def __init__(self, transport: Transport, config: ClientConfig) -> None:
         """Binds the namespace to the client's transport and resolved configuration."""
@@ -288,6 +330,142 @@ class AppsService:
             if remaining <= 0:
                 raise _timeout_error(deployment_id, deployment["phase"], timeout)
             time.sleep(min(interval, remaining))
+
+    def preview(self, *, size: str, project_id: str | None = None) -> dict[str, Any]:
+        """Prices an app of ``size`` without creating it.
+
+        The ``monthly`` charge is exact. ``dueToday`` is an estimate for a project
+        that already has a subscription, because the real charge is prorated onto
+        it. Amounts are integers in minor units; ``monthly`` excludes tax.
+        """
+        _require_size(size)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/preview", params={"size": size}
+        )
+        return result
+
+    def create_draft(
+        self,
+        *,
+        size: str,
+        region: str,
+        name: str | None = None,
+        app_type: AppType | None = None,
+        git_provider: GitProvider | None = None,
+        git_repo: str | None = None,
+        git_branch: str | None = None,
+        source_dir: str | None = None,
+        build_strategy: BuildStrategy | None = None,
+        build_command: str | None = None,
+        run_command: str | None = None,
+        output_dir: str | None = None,
+        public_port: int | None = None,
+        internal_port: int | None = None,
+        auto_deploy: bool | None = None,
+        container_registry: ContainerRegistry | None = None,
+        container_image: str | None = None,
+        container_public_port: str | None = None,
+        image_deploy_policy: ImageDeployPolicy | None = None,
+        instances: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Saves an app's settings as a draft and returns its ``draftId``.
+
+        A draft costs nothing and expires after 24 hours; :meth:`create` turns it
+        into an app. Only the fields given are sent, as their camelCase API names.
+        """
+        payload = _draft_payload(
+            {
+                "name": name,
+                "size": size,
+                "region": region,
+                "appType": app_type,
+                "gitProvider": git_provider,
+                "gitRepo": git_repo,
+                "gitBranch": git_branch,
+                "sourceDir": source_dir,
+                "buildStrategy": build_strategy,
+                "buildCommand": build_command,
+                "runCommand": run_command,
+                "outputDir": output_dir,
+                "publicPort": public_port,
+                "internalPort": internal_port,
+                "autoDeploy": auto_deploy,
+                "containerRegistry": container_registry,
+                "containerImage": container_image,
+                "containerPublicPort": container_public_port,
+                "imageDeployPolicy": image_deploy_policy,
+                "instances": instances,
+            }
+        )
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", f"{self._base_path(project_id)}/draft", json=payload
+        )
+        return result
+
+    def create(
+        self, *, draft_id: str, size: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Creates an app from a draft, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. The response carries the new ``appId``; the app starts
+        ``DEPLOYING``.
+        """
+        payload = _create_payload(draft_id, size)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", self._base_path(project_id), json=payload
+        )
+        return result
+
+    def sizes(self, app_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Fetches the ``sizes`` an app can move to, and its ``currentSize``."""
+        _require_app_id(app_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{app_id}/sizes"
+        )
+        return result
+
+    def resize_preview(
+        self, app_id: str, *, size: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Prices moving an app to ``size`` without changing it.
+
+        Besides the preview amounts, the response says whether this is an
+        ``upgrade`` or ``downgrade`` (``direction``), and carries ``creditBack``
+        and ``currentMonthly``. The ``monthly`` charge is exact; ``dueToday`` is
+        an estimate, because the real charge is prorated onto the subscription.
+        """
+        _require_app_id(app_id)
+        _require_size(size)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET",
+            f"{self._base_path(project_id)}/{app_id}/resize-preview",
+            params={"size": size},
+        )
+        return result
+
+    def resize(
+        self, app_id: str, *, size: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Moves an app to ``size``, charging the difference immediately.
+
+        Returns the new ``instanceSize``.
+        """
+        _require_app_id(app_id)
+        _require_size(size)
+
+        result: dict[str, Any] = self._transport.request(
+            "PATCH", f"{self._base_path(project_id)}/{app_id}/size", json={"size": size}
+        )
+        return result
 
 
 class AsyncAppsService:
@@ -459,3 +637,143 @@ class AsyncAppsService:
             if remaining <= 0:
                 raise _timeout_error(deployment_id, deployment["phase"], timeout)
             await asyncio.sleep(min(interval, remaining))
+
+    async def preview(
+        self, *, size: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Prices an app of ``size`` without creating it.
+
+        The ``monthly`` charge is exact. ``dueToday`` is an estimate for a project
+        that already has a subscription, because the real charge is prorated onto
+        it. Amounts are integers in minor units; ``monthly`` excludes tax.
+        """
+        _require_size(size)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/preview", params={"size": size}
+        )
+        return result
+
+    async def create_draft(
+        self,
+        *,
+        size: str,
+        region: str,
+        name: str | None = None,
+        app_type: AppType | None = None,
+        git_provider: GitProvider | None = None,
+        git_repo: str | None = None,
+        git_branch: str | None = None,
+        source_dir: str | None = None,
+        build_strategy: BuildStrategy | None = None,
+        build_command: str | None = None,
+        run_command: str | None = None,
+        output_dir: str | None = None,
+        public_port: int | None = None,
+        internal_port: int | None = None,
+        auto_deploy: bool | None = None,
+        container_registry: ContainerRegistry | None = None,
+        container_image: str | None = None,
+        container_public_port: str | None = None,
+        image_deploy_policy: ImageDeployPolicy | None = None,
+        instances: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Saves an app's settings as a draft and returns its ``draftId``.
+
+        A draft costs nothing and expires after 24 hours; :meth:`create` turns it
+        into an app. Only the fields given are sent, as their camelCase API names.
+        """
+        payload = _draft_payload(
+            {
+                "name": name,
+                "size": size,
+                "region": region,
+                "appType": app_type,
+                "gitProvider": git_provider,
+                "gitRepo": git_repo,
+                "gitBranch": git_branch,
+                "sourceDir": source_dir,
+                "buildStrategy": build_strategy,
+                "buildCommand": build_command,
+                "runCommand": run_command,
+                "outputDir": output_dir,
+                "publicPort": public_port,
+                "internalPort": internal_port,
+                "autoDeploy": auto_deploy,
+                "containerRegistry": container_registry,
+                "containerImage": container_image,
+                "containerPublicPort": container_public_port,
+                "imageDeployPolicy": image_deploy_policy,
+                "instances": instances,
+            }
+        )
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", f"{self._base_path(project_id)}/draft", json=payload
+        )
+        return result
+
+    async def create(
+        self, *, draft_id: str, size: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Creates an app from a draft, charging the project's saved card immediately.
+
+        The charge is a prorated invoice. A project that cannot be billed is
+        refused with 402 (``ORG_PAYMENT_METHOD_REQUIRED``,
+        ``BILLER_PAYMENT_METHOD_REQUIRED`` or ``PAYMENT_REQUIRED``) before anything
+        is created. The response carries the new ``appId``; the app starts
+        ``DEPLOYING``.
+        """
+        payload = _create_payload(draft_id, size)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", self._base_path(project_id), json=payload
+        )
+        return result
+
+    async def sizes(
+        self, app_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Fetches the ``sizes`` an app can move to, and its ``currentSize``."""
+        _require_app_id(app_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{app_id}/sizes"
+        )
+        return result
+
+    async def resize_preview(
+        self, app_id: str, *, size: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Prices moving an app to ``size`` without changing it.
+
+        Besides the preview amounts, the response says whether this is an
+        ``upgrade`` or ``downgrade`` (``direction``), and carries ``creditBack``
+        and ``currentMonthly``. The ``monthly`` charge is exact; ``dueToday`` is
+        an estimate, because the real charge is prorated onto the subscription.
+        """
+        _require_app_id(app_id)
+        _require_size(size)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET",
+            f"{self._base_path(project_id)}/{app_id}/resize-preview",
+            params={"size": size},
+        )
+        return result
+
+    async def resize(
+        self, app_id: str, *, size: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Moves an app to ``size``, charging the difference immediately.
+
+        Returns the new ``instanceSize``.
+        """
+        _require_app_id(app_id)
+        _require_size(size)
+
+        result: dict[str, Any] = await self._transport.request(
+            "PATCH", f"{self._base_path(project_id)}/{app_id}/size", json={"size": size}
+        )
+        return result

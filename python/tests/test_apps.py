@@ -8,6 +8,16 @@ from cosmoner import AsyncCosmoner, Cosmoner, NotFoundError
 BASE = "https://api.test.dev/v1/projects/proj-1/apps"
 DIGEST = "sha256:" + "a" * 64
 
+PREVIEW = {
+    "subtotal": 1000,
+    "tax": None,
+    "creditApplied": 0,
+    "dueToday": 1000,
+    "monthly": 1000,
+    "currency": "USD",
+    "nextBillingDate": "2026-11-01T00:00:00.000Z",
+}
+
 APP = {
     "id": "app-1",
     "name": "web",
@@ -616,5 +626,344 @@ class TestAsyncAppWrites:
                 await client.apps.update("", name="web")
             with pytest.raises(ValueError, match="app_id is required"):
                 await client.apps.delete("")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAppPreview:
+    """Tests for pricing an app before creating it."""
+
+    def test_sends_the_size(self, client, httpx_mock):
+        envelope = {"success": True, "data": PREVIEW}
+        httpx_mock.add_response(
+            url=f"{BASE}/preview?size=apps-s-1vcpu-1gb", json=envelope
+        )
+
+        result = client.apps.preview(size="apps-s-1vcpu-1gb")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "GET"
+        assert request.url.query == b"size=apps-s-1vcpu-1gb"
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/apps/preview?size=apps-s-1vcpu-1gb",
+            json={"success": True, "data": PREVIEW},
+        )
+
+        client.apps.preview(size="apps-s-1vcpu-1gb", project_id="proj-2")
+
+        assert "proj-2" in str(httpx_mock.get_request().url)
+
+    def test_requires_a_size_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="size is required"):
+            client.apps.preview(size="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAppDraft:
+    """Tests for saving an app draft via mocked HTTP."""
+
+    def test_sends_the_required_fields_and_the_domain_type(self, client, httpx_mock):
+        envelope = {"success": True, "data": {"draftId": "draft-1"}}
+        httpx_mock.add_response(
+            url=f"{BASE}/draft", method="POST", status_code=201, json=envelope
+        )
+
+        result = client.apps.create_draft(size="apps-s-1vcpu-1gb", region="fra")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {
+            "size": "apps-s-1vcpu-1gb",
+            "region": "fra",
+            "domainType": "cosmoner",
+        }
+
+    def test_sends_every_given_field_by_its_api_name(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/apps/draft",
+            method="POST",
+            status_code=201,
+            json={"success": True, "data": {"draftId": "draft-1"}},
+        )
+
+        client.apps.create_draft(
+            size="apps-s-1vcpu-1gb",
+            region="fra",
+            name="web",
+            app_type="service",
+            git_provider="github",
+            git_repo="acme/web",
+            git_branch="main",
+            source_dir="apps/web",
+            build_strategy="nixpacks",
+            build_command="npm run build",
+            run_command="npm start",
+            output_dir="dist",
+            public_port=3000,
+            internal_port=9000,
+            auto_deploy=False,
+            container_registry="ghcr",
+            container_image="ghcr.io/acme/web:1.0.0",
+            container_public_port="8080",
+            image_deploy_policy="TAG",
+            instances=2,
+            project_id="proj-2",
+        )
+
+        assert json.loads(httpx_mock.get_request().content) == {
+            "name": "web",
+            "size": "apps-s-1vcpu-1gb",
+            "region": "fra",
+            "appType": "service",
+            "gitProvider": "github",
+            "gitRepo": "acme/web",
+            "gitBranch": "main",
+            "sourceDir": "apps/web",
+            "buildStrategy": "nixpacks",
+            "buildCommand": "npm run build",
+            "runCommand": "npm start",
+            "outputDir": "dist",
+            "publicPort": 3000,
+            "internalPort": 9000,
+            "autoDeploy": False,
+            "containerRegistry": "ghcr",
+            "containerImage": "ghcr.io/acme/web:1.0.0",
+            "containerPublicPort": "8080",
+            "imageDeployPolicy": "TAG",
+            "instances": 2,
+            "domainType": "cosmoner",
+        }
+
+    @pytest.mark.parametrize(
+        ("fields", "message"),
+        [
+            ({"size": "", "region": "fra"}, "size is required"),
+            ({"size": "apps-s-1vcpu-1gb", "region": ""}, "region is required"),
+        ],
+    )
+    def test_requires_each_field_before_any_request(
+        self, client, httpx_mock, fields, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            client.apps.create_draft(**fields)
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAppCreate:
+    """Tests for creating an app from a draft via mocked HTTP."""
+
+    def test_sends_the_draft_and_size(self, client, httpx_mock):
+        envelope = {"success": True, "data": {"deployed": True, "appId": "app-1"}}
+        httpx_mock.add_response(url=BASE, method="POST", json=envelope)
+
+        result = client.apps.create(draft_id="draft-1", size="apps-s-1vcpu-1gb")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {
+            "draftId": "draft-1",
+            "size": "apps-s-1vcpu-1gb",
+        }
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/apps",
+            method="POST",
+            json={"success": True, "data": {"deployed": True, "appId": "app-1"}},
+        )
+
+        client.apps.create(
+            draft_id="draft-1", size="apps-s-1vcpu-1gb", project_id="proj-2"
+        )
+
+        assert httpx_mock.get_request().method == "POST"
+
+    @pytest.mark.parametrize(
+        ("fields", "message"),
+        [
+            ({"draft_id": "", "size": "apps-s-1vcpu-1gb"}, "draft_id is required"),
+            ({"draft_id": "draft-1", "size": ""}, "size is required"),
+        ],
+    )
+    def test_requires_each_field_before_any_request(
+        self, client, httpx_mock, fields, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            client.apps.create(**fields)
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAppResize:
+    """Tests for reading sizes, pricing a resize and resizing an app."""
+
+    def test_reads_the_sizes_an_app_can_move_to(self, client, httpx_mock):
+        envelope = {
+            "success": True,
+            "data": {"currentSize": "apps-s-1vcpu-1gb", "resizable": True, "sizes": []},
+        }
+        httpx_mock.add_response(url=f"{BASE}/app-1/sizes", json=envelope)
+
+        assert client.apps.sizes("app-1") == envelope
+        assert httpx_mock.get_request().method == "GET"
+
+    def test_previews_a_resize(self, client, httpx_mock):
+        preview = {
+            **PREVIEW,
+            "direction": "upgrade",
+            "creditBack": 0,
+            "currentMonthly": 500,
+        }
+        envelope = {"success": True, "data": preview}
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/resize-preview?size=apps-s-2vcpu-4gb", json=envelope
+        )
+
+        result = client.apps.resize_preview("app-1", size="apps-s-2vcpu-4gb")
+
+        assert result == envelope
+        assert httpx_mock.get_request().url.query == b"size=apps-s-2vcpu-4gb"
+
+    def test_resizes_an_app(self, client, httpx_mock):
+        envelope = {"success": True, "data": {"instanceSize": "apps-s-2vcpu-4gb"}}
+        httpx_mock.add_response(url=f"{BASE}/app-1/size", method="PATCH", json=envelope)
+
+        result = client.apps.resize("app-1", size="apps-s-2vcpu-4gb")
+
+        assert result == envelope
+        request = httpx_mock.get_request()
+        assert request.method == "PATCH"
+        assert json.loads(request.content) == {"size": "apps-s-2vcpu-4gb"}
+
+    def test_targets_another_project_per_call(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/apps/app-1/size",
+            method="PATCH",
+            json={"success": True, "data": {"instanceSize": "apps-s-2vcpu-4gb"}},
+        )
+
+        client.apps.resize("app-1", size="apps-s-2vcpu-4gb", project_id="proj-2")
+
+        assert "proj-2" in str(httpx_mock.get_request().url)
+
+    def test_requires_an_app_id_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="app_id is required"):
+            client.apps.sizes("")
+        with pytest.raises(ValueError, match="app_id is required"):
+            client.apps.resize_preview("", size="apps-s-2vcpu-4gb")
+        with pytest.raises(ValueError, match="app_id is required"):
+            client.apps.resize("", size="apps-s-2vcpu-4gb")
+
+        assert httpx_mock.get_requests() == []
+
+    def test_requires_a_size_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="size is required"):
+            client.apps.resize_preview("app-1", size="")
+        with pytest.raises(ValueError, match="size is required"):
+            client.apps.resize("app-1", size="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncAppCreate:
+    """Tests for pricing, creating and resizing apps through the async client."""
+
+    async def test_previews_drafts_and_creates_an_app(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/preview?size=apps-s-1vcpu-1gb",
+            json={"success": True, "data": PREVIEW},
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/draft",
+            method="POST",
+            status_code=201,
+            json={"success": True, "data": {"draftId": "draft-1"}},
+        )
+        httpx_mock.add_response(
+            url=BASE,
+            method="POST",
+            json={"success": True, "data": {"deployed": True, "appId": "app-1"}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            preview = await client.apps.preview(size="apps-s-1vcpu-1gb")
+            draft = await client.apps.create_draft(
+                size="apps-s-1vcpu-1gb", region="fra", name="web"
+            )
+            created = await client.apps.create(
+                draft_id=draft["data"]["draftId"], size="apps-s-1vcpu-1gb"
+            )
+
+        assert preview["data"] == PREVIEW
+        assert created["data"]["appId"] == "app-1"
+        draft_request, create_request = httpx_mock.get_requests()[1:]
+        assert json.loads(draft_request.content) == {
+            "name": "web",
+            "size": "apps-s-1vcpu-1gb",
+            "region": "fra",
+            "domainType": "cosmoner",
+        }
+        assert json.loads(create_request.content) == {
+            "draftId": "draft-1",
+            "size": "apps-s-1vcpu-1gb",
+        }
+
+    async def test_reads_sizes_previews_and_resizes(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/sizes",
+            json={"success": True, "data": {"currentSize": "a", "resizable": True}},
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/resize-preview?size=b",
+            json={"success": True, "data": {**PREVIEW, "direction": "downgrade"}},
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/size",
+            method="PATCH",
+            json={"success": True, "data": {"instanceSize": "b"}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            sizes = await client.apps.sizes("app-1")
+            preview = await client.apps.resize_preview("app-1", size="b")
+            resized = await client.apps.resize("app-1", size="b")
+
+        assert sizes["data"]["currentSize"] == "a"
+        assert preview["data"]["direction"] == "downgrade"
+        assert resized == {"success": True, "data": {"instanceSize": "b"}}
+        assert json.loads(httpx_mock.get_requests()[2].content) == {"size": "b"}
+
+    async def test_validates_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="region is required"):
+                await client.apps.create_draft(size="apps-s-1vcpu-1gb", region="")
+            with pytest.raises(ValueError, match="draft_id is required"):
+                await client.apps.create(draft_id="", size="apps-s-1vcpu-1gb")
+            with pytest.raises(ValueError, match="app_id is required"):
+                await client.apps.resize("", size="b")
+            with pytest.raises(ValueError, match="size is required"):
+                await client.apps.preview(size="")
 
         assert httpx_mock.get_requests() == []
