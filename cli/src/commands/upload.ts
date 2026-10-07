@@ -35,8 +35,8 @@ Options
   --host-key <sha256>  Refuse any server whose host key has another
                        fingerprint. Comma-separate several. Defaults to
                        COSMONER_SFTP_HOST_KEY.
-  --project <id>       Project the site is in. Defaults to COSMONER_PROJECT_ID,
-                       then the project you logged in to.
+  --project <project>  Project the site is in, by slug or id. Defaults to
+                       COSMONER_PROJECT_ID, then the one set with cosmoner use.
   --format <format>    text (default) or json.
 
 Environment
@@ -87,7 +87,7 @@ export async function runUpload(args: ParsedArgs, cwd: string, env: NodeJS.Proce
     .filter(Boolean);
   const format = readChoice<UploadFormat>(args, "format", FORMATS, "text");
 
-  const client = makeClient(args, env, "hosting:read");
+  const client = await makeClient(args, env, "hosting:read");
   if (!existsSync(localRoot) || !statSync(localRoot).isDirectory()) {
     throw new UsageError(`${dir} is not a folder`);
   }

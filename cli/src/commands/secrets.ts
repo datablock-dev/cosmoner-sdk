@@ -47,8 +47,8 @@ Options
   --from-file <path>   Read the value from a file. One trailing newline is
                        stripped.
   --description <text> Set alongside the value.
-  --project <id>       Project to work in. Defaults to COSMONER_PROJECT_ID, then
-                       the project you logged in to.
+  --project <project>  Project to work in, by slug or id. Defaults to
+                       COSMONER_PROJECT_ID, then the one set with cosmoner use.
   --format <format>    text (default) or json. json never includes a value.
 
 Environment
@@ -94,7 +94,7 @@ export async function runSecrets(
   // as a usage error rather than after a round trip.
   const value = sub === "set" ? readEntryValue(args, cwd) : "";
 
-  const client = makeClient(args, env, sub === "list" ? "secrets:read" : "secrets:write");
+  const client = await makeClient(args, env, sub === "list" ? "secrets:read" : "secrets:write");
 
   try {
     if (sub === "list") {
