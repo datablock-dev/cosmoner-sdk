@@ -16,7 +16,7 @@ import {
 
 import { describeApiError } from "../api-error";
 import { readChoice, readValue, rejectUnknownFlags, UsageError, type ParsedArgs } from "../args";
-import { makeClient } from "../credentials";
+import { makeClient, usesSession } from "../credentials";
 
 export const DEPLOY_HELP = `cosmoner deploy <app> [options]
 
@@ -31,8 +31,8 @@ Options
                        pushed as a tag goes here.
   --digest <digest>    Deploy this exact image: sha256:<64 hex characters>. The
                        sha256: prefix may be left off.
-  --project <id>       Project the app is in. Defaults to COSMONER_PROJECT_ID,
-                       then the project you logged in to.
+  --project <project>  Project the app is in, by slug or id. Defaults to
+                       COSMONER_PROJECT_ID, then the one set with cosmoner use.
   --no-wait            Return once the deploy is accepted, without waiting.
   --timeout <seconds>  How long to wait for the rollout. Defaults to 600.
   --format <format>    text (default) or json.
@@ -61,6 +61,20 @@ const DEFAULT_TIMEOUT_SECONDS = 600;
 /** How often the deployment is polled while waiting. */
 export const POLL_INTERVAL_MS = 3_000;
 
+/**
+ * The longest stretch a saved CLI session waits on one access token.
+ *
+ * A session's access token lives an hour, and `--timeout` can be longer than
+ * that. The SDK's wait cannot swap credentials mid-loop, so a long wait is cut
+ * into windows, each started on a token refreshed to outlast it.
+ */
+export const SESSION_WAIT_WINDOW_MS = 40 * 60 * 1000;
+
+/** Slack on top of a window, for the requests either side of the wait. */
+const TOKEN_MARGIN_MS = 5 * 60 * 1000;
+
+const SCOPE = "apps:read and apps:write";
+
 /** Runs `cosmoner deploy`, returning the exit code. */
 export async function runDeploy(args: ParsedArgs, env: NodeJS.ProcessEnv): Promise<number> {
   rejectUnknownFlags(args, FLAGS);
@@ -74,7 +88,9 @@ export async function runDeploy(args: ParsedArgs, env: NodeJS.ProcessEnv): Promi
   const timeoutSeconds = readTimeout(args);
   const format = readChoice<DeployFormat>(args, "format", FORMATS, "text");
 
-  const client = makeClient(args, env, "apps:read and apps:write");
+  const windowMs = usesSession(env) ? SESSION_WAIT_WINDOW_MS : Number.POSITIVE_INFINITY;
+  const firstWindowMs = wait ? Math.min(timeoutSeconds * 1000, windowMs) : 0;
+  let client = await makeClient(args, env, SCOPE, firstWindowMs + TOKEN_MARGIN_MS);
   const say = format === "text" ? (line: string) => console.log(line) : () => {};
 
   try {
@@ -96,15 +112,31 @@ export async function runDeploy(args: ParsedArgs, env: NodeJS.ProcessEnv): Promi
     let lastPhase = started.phase;
     say(`  ${lastPhase}`);
 
-    const finished = await client.apps.waitForDeployment(app.id, started.id, {
-      interval: POLL_INTERVAL_MS,
-      timeout: timeoutSeconds * 1000,
-      onPoll: (deployment) => {
-        if (deployment.phase === lastPhase) return;
-        lastPhase = deployment.phase;
-        say(`  ${lastPhase}`);
-      },
-    });
+    const deadline = startedAt + timeoutSeconds * 1000;
+    let finished: AppDeployment | undefined;
+    while (finished === undefined) {
+      const windowEnd = Math.min(deadline, Date.now() + windowMs);
+      try {
+        finished = await client.apps.waitForDeployment(app.id, started.id, {
+          interval: POLL_INTERVAL_MS,
+          timeout: Math.max(1, windowEnd - Date.now()),
+          onPoll: (deployment) => {
+            if (deployment.phase === lastPhase) return;
+            lastPhase = deployment.phase;
+            say(`  ${lastPhase}`);
+          },
+        });
+      } catch (err) {
+        // Only a window running out is waited past. An API error, or the
+        // whole --timeout elapsing, ends the wait as it always did.
+        const windowRanOut = !(err instanceof CosmonerError) && Date.now() >= windowEnd;
+        if (!windowRanOut) throw err;
+        if (windowEnd >= deadline) {
+          throw new Error(`Deployment ${started.id} was still ${lastPhase} after ${timeoutSeconds}s`, { cause: err });
+        }
+        client = await makeClient(args, env, SCOPE, Math.min(deadline - Date.now(), windowMs) + TOKEN_MARGIN_MS);
+      }
+    }
 
     if (format === "json") printJson(app, finished);
 

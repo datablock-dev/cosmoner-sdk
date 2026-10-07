@@ -2,9 +2,11 @@
  * `cosmoner login` — sign the CLI in through the browser.
  *
  * The terminal asks the API for a short code, opens the approval page, and
- * polls until the user approves it there. What comes back is an ordinary API
- * key bound to the project they picked, saved for the other commands to use.
- * No password or key is ever typed into the terminal.
+ * polls until the user approves it there. What comes back is an account-level
+ * CLI session — an hour-long access token and the refresh token that renews
+ * it — which reaches every project the user is a member of. Commands pick the
+ * project with `--project` or the default `cosmoner use` sets. No password or
+ * key is ever typed into the terminal.
  */
 
 import { hostname } from "node:os";
@@ -12,16 +14,20 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { rejectUnknownFlags, type ParsedArgs } from "../args";
 import { openBrowser } from "../browser";
-import { apiUrl, saveLogin } from "../credentials";
+import { apiUrl, isLegacyLogin, readLogin, saveLogin, type SessionLogin, type StoredLogin } from "../credentials";
 
 export const LOGIN_HELP = `cosmoner login [options]
 
 Signs the CLI in through your browser. The terminal shows a code and opens a
-page where you check the code, pick a project and approve. The CLI then saves
-an API key for that project, which expires after 90 days.
+page where you check the code and approve. The CLI is then signed in to your
+account and reaches every project you are a member of. Pick one per command
+with --project, or set a default with cosmoner use <project>.
 
-The key can deploy apps, upload to web hosting, and manage secrets and
-variables. It is listed with the project's API keys, where you can revoke it.
+The login can deploy apps, upload to web hosting, and manage secrets and
+variables, in every project, and never beyond your role in each one. It stays
+signed in while you use it, and ends after 7 days unused or 30 days after
+approval. Each machine is listed under Account → Security, where you can sign
+it out.
 
 Options
   --no-browser   Print the approval link instead of opening it.
@@ -37,8 +43,9 @@ const FLAGS = ["no-browser", "help"];
 
 /**
  * The scopes a login asks for: what `deploy`, `upload`, `secrets` and
- * `variables` need, and `projects:read` for `whoami`. Shown on the approval
- * page before anything is issued. A command that needs more has to add it here.
+ * `variables` need, and `projects:read` for `use`. Shown on the approval page
+ * before anything is issued, and they cap the session in every project. A
+ * command that needs more has to add it here.
  */
 export const LOGIN_PERMISSIONS: Record<string, string[]> = {
   projects: ["read"],
@@ -62,10 +69,11 @@ interface StartedLogin {
 
 interface ApprovedLogin {
   status: "approved";
-  apiKey: string;
-  keyId: string;
-  expiresAt: string | null;
-  project: { id: string; name: string };
+  user: { id: string; email: string; name: string };
+  accessToken: string;
+  accessTokenExpiresAt: string;
+  refreshToken: string;
+  session: { id: string; name: string; expiresAt: string; idleExpiresAt: string };
 }
 
 interface ApiReply<T> {
@@ -75,10 +83,10 @@ interface ApiReply<T> {
 }
 
 /** POSTs JSON to the API and reads the envelope, whatever the status. */
-async function post<T>(url: string, body: unknown): Promise<ApiReply<T>> {
+async function post<T>(url: string, body: unknown, headers: Record<string, string> = {}): Promise<ApiReply<T>> {
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...headers },
     body: JSON.stringify(body),
   });
   const parsed = (await response.json().catch(() => ({}))) as { data?: T; error?: ApiReply<T>["error"] };
@@ -93,6 +101,7 @@ export async function runLogin(args: ParsedArgs, env: NodeJS.ProcessEnv): Promis
   const started = await post<StartedLogin>(`${base}/v1/cli/login`, {
     clientName: hostname().slice(0, 60) || "cosmoner-cli",
     permissions: LOGIN_PERMISSIONS,
+    credential: "cli_session",
   });
   if (started.status !== 201 || !started.data) {
     console.error(`Could not start a login: ${started.error?.message ?? `HTTP ${started.status}`}`);
@@ -123,7 +132,7 @@ export async function runLogin(args: ParsedArgs, env: NodeJS.ProcessEnv): Promis
       continue;
     }
     if (poll.status === 200 && poll.data?.status === "approved") {
-      return finish(env, poll.data);
+      return finish(env, poll.data, readLogin(env));
     }
 
     const reason =
@@ -140,21 +149,66 @@ export async function runLogin(args: ParsedArgs, env: NodeJS.ProcessEnv): Promis
   return 1;
 }
 
-/** Saves an approved login and says where the CLI now points. */
-function finish(env: NodeJS.ProcessEnv, approved: ApprovedLogin): number {
-  const path = saveLogin(env, {
-    apiKey: approved.apiKey,
-    keyId: approved.keyId,
-    projectId: approved.project.id,
-    projectName: approved.project.name,
-    expiresAt: approved.expiresAt,
-  });
+/**
+ * Saves an approved login and says where the CLI now stands.
+ *
+ * Whatever the machine held before is signed out first, so logging in again
+ * leaves one session per machine on the account page rather than a trail of
+ * them. A project picked with `cosmoner use` under an earlier session carries
+ * over, and a legacy login's project becomes the default, so the commands a
+ * user already ran keep pointing where they did.
+ */
+async function finish(env: NodeJS.ProcessEnv, approved: ApprovedLogin, previous: StoredLogin | null): Promise<number> {
+  if (previous) await revokePrevious(env, previous);
 
-  const expiry = approved.expiresAt ? `, until ${approved.expiresAt.slice(0, 10)}` : "";
-  console.log(`\nLogged in to ${approved.project.name}${expiry}.`);
+  const defaultProject = previous
+    ? isLegacyLogin(previous)
+      ? { id: previous.projectId, slug: null, name: previous.projectName }
+      : previous.defaultProject
+    : undefined;
+
+  const login: SessionLogin = {
+    kind: "session",
+    sessionId: approved.session.id,
+    sessionName: approved.session.name,
+    user: approved.user,
+    accessToken: approved.accessToken,
+    accessTokenExpiresAt: approved.accessTokenExpiresAt,
+    refreshToken: approved.refreshToken,
+    idleExpiresAt: approved.session.idleExpiresAt,
+    expiresAt: approved.session.expiresAt,
+    ...(defaultProject ? { defaultProject } : {}),
+  };
+  const path = saveLogin(env, login);
+
+  console.log(`\nLogged in as ${approved.user.email}, until ${approved.session.expiresAt.slice(0, 10)} at the latest.`);
   console.log(`Saved to ${path}`);
+  if (defaultProject) {
+    console.log(`Default project: ${defaultProject.name}. Change it with cosmoner use <project>.`);
+  } else {
+    console.log("Pick a default project with cosmoner use <project>, or pass --project to each command.");
+  }
   if (env.COSMONER_API_KEY) {
     console.log("COSMONER_API_KEY is set, and takes priority over this login until you unset it.");
   }
   return 0;
+}
+
+/**
+ * Signs out the credential the machine held before this login, best effort.
+ *
+ * A failure is not worth failing the login over — the new session is already
+ * issued — so it is reported and left to the account page.
+ */
+async function revokePrevious(env: NodeJS.ProcessEnv, previous: StoredLogin): Promise<void> {
+  const base = apiUrl(env);
+  try {
+    const reply = isLegacyLogin(previous)
+      ? await post(`${base}/v1/cli/logout`, {}, { Authorization: `Bearer ${previous.apiKey}` })
+      : await post(`${base}/v1/cli/logout`, { refreshToken: previous.refreshToken });
+    if (reply.status >= 400 && reply.status !== 401) throw new Error(`HTTP ${reply.status}`);
+  } catch (err) {
+    const what = isLegacyLogin(previous) ? `the old key for ${previous.projectName}` : "the previous CLI session";
+    console.error(`Could not sign out ${what} (${err instanceof Error ? err.message : String(err)}).`);
+  }
 }

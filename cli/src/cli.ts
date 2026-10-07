@@ -4,7 +4,7 @@
  * The file commands run offline. Validating a file needs no account, and a
  * check that reaches the network is a check that fails when the network does,
  * which is not what anyone wants guarding a push. `deploy`, `upload`,
- * `secrets`, `variables` and the login commands are the exceptions by nature,
+ * `secrets`, `variables`, `use` and the login commands are the exceptions by nature,
  * and only they read a credential.
  */
 
@@ -21,6 +21,7 @@ import { LOGOUT_HELP, runLogout } from "./commands/logout";
 import { runSchema, SCHEMA_HELP } from "./commands/schema";
 import { runSecrets, SECRETS_HELP, SECRETS_VALUE_FLAGS } from "./commands/secrets";
 import { runUpload, UPLOAD_HELP, UPLOAD_VALUE_FLAGS } from "./commands/upload";
+import { runUse, USE_HELP } from "./commands/use";
 import { runValidate, VALIDATE_HELP } from "./commands/validate";
 import { runVariables, VARIABLES_HELP, VARIABLES_VALUE_FLAGS } from "./commands/variables";
 import { runWhoami, WHOAMI_HELP } from "./commands/whoami";
@@ -40,9 +41,10 @@ Commands
   upload     Upload a folder to a web hosting site over SFTP.
   secrets    List, set and remove a project's secrets.
   variables  List, set and remove a project's variables.
-  login      Sign in through the browser and save a key for a project.
-  logout     Revoke and forget the saved key.
-  whoami     Show which credential and project the CLI is using.
+  login      Sign in through the browser, to every project you are a member of.
+  use        Set the project commands act on by default.
+  logout     Sign this machine out.
+  whoami     Show who the CLI is signed in as, and the default project.
 
   cosmoner <command> --help for a command's options.
 
@@ -61,6 +63,7 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   secrets: SECRETS_VALUE_FLAGS,
   variables: VARIABLES_VALUE_FLAGS,
   login: [],
+  use: [],
   logout: [],
   whoami: [],
 };
@@ -80,6 +83,7 @@ export const COMMAND_HELP: Record<string, string> = {
   secrets: SECRETS_HELP,
   variables: VARIABLES_HELP,
   login: LOGIN_HELP,
+  use: USE_HELP,
   logout: LOGOUT_HELP,
   whoami: WHOAMI_HELP,
 };
@@ -147,6 +151,8 @@ export function run(
         return runVariables(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
       case "login":
         return runLogin(args, env).catch((err: unknown) => reportUsage(err, command));
+      case "use":
+        return runUse(args, env).catch((err: unknown) => reportUsage(err, command));
       case "logout":
         return runLogout(args, env).catch((err: unknown) => reportUsage(err, command));
       case "whoami":

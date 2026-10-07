@@ -262,3 +262,102 @@ describe("deploy", () => {
     });
   });
 });
+
+/** The bearer a captured request carried. */
+function authorizationOf(call: [string, RequestInit]): string | undefined {
+  return (call[1].headers as Record<string, string>).Authorization;
+}
+
+describe("deploying on a saved CLI session", () => {
+  let configDir: string;
+
+  beforeEach(async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    configDir = mkdtempSync(join(tmpdir(), "cosmoner-deploy-"));
+    writeFileSync(
+      join(configDir, "credentials.json"),
+      JSON.stringify({
+        version: 2,
+        logins: {
+          "https://api.test.dev": {
+            kind: "session",
+            sessionId: "cs_1",
+            sessionName: "laptop",
+            user: { id: "user-1", email: "dana@example.com", name: "Dana" },
+            accessToken: "cos_at_first",
+            accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            refreshToken: "cos_rt_first",
+            idleExpiresAt: "2099-01-07T00:00:00.000Z",
+            expiresAt: "2099-01-30T00:00:00.000Z",
+            defaultProject: { id: "proj-1", slug: "acme", name: "Acme" },
+          },
+        },
+      })
+    );
+  });
+
+  afterEach(async () => {
+    const { rmSync } = await import("node:fs");
+    rmSync(configDir, { recursive: true, force: true });
+  });
+
+  // An access token lives an hour and --timeout can be longer. The wait is
+  // cut into windows, and the token is renewed between them, so a long
+  // rollout is not cut off by the credential expiring under it.
+  it("renews the access token between wait windows on a long --timeout", async () => {
+    let refreshed = false;
+    fetchSpy.mockImplementation((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/v1/cli/token/refresh")) {
+        refreshed = true;
+        return Promise.resolve(ok({
+          accessToken: "cos_at_second",
+          accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          refreshToken: "cos_rt_second",
+          session: { id: "cs_1", name: "laptop", expiresAt: "2099-01-30T00:00:00.000Z", idleExpiresAt: "2099-01-08T00:00:00.000Z" },
+        }));
+      }
+      if (url === API) return Promise.resolve(ok([IMAGE_APP]));
+      if (url.endsWith("/deployments") && init?.method === "POST") return Promise.resolve(ok(deployment("PENDING"), 201));
+      return Promise.resolve(ok(deployment(refreshed ? "ACTIVE" : "DEPLOYING")));
+    });
+
+    const result = await deploy(["web", "--tag", "v2", "--timeout", "4800"], {
+      COSMONER_API_URL: "https://api.test.dev",
+      COSMONER_CONFIG_DIR: configDir,
+    });
+
+    expect(result.code).toBe(0);
+    expect(refreshed).toBe(true);
+    const calls = fetchSpy.mock.calls as Array<[string, RequestInit]>;
+    expect(authorizationOf(calls[0])).toBe("Bearer cos_at_first");
+    expect(authorizationOf(calls[calls.length - 1])).toBe("Bearer cos_at_second");
+  });
+
+  it("still gives up once the whole --timeout has passed", async () => {
+    fetchSpy.mockImplementation((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/v1/cli/token/refresh")) {
+        return Promise.resolve(ok({
+          accessToken: "cos_at_next",
+          accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          refreshToken: "cos_rt_next",
+          session: { id: "cs_1", name: "laptop", expiresAt: "2099-01-30T00:00:00.000Z", idleExpiresAt: "2099-01-08T00:00:00.000Z" },
+        }));
+      }
+      if (url === API) return Promise.resolve(ok([IMAGE_APP]));
+      if (url.endsWith("/deployments") && init?.method === "POST") return Promise.resolve(ok(deployment("PENDING"), 201));
+      return Promise.resolve(ok(deployment("DEPLOYING")));
+    });
+
+    const result = await deploy(["web", "--timeout", "3000"], {
+      COSMONER_API_URL: "https://api.test.dev",
+      COSMONER_CONFIG_DIR: configDir,
+    });
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("was still DEPLOYING after 3000s");
+  });
+});
