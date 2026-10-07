@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmoner\Sdk\Tests;
 
 use Cosmoner\Sdk\Cosmoner;
+use Cosmoner\Sdk\HttpResponse;
 use Cosmoner\Sdk\NotFoundError;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
@@ -126,5 +127,37 @@ class IamServiceTest extends TestCase
         $this->expectException(NotFoundError::class);
 
         $this->client->iam->get('missing');
+    }
+
+    public function testThrowsWhenIamUserNameIsEmptyOnDelete(): void
+    {
+        try {
+            $this->client->iam->delete('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('iamUserName is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesACredentialToleratingTheEmpty204(): void
+    {
+        $this->http->queue(new HttpResponse(204, ''));
+
+        $this->client->iam->delete('cosmoner-org1-ci');
+
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/cosmoner-org1-ci', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testUrlEncodesTheIamUserNameOnDelete(): void
+    {
+        $this->http->queue(new HttpResponse(204, ''));
+
+        $this->client->iam->delete('ci/deploy', 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/iam/ci%2Fdeploy', $this->http->requests[0]['url']);
     }
 }

@@ -9,7 +9,7 @@ use InvalidArgumentException;
 use RuntimeException;
 use stdClass;
 
-/** App lookup and image deploy operations for a project. */
+/** App lookup, configuration, deletion and image deploy operations for a project. */
 class AppsService
 {
     /** Phases after which a deployment will not change again. */
@@ -25,6 +25,19 @@ class AppsService
     // malformed value fails before it spends a request against the deploy budget.
     private const TAG_PATTERN = '/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/';
     private const DIGEST_PATTERN = '/^sha256:[a-f0-9]{64}$/';
+
+    /** The settings `update()` may change, under the camelCase keys the API takes. */
+    private const CHANGE_FIELDS = [
+        'name',
+        'buildCommand',
+        'runCommand',
+        'outputDir',
+        'publicPort',
+        'internalPort',
+        'autoDeploy',
+        'imageDeployPolicy',
+        'instances',
+    ];
 
     /** @var Closure(float): void */
     private readonly Closure $sleep;
@@ -79,6 +92,64 @@ class AppsService
 
         /** @var array{success: true, data: array<string, mixed>} */
         return $this->transport->request('GET', $this->basePath($projectId) . "/{$appId}");
+    }
+
+    /**
+     * Changes an app's settings, sending only the keys present in `$changes`.
+     *
+     * Keys take the API's camelCase names. A key set to null is sent as null,
+     * which clears that setting; leave a key out to keep its current value.
+     *
+     * @param array{
+     *     name?: string,
+     *     buildCommand?: ?string,
+     *     runCommand?: ?string,
+     *     outputDir?: ?string,
+     *     publicPort?: ?int,
+     *     internalPort?: ?int,
+     *     autoDeploy?: bool,
+     *     imageDeployPolicy?: 'TAG'|'NEWEST'|'MANUAL',
+     *     instances?: int,
+     * } $changes At least one setting to change.
+     *
+     * @return array{success: true, data: array<string, mixed>}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function update(string $appId, array $changes, ?string $projectId = null): array
+    {
+        self::requireAppId($appId);
+        if ($changes === []) {
+            throw new InvalidArgumentException('at least one change is required');
+        }
+        $unknown = array_diff(array_keys($changes), self::CHANGE_FIELDS);
+        if ($unknown !== []) {
+            throw new InvalidArgumentException('Unknown change "' . implode('", "', $unknown) . '"');
+        }
+
+        /** @var array{success: true, data: array<string, mixed>} */
+        return $this->transport->request(
+            'PATCH',
+            $this->basePath($projectId) . "/{$appId}",
+            $changes,
+        );
+    }
+
+    /**
+     * Permanently deletes an app.
+     *
+     * @return array{success: true, data: array{}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function delete(string $appId, ?string $projectId = null): array
+    {
+        self::requireAppId($appId);
+
+        /** @var array{success: true, data: array{}} */
+        return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$appId}");
     }
 
     /**

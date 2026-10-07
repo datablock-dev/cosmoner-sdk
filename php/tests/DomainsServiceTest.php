@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cosmoner\Sdk\Tests;
 
+use Cosmoner\Sdk\ConflictError;
 use Cosmoner\Sdk\Cosmoner;
 use Cosmoner\Sdk\NotFoundError;
 use InvalidArgumentException;
@@ -146,5 +147,123 @@ class DomainsServiceTest extends TestCase
         $this->expectException(NotFoundError::class);
 
         $this->client->domains->get('missing.example');
+    }
+
+    /** @return array<string, mixed> */
+    private function verificationRecordFixture(): array
+    {
+        return ['type' => 'TXT', 'name' => '_cosmoner.example.com', 'value' => 'cosmoner-verify=abc123'];
+    }
+
+    public function testRejectsAnEmptyDomainOnEveryWriteWithoutSendingARequest(): void
+    {
+        $cases = [
+            ['name is required', fn () => $this->client->domains->create('')],
+            ['domain is required', fn () => $this->client->domains->verify('')],
+            ['domain is required', fn () => $this->client->domains->delete('')],
+        ];
+
+        foreach ($cases as [$message, $call]) {
+            try {
+                $call();
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testAddsAnExternalDomainWithItsVerificationRecord(): void
+    {
+        $created = [
+            ...$this->domainFixture(),
+            'status' => 'PENDING',
+            'verificationRecord' => $this->verificationRecordFixture(),
+        ];
+        $this->http->queueJson(201, ['success' => true, 'data' => $created]);
+
+        $result = $this->client->domains->create('example.com');
+
+        $this->assertSame(['success' => true, 'data' => $created], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE, $this->http->requests[0]['url']);
+        $this->assertSame('{"name":"example.com","type":"EXTERNAL"}', $this->http->requests[0]['body']);
+    }
+
+    public function testAddsADomainToAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->domainFixture()]);
+
+        $this->client->domains->create('example.com', 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/domains', $this->http->requests[0]['url']);
+    }
+
+    public function testVerifiesADomain(): void
+    {
+        $verification = [
+            'status' => 'PENDING',
+            'verified' => false,
+            'record' => $this->verificationRecordFixture(),
+            'error' => 'TXT record not found',
+        ];
+        $this->http->queueJson(200, ['success' => true, 'data' => $verification]);
+
+        $result = $this->client->domains->verify('dom-1');
+
+        $this->assertSame(['success' => true, 'data' => $verification], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/dom-1/verify', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testUrlEncodesTheDomainOnVerify(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['status' => 'ACTIVE', 'verified' => true]]);
+
+        $this->client->domains->verify('ci/deploy example.com', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/domains/ci%2Fdeploy%20example.com/verify',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testDeletesADomain(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['id' => 'dom-1']]);
+
+        $result = $this->client->domains->delete('dom-1');
+
+        $this->assertSame(['success' => true, 'data' => ['id' => 'dom-1']], $result);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/dom-1', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testUrlEncodesTheDomainOnDelete(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['id' => 'dom-1']]);
+
+        $this->client->domains->delete('ci/deploy example.com', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/domains/ci%2Fdeploy%20example.com',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testSurfacesADomainStillInUseAsAConflictError(): void
+    {
+        $this->http->queueJson(409, [
+            'success' => false,
+            'error' => ['code' => 'CONFLICT', 'message' => 'Domain is still in use'],
+        ]);
+
+        $this->expectException(ConflictError::class);
+
+        $this->client->domains->delete('example.com');
     }
 }

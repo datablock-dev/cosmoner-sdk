@@ -69,4 +69,82 @@ class SshKeysServiceTest extends TestCase
 
         $this->assertSame('https://api.test.dev/v1/projects/proj-2/ssh-keys', $this->http->requests[0]['url']);
     }
+
+    public function testRejectsAnEmptyNameOrPublicKeyWithoutSendingARequest(): void
+    {
+        $cases = [
+            'name is required' => fn () => $this->client->sshKeys->create('', 'ssh-ed25519 AAAA'),
+            'publicKey is required' => fn () => $this->client->sshKeys->create('laptop', ''),
+        ];
+
+        foreach ($cases as $message => $call) {
+            try {
+                $call();
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testCreatesAnSshKey(): void
+    {
+        $created = $this->keyFixture();
+        unset($created['updatedAt']);
+        $this->http->queueJson(201, ['success' => true, 'data' => $created]);
+
+        $result = $this->client->sshKeys->create('laptop', $created['publicKey']);
+
+        $this->assertSame(['success' => true, 'data' => $created], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame('https://api.test.dev/v1/projects/proj-1/ssh-keys', $this->http->requests[0]['url']);
+        $this->assertSame(
+            ['name' => 'laptop', 'publicKey' => $created['publicKey']],
+            json_decode((string) $this->http->requests[0]['body'], true),
+        );
+    }
+
+    public function testCreatesAnSshKeyInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->keyFixture()]);
+
+        $this->client->sshKeys->create('laptop', 'ssh-ed25519 AAAA', 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/ssh-keys', $this->http->requests[0]['url']);
+    }
+
+    public function testThrowsWhenSshKeyIdIsEmptyOnDelete(): void
+    {
+        try {
+            $this->client->sshKeys->delete('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('sshKeyId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesAnSshKeyAndReportsWhereItIsStillAuthorised(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['stillAuthorisedOn' => 2]]);
+
+        $result = $this->client->sshKeys->delete('key-1');
+
+        $this->assertSame(['success' => true, 'data' => ['stillAuthorisedOn' => 2]], $result);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame('https://api.test.dev/v1/projects/proj-1/ssh-keys/key-1', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesAnSshKeyInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['stillAuthorisedOn' => 0]]);
+
+        $this->client->sshKeys->delete('key-1', 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/ssh-keys/key-1', $this->http->requests[0]['url']);
+    }
 }

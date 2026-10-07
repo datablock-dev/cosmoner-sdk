@@ -7,7 +7,7 @@ namespace Cosmoner\Sdk;
 use InvalidArgumentException;
 
 /**
- * Read operations on a project's IAM credentials.
+ * Reads and deletes a project's IAM credentials.
  *
  * These reads return the access key id only; a secret access key is returned
  * by the call that creates the credential and by no read afterwards.
@@ -61,20 +61,42 @@ class IamService
      */
     public function get(string $iamUserName, ?string $projectId = null): array
     {
-        if ($iamUserName === '') {
-            throw new InvalidArgumentException('iamUserName is required');
-        }
+        self::requireIamUserName($iamUserName);
 
         /** @var array{success: true, data: IamCredential} */
-        return $this->transport->request(
-            'GET',
-            $this->basePath($projectId) . '/' . rawurlencode($iamUserName),
-        );
+        return $this->transport->request('GET', $this->userPath($iamUserName, $projectId));
+    }
+
+    /**
+     * Permanently deletes an IAM credential. The API answers 204, so there is nothing to return.
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function delete(string $iamUserName, ?string $projectId = null): void
+    {
+        self::requireIamUserName($iamUserName);
+
+        $this->transport->request('DELETE', $this->userPath($iamUserName, $projectId));
     }
 
     /** Builds the collection route for the resolved project. */
     private function basePath(?string $projectId): string
     {
         return '/v1/projects/' . $this->config->resolveProjectId($projectId) . '/iam';
+    }
+
+    /** Builds one credential's route, URL-encoding the IAM user name. */
+    private function userPath(string $iamUserName, ?string $projectId): string
+    {
+        return $this->basePath($projectId) . '/' . rawurlencode($iamUserName);
+    }
+
+    /** Rejects an empty IAM user name before it becomes a malformed route. */
+    private static function requireIamUserName(string $iamUserName): void
+    {
+        if ($iamUserName === '') {
+            throw new InvalidArgumentException('iamUserName is required');
+        }
     }
 }

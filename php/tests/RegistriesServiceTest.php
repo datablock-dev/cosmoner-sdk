@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmoner\Sdk\Tests;
 
 use Cosmoner\Sdk\Cosmoner;
+use Cosmoner\Sdk\HttpResponse;
 use Cosmoner\Sdk\NotFoundError;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
@@ -125,5 +126,44 @@ class RegistriesServiceTest extends TestCase
         $this->expectException(NotFoundError::class);
 
         $this->client->registries->get('reg-missing');
+    }
+
+    public function testThrowsWhenRegistryIdIsEmptyOnDelete(): void
+    {
+        try {
+            $this->client->registries->delete('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('registryId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesARegistry(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $result = $this->client->registries->delete('reg-1');
+
+        $this->assertSame(['success' => true, 'data' => []], $result);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/storage/container-registry/reg-1',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesARegistryInAnotherProject(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $this->client->registries->delete('reg-1', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/storage/container-registry/reg-1',
+            $this->http->requests[0]['url'],
+        );
     }
 }

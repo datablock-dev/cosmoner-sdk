@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmoner\Sdk\Tests;
 
 use Cosmoner\Sdk\Cosmoner;
+use Cosmoner\Sdk\HttpResponse;
 use Cosmoner\Sdk\NotFoundError;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
@@ -223,5 +224,83 @@ class DatabasesServiceTest extends TestCase
         $this->expectException(NotFoundError::class);
 
         $this->client->databases->getDedicated('db-missing');
+    }
+
+    public function testThrowsWhenDatabaseIdIsEmptyOnDeleteDedicated(): void
+    {
+        try {
+            $this->client->databases->deleteDedicated('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('databaseId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesADedicatedDatabase(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $result = $this->client->databases->deleteDedicated('db-1');
+
+        $this->assertSame(['success' => true, 'data' => []], $result);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/databases/dedicated/db-1',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesADedicatedDatabaseInAnotherProject(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $this->client->databases->deleteDedicated('db-1', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/databases/dedicated/db-1',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testThrowsWhenTenantIdIsEmptyOnDeleteShared(): void
+    {
+        try {
+            $this->client->databases->deleteShared('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('tenantId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesASharedDatabase(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $result = $this->client->databases->deleteShared('tenant-1');
+
+        $this->assertSame(['success' => true, 'data' => []], $result);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/databases/shared/tenant-1',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesASharedDatabaseInAnotherProject(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $this->client->databases->deleteShared('tenant-1', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/databases/shared/tenant-1',
+            $this->http->requests[0]['url'],
+        );
     }
 }

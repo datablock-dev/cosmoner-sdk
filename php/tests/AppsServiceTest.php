@@ -8,6 +8,7 @@ use Cosmoner\Sdk\AppsService;
 use Cosmoner\Sdk\Config;
 use Cosmoner\Sdk\Cosmoner;
 use Cosmoner\Sdk\CosmonerConnectionError;
+use Cosmoner\Sdk\HttpResponse;
 use Cosmoner\Sdk\NotFoundError;
 use Cosmoner\Sdk\Transport;
 use InvalidArgumentException;
@@ -390,5 +391,112 @@ class AppsServiceTest extends TestCase
         $this->expectExceptionMessage('timeout must be greater than 0');
 
         $this->client->apps->waitForDeployment('app-1', 'dep-1', timeout: 0.0);
+    }
+
+    public function testThrowsWhenAppIdIsEmptyOnUpdate(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('appId is required');
+
+        $this->client->apps->update('', ['name' => 'web']);
+    }
+
+    public function testRejectsAnUpdateWithNoChangesWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->apps->update('app-1', []);
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('at least one change is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testRejectsAnUnknownChangeWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->apps->update('app-1', ['build_command' => 'npm run build']);
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('Unknown change "build_command"', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testUpdatesOnlyTheGivenSettings(): void
+    {
+        $updated = [...$this->appFixture(), 'imageDeployPolicy' => 'NEWEST'];
+        $this->http->queueJson(200, ['success' => true, 'data' => $updated]);
+
+        $result = $this->client->apps->update('app-1', [
+            'buildCommand' => 'npm run build',
+            'publicPort' => 8080,
+            'autoDeploy' => false,
+            'imageDeployPolicy' => 'NEWEST',
+            'instances' => 2,
+        ]);
+
+        $this->assertSame(['success' => true, 'data' => $updated], $result);
+        $this->assertSame('PATCH', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/app-1', $this->http->requests[0]['url']);
+        $this->assertSame(
+            '{"buildCommand":"npm run build","publicPort":8080,"autoDeploy":false,'
+            . '"imageDeployPolicy":"NEWEST","instances":2}',
+            $this->http->requests[0]['body'],
+        );
+    }
+
+    public function testSendsAnExplicitNullToClearASetting(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->appFixture()]);
+
+        $this->client->apps->update('app-1', ['outputDir' => null, 'internalPort' => null]);
+
+        $this->assertSame('{"outputDir":null,"internalPort":null}', $this->http->requests[0]['body']);
+    }
+
+    public function testUpdatesAnAppInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->appFixture()]);
+
+        $this->client->apps->update('app-1', ['name' => 'web'], 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/apps/app-1', $this->http->requests[0]['url']);
+        $this->assertSame(['name' => 'web'], $this->sentBody());
+    }
+
+    public function testThrowsWhenAppIdIsEmptyOnDelete(): void
+    {
+        try {
+            $this->client->apps->delete('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('appId is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesAnApp(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $result = $this->client->apps->delete('app-1');
+
+        $this->assertSame(['success' => true, 'data' => []], $result);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/app-1', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesAnAppInAnotherProject(): void
+    {
+        $this->http->queue(new HttpResponse(200, '{"success":true,"data":{}}'));
+
+        $this->client->apps->delete('app-1', 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/apps/app-1', $this->http->requests[0]['url']);
     }
 }
