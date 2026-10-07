@@ -29,6 +29,7 @@ import { APP_LOGS_HELP, APP_LOGS_VALUE_FLAGS, runAppLogs } from "./read/app-logs
 import { OVERVIEW_HELP, runOverview } from "./read/overview";
 import { PRODUCTS } from "./read/products";
 import { productHelp, productValueFlags, READ_VALUE_FLAGS, runProduct } from "./read/resource";
+import { checkForUpdate } from "./update-check";
 
 /** The top-level help. Exported so a test can hold it to every command that exists. */
 export const HELP = `cosmoner — the Cosmoner command line
@@ -246,12 +247,23 @@ function version(): string {
 // exist; the built bundle is CommonJS, where it does.
 if (typeof require !== "undefined" && require.main === module) {
   void (async () => {
+    const argv = process.argv.slice(2);
+    // Started alongside the command, so the day's registry lookup overlaps it.
+    const update = checkForUpdate({
+      env: process.env,
+      command: argv[0],
+      current: version(),
+      stderrIsTty: process.stderr.isTTY === true,
+      viaNpx: /[\\/]_npx[\\/]/.test(process.argv[1] ?? ""),
+    });
     try {
-      process.exitCode = await run(process.argv.slice(2), process.cwd(), process.stdout.isTTY === true);
+      process.exitCode = await run(argv, process.cwd(), process.stdout.isTTY === true);
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err));
       process.exitCode = 2;
     }
+    const notice = await update;
+    if (notice !== null) console.error(`\n${notice}`);
   })();
 }
 /* c8 ignore stop */
