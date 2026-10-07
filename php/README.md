@@ -218,7 +218,7 @@ Every delete is permanent.
 | Namespace | Methods |
 | --- | --- |
 | `apps` | `update($appId, $changes)`, `delete($appId)` |
-| `sshKeys` | `create($name, $publicKey)`, `delete($sshKeyId)` |
+| `sshKeys` | `create($name, $publicKey)`, `generate($name)`, `delete($sshKeyId)` |
 | `domains` | `create($name)`, `verify($domain)`, `delete($domain)` — by id or name |
 | `redis` | `delete($redisId)` |
 | `databases` | `deleteDedicated($databaseId)`, `deleteShared($tenantId)` |
@@ -226,8 +226,8 @@ Every delete is permanent.
 | `buckets` | `delete($bucketId)` — with every object in it and its access credentials |
 | `registries` | `delete($registryId)` — with every repository and image in it |
 | `hosting` | `delete($siteId)` |
-| `email` | `deleteDomain($emailDomainId)` — returns nothing |
-| `iam` | `delete($iamUserName)` — returns nothing |
+| `email` | `createCredential($emailDomainId, ['label' => …, 'fromAddress' => …])`, `deleteCredential($emailDomainId, $credentialId)` — returns nothing, `deleteDomain($emailDomainId)` — returns nothing |
+| `iam` | `create(['label' => …, 'storage' => […], 'registry' => […]])`, `delete($iamUserName)` — returns nothing |
 
 `apps->update()` sends only the keys in `$changes`, under the API's camelCase
 names: `name`, `buildCommand`, `runCommand`, `outputDir`, `publicPort`,
@@ -244,6 +244,33 @@ domain an app or email domain still uses fails with `ConflictError`.
 
 `sshKeys->delete()` does not remove the key from servers it was already
 installed on; `stillAuthorisedOn` in the response counts them.
+
+Three of these return a credential **exactly once** — the API keeps only a
+hash or nothing at all, and no later read returns it, so store it now:
+
+| Method | Credential |
+| --- | --- |
+| `iam->create()` | `secretAccessKey` |
+| `email->createCredential()` | `smtpPassword` |
+| `sshKeys->generate()` | `privateKey` — RSA 4096 in PEM (PKCS#1, `-----BEGIN RSA PRIVATE KEY-----`) |
+
+`iam->create()` takes a `label` of 1–20 characters and at least one of
+`storage` (`['access' => 'read' | 'write', 'bucketIds' => […]]`) and `registry`
+(`['access' => 'pull' | 'push', 'repositoryIds' => […]]`). Leaving out the id
+list, or passing an empty one, grants every bucket or repository, including
+ones created later. As with `$params` elsewhere, a key the method does not take
+throws `InvalidArgumentException` before anything is sent.
+
+```php
+$key = $client->iam->create([
+    'label' => 'ci',
+    'storage' => ['access' => 'write', 'bucketIds' => ['bucket-id']],
+])['data'];
+// $key['accessKeyId'], $key['secretAccessKey'] — the secret is never returned again
+```
+
+`email->createCredential()` sends from `fromAddress`, which must be an address
+on the email domain. Deleting a credential stops anything still sending with it.
 
 ## Ordering paid resources
 

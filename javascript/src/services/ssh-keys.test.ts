@@ -126,3 +126,33 @@ describe("SshKeysService writes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("SshKeysService credentials", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("generate returns the private key", async () => {
+    const key = { id: "key-1", name: "deploy", privateKey: "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----\n" };
+    fetchSpy.mockResolvedValueOnce(writeReply(key, 201));
+
+    const result = await client.sshKeys.generate({ name: "deploy" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/ssh-keys/generate`, body: { name: "deploy" } });
+    expect(result.data.privateKey).toContain("BEGIN RSA PRIVATE KEY");
+  });
+
+  it("generate requires a name before any request", async () => {
+    await expect(client.sshKeys.generate({ name: "" })).rejects.toThrow("name is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

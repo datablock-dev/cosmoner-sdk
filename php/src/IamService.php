@@ -7,10 +7,10 @@ namespace Cosmoner\Sdk;
 use InvalidArgumentException;
 
 /**
- * Reads and deletes a project's IAM credentials.
+ * Creates, reads and deletes a project's IAM credentials.
  *
  * These reads return the access key id only; a secret access key is returned
- * by the call that creates the credential and by no read afterwards.
+ * by `create()` and by no read afterwards.
  * The API returns more fields than the shapes below declare.
  *
  * @phpstan-type IamCredential array{
@@ -21,6 +21,27 @@ use InvalidArgumentException;
  *     origin: 'project'|'registry'|'bucket',
  *     registry: mixed,
  *     storage: mixed,
+ *     ...
+ * }
+ * @phpstan-type IamStorageGrant array{access: string, bucketIds?: ?list<string>}
+ * @phpstan-type IamRegistryGrant array{access: string, repositoryIds?: ?list<string>}
+ * @phpstan-type NewIamCredential array{
+ *     iamUserName: string,
+ *     label: string,
+ *     accessKeyId: string,
+ *     secretAccessKey: string,
+ *     createdAt: string,
+ *     origin: 'project',
+ *     storage: ?array{
+ *         access: 'read'|'write',
+ *         allBuckets: bool,
+ *         buckets: list<array{bucketId: string, bucketName: string}>,
+ *     },
+ *     registry: ?array{
+ *         access: 'pull'|'push',
+ *         allRepositories: bool,
+ *         repositories: list<array{repositoryId: string, repositoryName: string, registryId: string}>,
+ *     },
  *     ...
  * }
  */
@@ -68,6 +89,43 @@ class IamService
     }
 
     /**
+     * Creates an access key for the project's object storage, container registry, or both.
+     *
+     * The response holds `secretAccessKey` exactly once: the API keeps no copy,
+     * so store it now; it cannot be read again.
+     *
+     * @param array{label: string, storage?: ?IamStorageGrant, registry?: ?IamRegistryGrant} $params
+     *     `label` is 1–20 characters. `storage.access` is `read` or `write`;
+     *     `registry.access` is `pull` or `push`. At least one of `storage` and
+     *     `registry` is required. Leaving out `bucketIds` or `repositoryIds`, or
+     *     passing an empty list, grants every bucket or repository, including
+     *     ones created later.
+     *
+     * @return array{success: true, data: NewIamCredential}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function create(array $params, ?string $projectId = null): array
+    {
+        Params::check($params, ['label', 'storage', 'registry'], ['label']);
+        if (!isset($params['storage']) && !isset($params['registry'])) {
+            throw new InvalidArgumentException('storage or registry is required');
+        }
+
+        $body = ['label' => $params['label']];
+        if (isset($params['storage'])) {
+            $body['storage'] = self::grant($params['storage'], 'storage', 'bucketIds');
+        }
+        if (isset($params['registry'])) {
+            $body['registry'] = self::grant($params['registry'], 'registry', 'repositoryIds');
+        }
+
+        /** @var array{success: true, data: NewIamCredential} */
+        return $this->transport->request('POST', $this->basePath($projectId), $body);
+    }
+
+    /**
      * Permanently deletes an IAM credential. The API answers 204, so there is nothing to return.
      *
      * @throws CosmonerError On API errors.
@@ -90,6 +148,27 @@ class IamService
     private function userPath(string $iamUserName, ?string $projectId): string
     {
         return $this->basePath($projectId) . '/' . rawurlencode($iamUserName);
+    }
+
+    /**
+     * Checks one half of a create and builds its body, sending the id list only when given.
+     *
+     * @param array<string, mixed> $grant
+     *
+     * @return array<string, mixed>
+     *
+     * @throws InvalidArgumentException On invalid input.
+     */
+    private static function grant(array $grant, string $name, string $idsKey): array
+    {
+        Params::check($grant, ['access', $idsKey], ['access'], "{$name}.");
+
+        $body = ['access' => $grant['access']];
+        if (isset($grant[$idsKey])) {
+            $body[$idsKey] = $grant[$idsKey];
+        }
+
+        return $body;
     }
 
     /** Rejects an empty IAM user name before it becomes a malformed route. */

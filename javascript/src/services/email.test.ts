@@ -334,3 +334,49 @@ describe("EmailService writes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("EmailService credentials", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("createCredential sends the label and address and returns the password", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ id: "c-1", smtpUsername: "smtp_ab", smtpPassword: "pw" }, 201));
+
+    const result = await client.email.createCredential("ed-1", { label: "app", fromAddress: "noreply@example.com" });
+
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "POST",
+      url: `${P}/email/ed-1/credentials`,
+      body: { label: "app", fromAddress: "noreply@example.com" },
+    });
+    expect(result.data.smtpPassword).toBe("pw");
+  });
+
+  it("deleteCredential sends DELETE and returns nothing for the 204", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply(null, 204));
+
+    await expect(client.email.deleteCredential("ed-1", "c-1", { projectId: "proj-2" })).resolves.toBeUndefined();
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "DELETE",
+      url: "https://api.test.dev/v1/projects/proj-2/email/ed-1/credentials/c-1",
+      body: undefined,
+    });
+  });
+
+  it("requires its arguments before any request", async () => {
+    await expect(client.email.createCredential("", { label: "a", fromAddress: "a@b.c" })).rejects.toThrow("emailDomainId is required");
+    await expect(client.email.createCredential("ed-1", { label: "a", fromAddress: "" })).rejects.toThrow("fromAddress is required");
+    await expect(client.email.deleteCredential("ed-1", "")).rejects.toThrow("credentialId is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

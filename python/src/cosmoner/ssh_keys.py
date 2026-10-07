@@ -18,6 +18,14 @@ def _create_payload(name: str, public_key: str) -> dict[str, Any]:
     return {"name": name, "publicKey": public_key}
 
 
+def _generate_payload(name: str) -> dict[str, Any]:
+    """Validates generate arguments and shapes them into the API request body."""
+    if not name:
+        raise ValueError("name is required")
+
+    return {"name": name}
+
+
 def _require_ssh_key_id(ssh_key_id: str) -> None:
     """Rejects an empty SSH key id before it becomes a malformed route."""
     if not ssh_key_id:
@@ -51,6 +59,20 @@ class SshKeysService:
 
         result: dict[str, Any] = self._transport.request(
             "POST", self._base_path(project_id), json=payload
+        )
+        return result
+
+    def generate(self, *, name: str, project_id: str | None = None) -> dict[str, Any]:
+        """Generates a key pair, registers its public half, and returns both.
+
+        ``privateKey`` is an RSA 4096 key as PKCS#1 PEM, opening with
+        ``-----BEGIN RSA PRIVATE KEY-----``. The API keeps only the public half,
+        so it is returned exactly once: store it now; it cannot be read again.
+        """
+        payload = _generate_payload(name)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", f"{self._base_path(project_id)}/generate", json=payload
         )
         return result
 
@@ -95,6 +117,22 @@ class AsyncSshKeysService:
 
         result: dict[str, Any] = await self._transport.request(
             "POST", self._base_path(project_id), json=payload
+        )
+        return result
+
+    async def generate(
+        self, *, name: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Generates a key pair, registers its public half, and returns both.
+
+        ``privateKey`` is an RSA 4096 key as PKCS#1 PEM, opening with
+        ``-----BEGIN RSA PRIVATE KEY-----``. The API keeps only the public half,
+        so it is returned exactly once: store it now; it cannot be read again.
+        """
+        payload = _generate_payload(name)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", f"{self._base_path(project_id)}/generate", json=payload
         )
         return result
 

@@ -299,9 +299,20 @@ commands are:
 | `cosmoner webhooks test <webhook> [--event <event>]` | Sends a sample event; exits 1 when the delivery failed. |
 | `cosmoner webhooks rotate-secret <webhook>` | Replaces the signing secret, after asking. |
 
-A webhook's signing secret is printed once, by the command that creates or
-rotates it, because the API never returns it again. Save it then; every read
-shows it as `[hidden]`.
+### Credentials
+
+These print a secret exactly once — the API keeps no copy, or only a hash —
+so save it from the command's output. Every read shows it as `[hidden]`.
+
+| Command | Prints |
+| --- | --- |
+| `cosmoner iam create <label> [--storage read\|write] [--buckets <bucket,…>] [--registry pull\|push] [--repositories <repo,…>]` | An access key ID and its secret access key, for object storage, the registry or both. Without `--buckets` or `--repositories` it reaches every bucket or repository, including later ones. |
+| `cosmoner email credentials create <domain> --label <label> --from <address>` | An SMTP username and password, and the server to send through. |
+| `cosmoner ssh-keys generate <name> [--out <file>]` | An RSA private key — or, with `--out`, writes it to `<file>` (mode 600) and `<file>.pub` and prints neither. |
+| `cosmoner webhooks create` / `rotate-secret` | The signing secret. |
+
+`cosmoner email credentials delete <domain> <credential>` removes an SMTP
+login, after asking. `cosmoner iam delete` removes an access key.
 
 ### `cosmoner deploy <app>`
 
