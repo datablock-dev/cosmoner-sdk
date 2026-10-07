@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { run } from "../src/cli";
+import { COMMAND_HELP, HELP, run } from "../src/cli";
 
 /**
  * Drives the CLI the way a user does — a directory, a command line, an exit
@@ -50,6 +50,14 @@ afterEach(() => {
 describe("usage", () => {
   it("prints help with no command", () => {
     expect(cli().stdout).toContain("cosmoner <command>");
+  });
+
+  it("names every command and product in the top-level help", () => {
+    // A command missing here exists only for those who already know it.
+    const words = new Set(HELP.split(/[^a-z-]+/));
+    for (const command of Object.keys(COMMAND_HELP)) {
+      expect(words, `cosmoner --help does not mention "${command}"`).toContain(command);
+    }
   });
 
   it("exits 2 on an unknown command", () => {
