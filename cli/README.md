@@ -238,6 +238,37 @@ scope — is `null`, with the reason under `errors`, and the command still
 succeeds. It exits 1 only when nothing could be read. A CLI login reads every
 product its user can see.
 
+### Ordering
+
+`cosmoner <product> create <name>` orders a paid resource. It prices the order
+with the API first, shows the price, and asks:
+
+```
+$ cosmoner redis create cache --plan valkey-1gb
+This orders Redis "cache": plan valkey-1gb in se-sto.
+It costs $12.00 a month before tax, billed to the project's saved card. About $4.50 is charged now, prorated until 25 Oct 2026.
+Order Redis "cache"? [y/N]
+```
+
+The monthly price is exact. What is charged now is an estimate once the
+project already pays for something, because the charge is prorated onto the
+existing subscription. As with deletes, `--yes` answers in advance, and with no
+terminal and no `--yes` nothing is ordered and the command exits 2.
+
+| Command | Lists the choices |
+| --- | --- |
+| `cosmoner servers create <name> --size <size> --region <region> [--image <image>] [--ssh-keys <key,…>]` | `servers sizes`, `servers regions`, `servers images` |
+| `cosmoner redis create <name> --plan <plan> [--region] [--persistence <mode>]` | `redis plans`, `redis regions` |
+| `cosmoner databases create <name> --size <size> [--version] [--region]` | `databases sizes` |
+| `cosmoner buckets create <name> --region <aws-region> [--tier] [--public] [--versioning] [--cdn]` | |
+| `cosmoner registries create <name> --region <region> [--provider]` | `registries providers` |
+| `cosmoner hosting create <site> [--tier] [--php] [--database <name>] [--extra-storage <gb>]` | `hosting plans` |
+| `cosmoner apps create <name> --size <size> (--image <image> \| --repo <owner/repo>) [options]` | `apps sizes`, `apps regions` |
+| `cosmoner apps resize <app> --size <size>` | `apps sizes` |
+
+A region is optional wherever only one is open. A name already in use is
+refused before anything is priced. `--format json` prints `{ created, price }`.
+
 ### Changing and deleting
 
 `cosmoner <product> delete <name>` (or `rm`) deletes one item for good,
