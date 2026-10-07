@@ -26,6 +26,7 @@ import { runValidate, VALIDATE_HELP } from "./commands/validate";
 import { runVariables, VARIABLES_HELP, VARIABLES_VALUE_FLAGS } from "./commands/variables";
 import { runWhoami, WHOAMI_HELP } from "./commands/whoami";
 import { APP_LOGS_HELP, APP_LOGS_VALUE_FLAGS, runAppLogs } from "./read/app-logs";
+import { OVERVIEW_HELP, runOverview } from "./read/overview";
 import { PRODUCTS } from "./read/products";
 import { READ_VALUE_FLAGS, readHelp, runRead } from "./read/resource";
 
@@ -50,6 +51,7 @@ Commands
   whoami     Show who the CLI is signed in as, and the default project.
 
 Reading what a project has
+  cosmoner get --all                Every product in the project at once.
   cosmoner <product> get [<name>]   List everything, or show one item.
   --format json prints the API's objects, for scripts and agents.
 
@@ -78,6 +80,7 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   use: [],
   logout: [],
   whoami: [],
+  get: READ_VALUE_FLAGS,
   ...Object.fromEntries(
     Object.keys(PRODUCTS).map((name) => [name, name === "apps" ? APP_LOGS_VALUE_FLAGS : READ_VALUE_FLAGS])
   ),
@@ -101,6 +104,7 @@ export const COMMAND_HELP: Record<string, string> = {
   use: USE_HELP,
   logout: LOGOUT_HELP,
   whoami: WHOAMI_HELP,
+  get: OVERVIEW_HELP,
   ...Object.fromEntries(
     Object.entries(PRODUCTS).map(([name, product]) => [
       name,
@@ -178,6 +182,8 @@ export function run(
         return runLogout(args, env).catch((err: unknown) => reportUsage(err, command));
       case "whoami":
         return runWhoami(args, env).catch((err: unknown) => reportUsage(err, command));
+      case "get":
+        return runOverview(args, env).catch((err: unknown) => reportUsage(err, command));
       default: {
         const product = PRODUCTS[command];
         if (!product) return 2;

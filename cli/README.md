@@ -218,6 +218,27 @@ on purpose from the control panel or the SDK when you need it.
 `cosmoner apps logs <app> [--type run|build]` prints an app's recent log lines,
 with the same masking.
 
+### `cosmoner get --all`
+
+Everything a project has in one command: every product's listing, read in
+parallel. In text it prints a section per product; `--format json` prints one
+object, with `project`, a key per product holding its listing, and `errors`.
+
+```json
+{
+  "project": { "id": "…", "name": "Acme", "slug": "acme" },
+  "apps": [ … ],
+  "servers": [],
+  "iam": null,
+  "errors": { "iam": "Missing scope iam:read (FORBIDDEN)" }
+}
+```
+
+A product the credential may not read — an API key without that product's read
+scope — is `null`, with the reason under `errors`, and the command still
+succeeds. It exits 1 only when nothing could be read. A CLI login reads every
+product its user can see.
+
 ### `cosmoner deploy <app>`
 
 Deploys an image app — one that runs an image from a Cosmoner registry — and

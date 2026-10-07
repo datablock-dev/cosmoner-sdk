@@ -136,12 +136,14 @@ function printListing<T>(resource: ReadableResource<T>, rows: T[], format: ReadF
     console.log(`No ${resource.command}.`);
     return;
   }
-  const safe = redact(rows);
-  console.log(
-    renderTable(
-      resource.columns.map((column) => column.header),
-      safe.map((row) => resource.columns.map((column) => cell(column.value(row))))
-    )
+  console.log(renderListing(resource.columns, redact(rows)));
+}
+
+/** Renders already-redacted rows as a table with the given columns. */
+export function renderListing<T>(columns: Column<T>[], rows: T[]): string {
+  return renderTable(
+    columns.map((column) => column.header),
+    rows.map((row) => columns.map((column) => cell(column.value(row))))
   );
 }
 

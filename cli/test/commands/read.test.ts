@@ -295,3 +295,138 @@ describe("reads on a saved CLI session with no default project", () => {
     expect(inside.stderr).toContain("cosmoner use <project>");
   });
 });
+
+describe("cosmoner get --all", () => {
+  const PROJECT_URL = `${BASE}/v1/projects/proj-1`;
+  const LISTINGS = [
+    "apps",
+    "servers",
+    "ssh-keys",
+    "databases",
+    "redis",
+    "domains",
+    "storage/object-storage",
+    "storage/container-registry",
+    "email",
+    "iam",
+    "members",
+    "hosting/shared",
+    "webhooks",
+    "secrets",
+    "variables",
+  ];
+
+  /**
+   * Answers the project and every listing route; `overrides` replaces a
+   * route's data, and a route in `refused` answers 403 as a key without that
+   * scope would get.
+   */
+  function project(overrides: Record<string, unknown> = {}, refused: string[] = []): void {
+    fetchSpy.mockImplementation((input: string | URL | Request) => {
+      const url = String(input);
+      if (refused.includes(url)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ success: false, error: { code: "FORBIDDEN", message: "Missing scope" } }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          })
+        );
+      }
+      if (url in overrides) return Promise.resolve(ok(overrides[url]));
+      if (url === PROJECT_URL) return Promise.resolve(ok({ id: "proj-1", name: "Acme", slug: "acme" }));
+      if (url === `${P}/iam`) return Promise.resolve(ok({ credentials: [], errors: [] }));
+      if (url === `${P}/members`) return Promise.resolve(ok({ members: [], pendingInvitations: [] }));
+      if (LISTINGS.some((route) => url === `${P}/${route}`)) return Promise.resolve(ok([]));
+      throw new Error(`Unexpected request to ${url}`);
+    });
+  }
+
+  it("reads the project and every product in one object", async () => {
+    project({ [`${P}/apps`]: [APP] });
+
+    const result = await cli(["get", "--all", "--format", "json"]);
+
+    expect(result.code).toBe(0);
+    const overview = JSON.parse(result.stdout);
+    expect(overview.project).toEqual({ id: "proj-1", name: "Acme", slug: "acme" });
+    expect(overview.apps).toEqual([APP]);
+    expect(overview.servers).toEqual([]);
+    expect(Object.keys(overview)).toEqual([
+      "project",
+      "apps",
+      "servers",
+      "ssh-keys",
+      "databases",
+      "redis",
+      "domains",
+      "buckets",
+      "registries",
+      "email",
+      "iam",
+      "members",
+      "hosting",
+      "webhooks",
+      "secrets",
+      "variables",
+      "errors",
+    ]);
+    expect(overview.errors).toEqual({});
+    expect(requested()).toHaveLength(LISTINGS.length + 1);
+  });
+
+  it("records a product it may not read instead of failing", async () => {
+    project({}, [`${P}/iam`]);
+
+    const result = await cli(["get", "--all", "--format", "json"]);
+
+    expect(result.code).toBe(0);
+    const overview = JSON.parse(result.stdout);
+    expect(overview.iam).toBeNull();
+    expect(overview.errors).toEqual({ iam: "Missing scope (FORBIDDEN)" });
+    expect(overview.apps).toEqual([]);
+  });
+
+  it("exits 1 when nothing could be read", async () => {
+    project({}, [PROJECT_URL, ...LISTINGS.map((route) => `${P}/${route}`)]);
+
+    const result = await cli(["get", "--all", "--format", "json"]);
+
+    expect(result.code).toBe(1);
+    expect(Object.keys(JSON.parse(result.stdout).errors)).toHaveLength(LISTINGS.length + 1);
+  });
+
+  it("keeps secret names and hides credentials inside listings", async () => {
+    project({
+      [`${P}/secrets`]: [{ id: "s1", name: "DB_PASSWORD", environment: "default", version: 1 }],
+      [`${P}/redis`]: [{ id: "r1", name: "cache", password: "pw-123", url: "redis://:pw-123@cache:6379" }],
+    });
+
+    const result = await cli(["get", "--all", "--format", "json"]);
+
+    const overview = JSON.parse(result.stdout);
+    expect(overview.secrets[0].name).toBe("DB_PASSWORD");
+    expect(overview.redis[0].password).toBe("[hidden]");
+    expect(result.stdout).not.toContain("pw-123");
+  });
+
+  it("prints a section per product in text", async () => {
+    project({ [`${P}/apps`]: [APP] }, [`${P}/iam`]);
+
+    const result = await cli(["get", "--all"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout.split("\n")[0]).toBe("Project Acme (acme)");
+    expect(result.stdout).toMatch(/^APPS \(1\)\nNAME\s+STATUS/m);
+    expect(result.stdout).toMatch(/^SERVERS \(0\)\nNone\.$/m);
+    expect(result.stdout).toMatch(/^IAM\nNot read: Missing scope \(FORBIDDEN\)$/m);
+  });
+
+  it("exits 2 without --all, or with a product, before any request", async () => {
+    expect((await cli(["get"])).code).toBe(2);
+    const named = await cli(["get", "apps"]);
+    expect(named.code).toBe(2);
+    expect(named.stderr).toContain("cosmoner apps get");
+    expect((await cli(["get", "--all", "--format", "yaml"])).code).toBe(2);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
