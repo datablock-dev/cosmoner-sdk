@@ -4,6 +4,17 @@ on:
   push:
     branches: [main]
 
+# One release at a time. Each package's job commits a version bump to main;
+# two runs for merges a minute apart both bumped the CLI from the same base,
+# and the second one's push lost the race and failed on a package.json
+# conflict. Queued runs release from the tip of main instead of their own
+# commit (see the checkout in each publish workflow), so they start from the
+# previous run's bump. GitHub keeps one pending run per group: a third push
+# replaces the pending one, whose changes the newer run releases anyway.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
