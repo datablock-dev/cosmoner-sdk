@@ -178,6 +178,72 @@ class AppsServiceTest extends TestCase
         $this->assertSame(self::BASE, $this->http->requests[0]['url']);
     }
 
+    public function testThrowsWhenAppIdIsEmptyOnGet(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('appId is required');
+
+        $this->client->apps->get('');
+    }
+
+    public function testThrowsWhenAppIdIsEmptyOnLogs(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('appId is required');
+
+        $this->client->apps->logs('', 'RUN');
+    }
+
+    public function testRejectsAnUnknownLogTypeWithoutSendingARequest(): void
+    {
+        foreach (['', 'run', 'DEPLOY'] as $type) {
+            try {
+                $this->client->apps->logs('app-1', $type);
+                $this->fail("Expected an InvalidArgumentException for \"{$type}\"");
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame('type must be "BUILD" or "RUN"', $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testFetchesAnApp(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->appFixture()]);
+
+        $result = $this->client->apps->get('app-1');
+
+        $this->assertSame(['success' => true, 'data' => $this->appFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/app-1', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testFetchesBuildLogs(): void
+    {
+        $lines = [['message' => 'Step 1/4', 'timestamp' => '2026-09-01T12:00:00.000Z']];
+        $this->http->queueJson(200, ['success' => true, 'data' => ['lines' => $lines]]);
+
+        $result = $this->client->apps->logs('app-1', 'BUILD');
+
+        $this->assertSame($lines, $result['data']['lines']);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/app-1/logs?type=BUILD', $this->http->requests[0]['url']);
+    }
+
+    public function testFetchesRuntimeLogsFromAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['lines' => []]]);
+
+        $this->client->apps->logs('app-1', 'RUN', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/apps/app-1/logs?type=RUN',
+            $this->http->requests[0]['url'],
+        );
+    }
+
     public function testDeploysATag(): void
     {
         $this->http->queueJson(202, ['success' => true, 'data' => $this->deploymentFixture()]);

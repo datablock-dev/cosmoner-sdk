@@ -15,6 +15,9 @@ class AppsService
     /** Phases after which a deployment will not change again. */
     public const FINISHED_DEPLOYMENT_PHASES = ['ACTIVE', 'ERROR', 'CANCELED', 'SUPERSEDED'];
 
+    /** Log streams `logs()` can read: the image build, or the running app. */
+    public const LOG_TYPES = ['BUILD', 'RUN'];
+
     public const DEFAULT_POLL_INTERVAL = 3.0;
     public const DEFAULT_WAIT_TIMEOUT = 600.0;
 
@@ -60,6 +63,48 @@ class AppsService
     {
         /** @var array{success: true, data: array<int, array<string, mixed>>} */
         return $this->transport->request('GET', $this->basePath($projectId));
+    }
+
+    /**
+     * Fetches one app by id.
+     *
+     * @return array{success: true, data: array<string, mixed>}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function get(string $appId, ?string $projectId = null): array
+    {
+        self::requireAppId($appId);
+
+        /** @var array{success: true, data: array<string, mixed>} */
+        return $this->transport->request('GET', $this->basePath($projectId) . "/{$appId}");
+    }
+
+    /**
+     * Fetches an app's recent build or runtime log lines.
+     *
+     * @param string $type `BUILD` for the image build, `RUN` for the running app.
+     *
+     * @return array{success: true, data: array{lines: list<array{message: string, timestamp: string}>}}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function logs(string $appId, string $type, ?string $projectId = null): array
+    {
+        self::requireAppId($appId);
+        if (!in_array($type, self::LOG_TYPES, true)) {
+            throw new InvalidArgumentException('type must be "BUILD" or "RUN"');
+        }
+
+        /** @var array{success: true, data: array{lines: list<array{message: string, timestamp: string}>}} */
+        return $this->transport->request(
+            'GET',
+            $this->basePath($projectId) . "/{$appId}/logs",
+            null,
+            ['type' => $type],
+        );
     }
 
     /**

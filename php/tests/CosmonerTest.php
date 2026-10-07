@@ -95,4 +95,20 @@ class CosmonerTest extends TestCase
 
         $this->assertInstanceOf(\Cosmoner\Sdk\EmailService::class, $client->email);
     }
+
+    public function testExposesTheReadNamespaces(): void
+    {
+        $client = new Cosmoner('key-123', 'proj-1');
+
+        $this->assertInstanceOf(\Cosmoner\Sdk\ProjectsService::class, $client->projects);
+        $this->assertInstanceOf(\Cosmoner\Sdk\ServersService::class, $client->servers);
+        $this->assertInstanceOf(\Cosmoner\Sdk\SshKeysService::class, $client->sshKeys);
+        $this->assertInstanceOf(\Cosmoner\Sdk\DatabasesService::class, $client->databases);
+        $this->assertInstanceOf(\Cosmoner\Sdk\RedisService::class, $client->redis);
+        $this->assertInstanceOf(\Cosmoner\Sdk\DomainsService::class, $client->domains);
+        $this->assertInstanceOf(\Cosmoner\Sdk\BucketsService::class, $client->buckets);
+        $this->assertInstanceOf(\Cosmoner\Sdk\RegistriesService::class, $client->registries);
+        $this->assertInstanceOf(\Cosmoner\Sdk\IamService::class, $client->iam);
+        $this->assertInstanceOf(\Cosmoner\Sdk\MembersService::class, $client->members);
+    }
 }
