@@ -160,4 +160,112 @@ class IamServiceTest extends TestCase
 
         $this->assertSame('https://api.test.dev/v1/projects/proj-2/iam/ci%2Fdeploy', $this->http->requests[0]['url']);
     }
+
+    /** @return array<string, mixed> */
+    private function newCredentialFixture(): array
+    {
+        return [
+            'iamUserName' => 'cosmoner-org1-ci',
+            'label' => 'ci',
+            'accessKeyId' => 'AKIAEXAMPLE',
+            'secretAccessKey' => 'secret-example',
+            'createdAt' => '2026-09-01T12:00:00.000Z',
+            'origin' => 'project',
+            'storage' => [
+                'access' => 'write',
+                'allBuckets' => false,
+                'buckets' => [['bucketId' => 'bkt-1', 'bucketName' => 'assets']],
+            ],
+            'registry' => null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function sentBody(): array
+    {
+        return json_decode((string) $this->http->requests[0]['body'], true);
+    }
+
+    public function testCreatesAStorageCredentialAndReturnsTheSecretOnce(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->newCredentialFixture()]);
+
+        $result = $this->client->iam->create([
+            'label' => 'ci',
+            'storage' => ['access' => 'write', 'bucketIds' => ['bkt-1']],
+        ]);
+
+        $this->assertSame(['success' => true, 'data' => $this->newCredentialFixture()], $result);
+        $this->assertSame('secret-example', $result['data']['secretAccessKey']);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE, $this->http->requests[0]['url']);
+        $this->assertSame(
+            ['label' => 'ci', 'storage' => ['access' => 'write', 'bucketIds' => ['bkt-1']]],
+            $this->sentBody(),
+        );
+    }
+
+    public function testSendsOnlyTheGivenHalvesAndIdListsOnCreate(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->newCredentialFixture()]);
+
+        $this->client->iam->create(['label' => 'puller', 'registry' => ['access' => 'pull']]);
+
+        $this->assertSame(['label' => 'puller', 'registry' => ['access' => 'pull']], $this->sentBody());
+    }
+
+    public function testSendsBothHalvesWhenGivenOnCreate(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->newCredentialFixture()]);
+
+        $this->client->iam->create([
+            'label' => 'deploy',
+            'storage' => ['access' => 'read', 'bucketIds' => null],
+            'registry' => ['access' => 'push', 'repositoryIds' => ['repo-1', 'repo-2']],
+        ]);
+
+        $this->assertSame(
+            [
+                'label' => 'deploy',
+                'storage' => ['access' => 'read'],
+                'registry' => ['access' => 'push', 'repositoryIds' => ['repo-1', 'repo-2']],
+            ],
+            $this->sentBody(),
+        );
+    }
+
+    public function testCreatesACredentialInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->newCredentialFixture()]);
+
+        $this->client->iam->create(['label' => 'ci', 'storage' => ['access' => 'read']], 'proj-2');
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-2/iam', $this->http->requests[0]['url']);
+    }
+
+    public function testRejectsInvalidCreateInputWithoutSendingARequest(): void
+    {
+        $cases = [
+            'label is required' => ['label' => '', 'storage' => ['access' => 'read']],
+            'storage or registry is required' => ['label' => 'ci'],
+            'storage.access is required' => ['label' => 'ci', 'storage' => ['access' => '', 'bucketIds' => ['bkt-1']]],
+            'registry.access is required' => ['label' => 'ci', 'registry' => ['access' => '']],
+            'Unknown field "storage.bucket_ids"' => [
+                'label' => 'ci',
+                'storage' => ['access' => 'read', 'bucket_ids' => ['bkt-1']],
+            ],
+            'Unknown field "storageAccess"' => ['label' => 'ci', 'storageAccess' => 'read'],
+        ];
+
+        foreach ($cases as $message => $params) {
+            try {
+                $this->client->iam->create($params);
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }

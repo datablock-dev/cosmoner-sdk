@@ -249,4 +249,129 @@ class EmailServiceTest extends TestCase
 
         $this->assertSame('https://api.test.dev/v1/projects/proj-2/email/ed-1', $this->http->requests[0]['url']);
     }
+
+    /** @return array<string, mixed> */
+    private function newCredentialFixture(): array
+    {
+        return [
+            'id' => 'cred-2',
+            'label' => 'app',
+            'fromAddress' => 'hello@example.com',
+            'smtpUsername' => 'smtp-def',
+            'smtpPassword' => 'smtp-secret',
+            'sentCount' => 0,
+            'createdAt' => '2026-09-01T12:00:00.000Z',
+        ];
+    }
+
+    public function testCreatesACredentialAndReturnsThePasswordOnce(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->newCredentialFixture()]);
+
+        $result = $this->client->email->createCredential(
+            'ed-1',
+            ['label' => 'app', 'fromAddress' => 'hello@example.com'],
+        );
+
+        $this->assertSame(['success' => true, 'data' => $this->newCredentialFixture()], $result);
+        $this->assertSame('smtp-secret', $result['data']['smtpPassword']);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/email/ed-1/credentials',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertSame(['label' => 'app', 'fromAddress' => 'hello@example.com'], $this->sentBody());
+    }
+
+    public function testCreatesACredentialInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->newCredentialFixture()]);
+
+        $this->client->email->createCredential(
+            'ed-1',
+            ['label' => 'app', 'fromAddress' => 'hello@example.com'],
+            'proj-2',
+        );
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/email/ed-1/credentials',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testRejectsInvalidCreateCredentialInputWithoutSendingARequest(): void
+    {
+        $valid = ['label' => 'app', 'fromAddress' => 'hello@example.com'];
+        $cases = [
+            'emailDomainId is required' => fn () => $this->client->email->createCredential('', $valid),
+            'label is required' => fn () => $this->client->email->createCredential(
+                'ed-1',
+                ['label' => '', 'fromAddress' => 'hello@example.com'],
+            ),
+            'fromAddress is required' => fn () => $this->client->email->createCredential(
+                'ed-1',
+                ['label' => 'app', 'fromAddress' => ''],
+            ),
+            'Unknown field "from_address"' => fn () => $this->client->email->createCredential(
+                'ed-1',
+                [...$valid, 'from_address' => 'hello@example.com'],
+            ),
+        ];
+
+        foreach ($cases as $message => $call) {
+            try {
+                $call();
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testRejectsAnEmptyIdOnDeleteCredentialWithoutSendingARequest(): void
+    {
+        $cases = [
+            'emailDomainId is required' => fn () => $this->client->email->deleteCredential('', 'cred-1'),
+            'credentialId is required' => fn () => $this->client->email->deleteCredential('ed-1', ''),
+        ];
+
+        foreach ($cases as $message => $call) {
+            try {
+                $call();
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testDeletesACredentialToleratingTheEmpty204(): void
+    {
+        $this->http->queue(new HttpResponse(204, ''));
+
+        $this->client->email->deleteCredential('ed-1', 'cred-1');
+
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/email/ed-1/credentials/cred-1',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testDeletesACredentialInAnotherProject(): void
+    {
+        $this->http->queue(new HttpResponse(204, ''));
+
+        $this->client->email->deleteCredential('ed-1', 'cred-1', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/email/ed-1/credentials/cred-1',
+            $this->http->requests[0]['url'],
+        );
+    }
 }

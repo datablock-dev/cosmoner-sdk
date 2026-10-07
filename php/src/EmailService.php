@@ -20,6 +20,16 @@ use InvalidArgumentException;
  *     lastUsedAt: ?string,
  *     ...
  * }
+ * @phpstan-type NewEmailCredential array{
+ *     id: string,
+ *     label: string,
+ *     fromAddress: string,
+ *     smtpUsername: string,
+ *     smtpPassword: string,
+ *     sentCount: int,
+ *     createdAt: string,
+ *     ...
+ * }
  * @phpstan-type EmailDnsRecord array{
  *     type: string,
  *     name: string,
@@ -164,6 +174,58 @@ class EmailService
         $project = $this->config->resolveProjectId($projectId);
 
         $this->transport->request('DELETE', "/v1/projects/{$project}/email/{$emailDomainId}");
+    }
+
+    /**
+     * Creates an SMTP credential that sends from one address on an email domain.
+     *
+     * The response holds `smtpPassword` exactly once: the API keeps only a hash,
+     * so store it now; it cannot be read again.
+     *
+     * @param array{label: string, fromAddress: string} $params
+     *     `fromAddress` must be an address on the email domain.
+     *
+     * @return array{success: true, data: NewEmailCredential}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function createCredential(string $emailDomainId, array $params, ?string $projectId = null): array
+    {
+        self::requireEmailDomainId($emailDomainId);
+        Params::check($params, ['label', 'fromAddress'], ['label', 'fromAddress']);
+
+        $project = $this->config->resolveProjectId($projectId);
+
+        /** @var array{success: true, data: NewEmailCredential} */
+        return $this->transport->request(
+            'POST',
+            "/v1/projects/{$project}/email/{$emailDomainId}/credentials",
+            ['label' => $params['label'], 'fromAddress' => $params['fromAddress']],
+        );
+    }
+
+    /**
+     * Permanently deletes an SMTP credential. The API answers 204, so there is nothing to return.
+     *
+     * Anything still sending with the credential stops working.
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function deleteCredential(string $emailDomainId, string $credentialId, ?string $projectId = null): void
+    {
+        self::requireEmailDomainId($emailDomainId);
+        if ($credentialId === '') {
+            throw new InvalidArgumentException('credentialId is required');
+        }
+
+        $project = $this->config->resolveProjectId($projectId);
+
+        $this->transport->request(
+            'DELETE',
+            "/v1/projects/{$project}/email/{$emailDomainId}/credentials/{$credentialId}",
+        );
     }
 
     /** Rejects an empty email domain id before it becomes a malformed route. */

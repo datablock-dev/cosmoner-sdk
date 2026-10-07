@@ -22,18 +22,23 @@ final class Params
      * @param array<string, mixed> $params
      * @param list<string>         $allowed  Every key the method takes, required ones included.
      * @param list<string>         $required Keys that must be present and non-empty, in check order.
+     * @param string               $prefix   Put before each key named in a message, such as
+     *                                       `storage.` for a nested array.
      *
      * @throws InvalidArgumentException On invalid input.
      */
-    public static function check(array $params, array $allowed, array $required): void
+    public static function check(array $params, array $allowed, array $required, string $prefix = ''): void
     {
-        $unknown = array_diff(array_keys($params), $allowed);
+        $unknown = array_map(
+            static fn (int|string $key): string => $prefix . $key,
+            array_values(array_diff(array_keys($params), $allowed)),
+        );
         if ($unknown !== []) {
             throw new InvalidArgumentException('Unknown field "' . implode('", "', $unknown) . '"');
         }
         foreach ($required as $key) {
             if (!isset($params[$key]) || $params[$key] === '') {
-                throw new InvalidArgumentException("{$key} is required");
+                throw new InvalidArgumentException("{$prefix}{$key} is required");
             }
         }
     }

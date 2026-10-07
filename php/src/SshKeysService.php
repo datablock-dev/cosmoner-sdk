@@ -7,7 +7,7 @@ namespace Cosmoner\Sdk;
 use InvalidArgumentException;
 
 /**
- * Lists, adds and deletes a project's SSH keys.
+ * Lists, adds, generates and deletes a project's SSH keys.
  *
  * The API returns more fields than the shapes below declare.
  *
@@ -26,6 +26,16 @@ use InvalidArgumentException;
  *     publicKey: string,
  *     fingerprint: string,
  *     createdAt: string,
+ *     ...
+ * }
+ * @phpstan-type GeneratedSshKey array{
+ *     id: string,
+ *     name: string,
+ *     publicKey: string,
+ *     fingerprint: string,
+ *     createdAt: string,
+ *     updatedAt: string,
+ *     privateKey: string,
  *     ...
  * }
  */
@@ -78,6 +88,28 @@ class SshKeysService
             $this->basePath($projectId),
             ['name' => $name, 'publicKey' => $publicKey],
         );
+    }
+
+    /**
+     * Generates a key pair on the API, adds its public half to the project and returns both halves.
+     *
+     * The response holds `privateKey` exactly once — an RSA 4096 key in PEM
+     * (PKCS#1, `-----BEGIN RSA PRIVATE KEY-----`). The API keeps no copy, so
+     * store it now; it cannot be read again.
+     *
+     * @return array{success: true, data: GeneratedSshKey}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function generate(string $name, ?string $projectId = null): array
+    {
+        if ($name === '') {
+            throw new InvalidArgumentException('name is required');
+        }
+
+        /** @var array{success: true, data: GeneratedSshKey} */
+        return $this->transport->request('POST', $this->basePath($projectId) . '/generate', ['name' => $name]);
     }
 
     /**

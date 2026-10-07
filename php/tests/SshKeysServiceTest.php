@@ -147,4 +147,48 @@ class SshKeysServiceTest extends TestCase
 
         $this->assertSame('https://api.test.dev/v1/projects/proj-2/ssh-keys/key-1', $this->http->requests[0]['url']);
     }
+
+    public function testThrowsWhenNameIsEmptyOnGenerate(): void
+    {
+        try {
+            $this->client->sshKeys->generate('');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('name is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testGeneratesAKeyPairAndReturnsThePrivateKeyOnce(): void
+    {
+        $generated = [
+            ...$this->keyFixture(),
+            'publicKey' => 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQExample',
+            'privateKey' => "-----BEGIN RSA PRIVATE KEY-----\nMIIJKQIBAAKCAgEA\n-----END RSA PRIVATE KEY-----\n",
+        ];
+        $this->http->queueJson(201, ['success' => true, 'data' => $generated]);
+
+        $result = $this->client->sshKeys->generate('laptop');
+
+        $this->assertSame(['success' => true, 'data' => $generated], $result);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-1/ssh-keys/generate',
+            $this->http->requests[0]['url'],
+        );
+        $this->assertSame(['name' => 'laptop'], json_decode((string) $this->http->requests[0]['body'], true));
+    }
+
+    public function testGeneratesAKeyPairInAnotherProject(): void
+    {
+        $this->http->queueJson(201, ['success' => true, 'data' => $this->keyFixture()]);
+
+        $this->client->sshKeys->generate('laptop', 'proj-2');
+
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/ssh-keys/generate',
+            $this->http->requests[0]['url'],
+        );
+    }
 }
