@@ -154,9 +154,8 @@ Logged in as dana@example.com, until 2026-11-06 at the latest.
 Pick a default project with cosmoner use <project>, or pass --project to each command.
 ```
 
-What the login may do is limited twice: by the scopes `deploy`, `upload`,
-`secrets` and `variables` need, listed on the approval page before anything is
-issued, and by your role in each project. It renews itself while you use it
+The login acts as you: it can do what your role allows in each project.
+Members, API keys and billing stay in the control panel. It renews itself while you use it
 and ends after 7 days unused or 30 days after approval. Each machine is listed
 under **Account → Security**, where you can sign it out. `--no-browser` prints
 the link instead of opening it, for a machine reached over SSH.
