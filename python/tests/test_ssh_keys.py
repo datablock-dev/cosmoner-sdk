@@ -228,3 +228,106 @@ class TestAsyncSshKeyWrites:
                 await client.ssh_keys.delete("")
 
         assert httpx_mock.get_requests() == []
+
+
+PRIVATE_KEY = (
+    "-----BEGIN RSA PRIVATE KEY-----\nMIIJKQIBAAKCAgEA\n-----END RSA PRIVATE KEY-----\n"
+)
+
+GENERATED = {
+    "id": "key-3",
+    "name": "deploy",
+    "publicKey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ deploy",
+    "fingerprint": "SHA256:def",
+    "createdAt": "2026-09-01T12:00:00.000Z",
+    "updatedAt": "2026-09-01T12:00:00.000Z",
+    "privateKey": PRIVATE_KEY,
+}
+
+
+class TestSshKeyGenerate:
+    """Tests for generating an SSH key pair via mocked HTTP."""
+
+    def test_generates_a_key_returning_the_private_half_once(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/generate",
+            status_code=201,
+            json={"success": True, "data": GENERATED},
+        )
+
+        result = client.ssh_keys.generate(name="deploy")
+
+        assert result == {"success": True, "data": GENERATED}
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"name": "deploy"}
+
+    def test_generates_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/ssh-keys/generate",
+            status_code=201,
+            json={"success": True, "data": GENERATED},
+        )
+
+        client.ssh_keys.generate(name="deploy", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "POST"
+
+    def test_requires_a_name_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="name is required"):
+            client.ssh_keys.generate(name="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncSshKeyGenerate:
+    """Tests for generating an SSH key pair through the async client."""
+
+    async def test_generates_a_key_returning_the_private_half_once(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/generate",
+            status_code=201,
+            json={"success": True, "data": GENERATED},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.ssh_keys.generate(name="deploy")
+
+        assert result == {"success": True, "data": GENERATED}
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"name": "deploy"}
+
+    async def test_generates_in_another_project(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/ssh-keys/generate",
+            status_code=201,
+            json={"success": True, "data": GENERATED},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.ssh_keys.generate(name="deploy", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "POST"
+
+    async def test_requires_a_name_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="name is required"):
+                await client.ssh_keys.generate(name="")
+
+        assert httpx_mock.get_requests() == []

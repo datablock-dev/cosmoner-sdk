@@ -407,3 +407,208 @@ class TestAsyncEmailDomainDelete:
                 await client.email.delete_domain("")
 
         assert httpx_mock.get_requests() == []
+
+
+SMTP_CREDENTIAL = {
+    "id": "cred-2",
+    "label": "Receipts",
+    "fromAddress": "receipts@acme.test",
+    "smtpUsername": "smtp_acme_2",
+    "smtpPassword": "s3cr3t-smtp-password",
+    "sentCount": 0,
+    "createdAt": "2026-09-03T12:00:00.000Z",
+}
+
+
+class TestEmailCredentials:
+    """Tests for issuing and revoking SMTP credentials via mocked HTTP."""
+
+    def test_issues_a_credential_returning_the_password_once(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{DOMAINS}/ed-1/credentials",
+            status_code=201,
+            json={"success": True, "data": SMTP_CREDENTIAL},
+        )
+
+        result = client.email.create_credential(
+            "ed-1", label="Receipts", from_address="receipts@acme.test"
+        )
+
+        assert result == {"success": True, "data": SMTP_CREDENTIAL}
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {
+            "label": "Receipts",
+            "fromAddress": "receipts@acme.test",
+        }
+
+    def test_issues_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/ed-1/credentials",
+            status_code=201,
+            json={"success": True, "data": SMTP_CREDENTIAL},
+        )
+
+        client.email.create_credential(
+            "ed-1",
+            label="Receipts",
+            from_address="receipts@acme.test",
+            project_id="proj-2",
+        )
+
+        assert httpx_mock.get_request().method == "POST"
+
+    @pytest.mark.parametrize(
+        ("email_domain_id", "label", "from_address", "message"),
+        [
+            ("", "Receipts", "receipts@acme.test", "email_domain_id is required"),
+            ("ed-1", "", "receipts@acme.test", "label is required"),
+            ("ed-1", "Receipts", "", "from_address is required"),
+        ],
+    )
+    def test_rejects_an_empty_argument_before_any_request(
+        self, client, httpx_mock, email_domain_id, label, from_address, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            client.email.create_credential(
+                email_domain_id, label=label, from_address=from_address
+            )
+
+        assert httpx_mock.get_requests() == []
+
+    def test_revokes_a_credential_tolerating_the_empty_204(self, client, httpx_mock):
+        httpx_mock.add_response(url=f"{DOMAINS}/ed-1/credentials/cred-2", status_code=204)
+
+        assert client.email.delete_credential("ed-1", "cred-2") is None
+        assert httpx_mock.get_request().method == "DELETE"
+
+    def test_revokes_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/ed-1/credentials/cred-2",
+            status_code=204,
+        )
+
+        client.email.delete_credential("ed-1", "cred-2", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    @pytest.mark.parametrize(
+        ("email_domain_id", "credential_id", "message"),
+        [
+            ("", "cred-2", "email_domain_id is required"),
+            ("ed-1", "", "credential_id is required"),
+        ],
+    )
+    def test_revoke_rejects_an_empty_id_before_any_request(
+        self, client, httpx_mock, email_domain_id, credential_id, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            client.email.delete_credential(email_domain_id, credential_id)
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncEmailCredentials:
+    """Tests for issuing and revoking SMTP credentials through the async client."""
+
+    async def test_issues_a_credential_returning_the_password_once(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{DOMAINS}/ed-1/credentials",
+            status_code=201,
+            json={"success": True, "data": SMTP_CREDENTIAL},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.email.create_credential(
+                "ed-1", label="Receipts", from_address="receipts@acme.test"
+            )
+
+        assert result == {"success": True, "data": SMTP_CREDENTIAL}
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        assert json.loads(request.content) == {
+            "label": "Receipts",
+            "fromAddress": "receipts@acme.test",
+        }
+
+    async def test_issues_in_another_project(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/ed-1/credentials",
+            status_code=201,
+            json={"success": True, "data": SMTP_CREDENTIAL},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.email.create_credential(
+                "ed-1",
+                label="Receipts",
+                from_address="receipts@acme.test",
+                project_id="proj-2",
+            )
+
+        assert httpx_mock.get_request().method == "POST"
+
+    async def test_revokes_a_credential_tolerating_the_empty_204(self, httpx_mock):
+        httpx_mock.add_response(url=f"{DOMAINS}/ed-1/credentials/cred-2", status_code=204)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.email.delete_credential("ed-1", "cred-2") is None
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_revokes_in_another_project(self, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/email/ed-1/credentials/cred-2",
+            status_code=204,
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.email.delete_credential("ed-1", "cred-2", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "DELETE"
+
+    async def test_rejects_empty_arguments_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="email_domain_id is required"):
+                await client.email.create_credential(
+                    "", label="Receipts", from_address="receipts@acme.test"
+                )
+            with pytest.raises(ValueError, match="label is required"):
+                await client.email.create_credential(
+                    "ed-1", label="", from_address="receipts@acme.test"
+                )
+            with pytest.raises(ValueError, match="from_address is required"):
+                await client.email.create_credential(
+                    "ed-1", label="Receipts", from_address=""
+                )
+            with pytest.raises(ValueError, match="email_domain_id is required"):
+                await client.email.delete_credential("", "cred-2")
+            with pytest.raises(ValueError, match="credential_id is required"):
+                await client.email.delete_credential("ed-1", "")
+
+        assert httpx_mock.get_requests() == []

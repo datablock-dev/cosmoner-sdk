@@ -43,6 +43,22 @@ def _require_email_domain_id(email_domain_id: str) -> None:
         raise ValueError("email_domain_id is required")
 
 
+def _require_credential_id(credential_id: str) -> None:
+    """Rejects an empty SMTP credential id before it becomes a malformed route."""
+    if not credential_id:
+        raise ValueError("credential_id is required")
+
+
+def _credential_payload(label: str, from_address: str) -> dict[str, Any]:
+    """Validates credential arguments and shapes them into the API request body."""
+    if not label:
+        raise ValueError("label is required")
+    if not from_address:
+        raise ValueError("from_address is required")
+
+    return {"label": label, "fromAddress": from_address}
+
+
 class EmailService:
     """Synchronous email operations for a project."""
 
@@ -107,6 +123,45 @@ class EmailService:
 
         self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/{email_domain_id}"
+        )
+
+    def create_credential(
+        self,
+        email_domain_id: str,
+        *,
+        label: str,
+        from_address: str,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Issues an SMTP credential that sends from ``from_address``.
+
+        ``from_address`` must be an address on the domain. ``smtpPassword`` in the
+        response is returned exactly once: store it now; it cannot be read again.
+        """
+        _require_email_domain_id(email_domain_id)
+        payload = _credential_payload(label, from_address)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST",
+            f"{self._base_path(project_id)}/{email_domain_id}/credentials",
+            json=payload,
+        )
+        return result
+
+    def delete_credential(
+        self, email_domain_id: str, credential_id: str, *, project_id: str | None = None
+    ) -> None:
+        """Permanently revokes an SMTP credential. This cannot be undone.
+
+        Anything still sending with it stops working. The API answers 204, so
+        nothing is returned.
+        """
+        _require_email_domain_id(email_domain_id)
+        _require_credential_id(credential_id)
+
+        self._transport.request(
+            "DELETE",
+            f"{self._base_path(project_id)}/{email_domain_id}/credentials/{credential_id}",
         )
 
 
@@ -174,4 +229,43 @@ class AsyncEmailService:
 
         await self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/{email_domain_id}"
+        )
+
+    async def create_credential(
+        self,
+        email_domain_id: str,
+        *,
+        label: str,
+        from_address: str,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Issues an SMTP credential that sends from ``from_address``.
+
+        ``from_address`` must be an address on the domain. ``smtpPassword`` in the
+        response is returned exactly once: store it now; it cannot be read again.
+        """
+        _require_email_domain_id(email_domain_id)
+        payload = _credential_payload(label, from_address)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST",
+            f"{self._base_path(project_id)}/{email_domain_id}/credentials",
+            json=payload,
+        )
+        return result
+
+    async def delete_credential(
+        self, email_domain_id: str, credential_id: str, *, project_id: str | None = None
+    ) -> None:
+        """Permanently revokes an SMTP credential. This cannot be undone.
+
+        Anything still sending with it stops working. The API answers 204, so
+        nothing is returned.
+        """
+        _require_email_domain_id(email_domain_id)
+        _require_credential_id(credential_id)
+
+        await self._transport.request(
+            "DELETE",
+            f"{self._base_path(project_id)}/{email_domain_id}/credentials/{credential_id}",
         )

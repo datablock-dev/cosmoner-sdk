@@ -111,6 +111,8 @@ Set `max_retries=0` to disable retries entirely.
 | `list_domains(*, project_id=None)` | Every sending domain with its SMTP credentials and DNS records |
 | `get_domain(email_domain_id, *, project_id=None)` | One sending domain; adds `sending` (`identity`, `billingRequired`) |
 | `delete_domain(email_domain_id, *, project_id=None)` | Permanently removes a sending domain; the API answers 204, so it returns `None` |
+| `create_credential(email_domain_id, *, label, from_address, project_id=None)` | Issues an SMTP credential; `from_address` must be on the domain. Returns `smtpPassword` once |
+| `delete_credential(email_domain_id, credential_id, *, project_id=None)` | Revokes an SMTP credential, so anything sending with it stops working; returns `None` |
 
 ## Apps
 
@@ -198,19 +200,38 @@ one before sending anything. Every `delete` is permanent.
 | `projects` | `list()`, `get(project)` — by id or slug |
 | `catalog` | `server_sizes()`, `server_regions()`, `server_images()`, `redis_plans()`, `redis_regions()`, `databases()`, `app_sizes()`, `app_regions()` — what can be created; account-wide, so never uses the default project |
 | `servers` | `list()`, `get(server_id)` — adds the installed `sshKeys`; `preview(*, size, provider=None)`, `create(*, name, size, region, image=None, ssh_key_ids=None, provider=None)`, `delete(server_id)` |
-| `ssh_keys` | `list()`, `create(*, name, public_key)`, `delete(ssh_key_id)` — see below |
+| `ssh_keys` | `list()`, `create(*, name, public_key)`, `generate(*, name)` — returns `privateKey` once; `delete(ssh_key_id)` — see below |
 | `databases` | `list()` (every kind), `list_dedicated()`, `get_dedicated(database_id)`, `preview_dedicated(*, size)`, `create_dedicated(*, name, size, version, region, engine=None)`, `delete_dedicated(database_id)`, `list_shared()`, `get_shared(tenant_id)`, `delete_shared(tenant_id)` |
 | `redis` | `list()`, `get(redis_id)`, `preview(*, plan)`, `create(*, name, plan, region, persistence=None)`, `delete(redis_id)` |
 | `domains` | `list()`, `get(domain)`, `create(name)`, `verify(domain)`, `delete(domain)` — by id or name, such as `example.com` |
 | `buckets` | `list()` — there is no single-bucket read; `preview(*, tier=None)`, `create(*, name, region, tier=None, public_access=None, versioning=None, cdn_enabled=None)`, `delete(bucket_id)` also deletes every object in it and its access credentials |
 | `registries` | `list()`, `get(registry_id)`, `preview()`, `providers()`, `create(*, name, region, provider=None)`, `delete(registry_id)` — also deletes every repository and image in it |
-| `iam` | `list()`, `get(iam_user_name)` — the list holds `credentials` plus partial-failure `errors`; `delete(iam_user_name)` returns `None` |
+| `iam` | `list()`, `get(iam_user_name)` — the list holds `credentials` plus partial-failure `errors`; `create(*, label, storage_access=None, bucket_ids=None, registry_access=None, repository_ids=None)` — returns `secretAccessKey` once; `delete(iam_user_name)` returns `None` |
 | `members` | `list()` — members and pending invitations |
 
 Two of these return a credential, and each needs only the namespace's read
 scope, so guard keys that carry it: `databases.get_dedicated` always includes
 `connectionUri`, a full connection URI with the password, and `redis.get`
 always includes the plaintext `password`.
+
+### Credentials returned once
+
+`iam.create`, `email.create_credential` and `ssh_keys.generate` each return a
+credential exactly once — `secretAccessKey`, `smtpPassword` and `privateKey`.
+The API keeps only a hash or nothing at all, so no later read returns it: store
+it from that response.
+
+```python
+key = client.iam.create(label="CI", storage_access="read", bucket_ids=["bkt-1"])
+key["data"]["secretAccessKey"]  # store it now; it cannot be read again
+```
+
+`iam.create` needs at least one of `storage_access` (`"read"` or `"write"`) and
+`registry_access` (`"pull"` or `"push"`), and `label` is 1–20 characters.
+Omitting `bucket_ids` or `repository_ids`, or passing an empty list, grants
+every bucket or repository, including ones created later. Passing ids without
+their access raises `ValueError`. `ssh_keys.generate` returns an RSA 4096 key in
+PKCS#1 PEM (`-----BEGIN RSA PRIVATE KEY-----`) and registers its public half.
 
 `domains.create` adds a domain you already own; buying one is not available
 through the SDK. Its response carries `verificationRecord`, the TXT record to
