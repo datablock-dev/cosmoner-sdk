@@ -1,11 +1,11 @@
 /**
- * `cosmoner` — command line tools for Cosmoner deployment files and deploys.
+ * `cosmoner` — the Cosmoner command line: a project's resources, deploys, and
+ * the deployment file.
  *
  * The file commands run offline. Validating a file needs no account, and a
  * check that reaches the network is a check that fails when the network does,
- * which is not what anyone wants guarding a push. `deploy`, `upload`,
- * `secrets`, `variables`, `use` and the login commands are the exceptions by nature,
- * and only they read a credential.
+ * which is not what anyone wants guarding a push. Every other command reads a
+ * credential.
  */
 
 import { readFileSync } from "node:fs";
@@ -30,52 +30,47 @@ import { OVERVIEW_HELP, runOverview } from "./read/overview";
 import { PRODUCTS } from "./read/products";
 import { productHelp, productValueFlags, READ_VALUE_FLAGS, runProduct } from "./read/resource";
 
-const HELP = `cosmoner — tools for .cosmoner/deployment.yaml
+/** The top-level help. Exported so a test can hold it to every command that exists. */
+export const HELP = `cosmoner — the Cosmoner command line
 
 Usage
   cosmoner <command> [options]
+  cosmoner <product> <verb> [<name>] [options]
 
-Commands
+What a project has
+  apps  servers  databases  redis  buckets  registries  hosting  domains
+  email  iam  ssh-keys  webhooks  secrets  variables  members  projects
+
+  cosmoner <product> get [<name>]   List everything, or show one item.
+  cosmoner get --all                Every product in the project at once.
+  cosmoner <product> create <name>  Order or add one. Paid orders show the
+                                    price and ask first.
+  cosmoner <product> delete <name>  Delete one. Asks first.
+  cosmoner <product> --help         Every verb a product has: update, resize,
+                                    verify, logs, sizes, plans and more.
+
+  --project <project> picks the project; the default is set with use.
+  --format json prints the API's objects, for scripts and agents.
+  --yes answers a confirmation in advance, for scripts.
+
+Deploying
+  deploy     Deploy an image app and wait for it to go live.
+  upload     Upload a folder to a web hosting site over SFTP.
+
+Deployment files — offline: no account, no API key, no network
   validate   Check a deployment file against the format the platform reads.
   fmt        Rewrite a deployment file in canonical form.
   init       Write a starter deployment file.
   schema     Print the JSON Schema for the file.
-  agents     Write deploy instructions for coding agents into AGENTS.md.
-  deploy     Deploy an image app and wait for it to go live.
-  upload     Upload a folder to a web hosting site over SFTP.
-  secrets    List, set and remove a project's secrets.
-  variables  List, set and remove a project's variables.
+  agents     Write instructions for coding agents into AGENTS.md.
+
+Signing in
   login      Sign in through the browser, to every project you are a member of.
   use        Set the project commands act on by default.
-  logout     Sign this machine out.
   whoami     Show who the CLI is signed in as, and the default project.
+  logout     Sign this machine out.
 
-Reading what a project has
-  cosmoner get --all                Every product in the project at once.
-  cosmoner <product> get [<name>]   List everything, or show one item.
-  --format json prints the API's objects, for scripts and agents.
-
-  projects  apps  servers  ssh-keys  databases  redis  domains  buckets
-  registries  email  iam  members  hosting  webhooks  secrets  variables
-
-  cosmoner apps logs <app> prints an app's recent log lines.
-
-Changing what a project has
-  cosmoner <product> create <name>  Order servers, redis, databases, buckets,
-                                    registries, hosting and apps. Shows the
-                                    price and asks first; --yes skips it.
-  cosmoner <product> delete <name>  Delete one item. Asks first; --yes skips it.
-  apps update|resize, ssh-keys create, domains create|verify,
-  webhooks create|update|test|rotate-secret.
-
-  servers sizes|regions|images, redis plans|regions, databases sizes,
-  apps sizes|regions, registries providers and hosting plans list what can
-  be ordered.
-
-  cosmoner <command> --help for a command's options.
-
-validate, fmt, init, schema and agents work offline: no account, no API key,
-no network.`;
+cosmoner <command> --help for a command's options.`;
 
 /** Flags taking a separate value, per command, for the argument parser. */
 const VALUE_FLAGS: Record<string, readonly string[]> = {
