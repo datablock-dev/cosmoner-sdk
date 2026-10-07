@@ -238,6 +238,40 @@ scope — is `null`, with the reason under `errors`, and the command still
 succeeds. It exits 1 only when nothing could be read. A CLI login reads every
 product its user can see.
 
+### Changing and deleting
+
+`cosmoner <product> delete <name>` (or `rm`) deletes one item for good,
+resolving the name as `get` does. It says what goes with the item and asks
+first:
+
+```
+$ cosmoner redis delete cache
+This deletes redis "cache". Its data goes with it, and its billing stops. It cannot be undone.
+Delete redis "cache"? [y/N]
+```
+
+`--yes` answers in advance, for scripts. With no terminal and no `--yes` — CI,
+or an agent's shell — it changes nothing and exits 2, rather than waiting on
+an answer that cannot come.
+
+Every product except `projects` and `members` can be deleted. The other write
+commands are:
+
+| Command | |
+| --- | --- |
+| `cosmoner ssh-keys create <name> --public-key <file\|->` | Adds a public key. |
+| `cosmoner domains create <domain>` | Adds a domain you own and prints the TXT record to publish. |
+| `cosmoner domains verify <domain>` | Checks that record; exits 1 until it is visible. |
+| `cosmoner apps update <app> [options]` | Changes name, instances, build and run commands, ports, auto-deploy and the image deploy policy. An empty value clears a setting. |
+| `cosmoner webhooks create <name> --url <url> --events <event,…>` | Creates an endpoint and prints its signing secret. |
+| `cosmoner webhooks update <webhook> [options]` | Changes it; `--enable` and `--disable` switch it on and off. |
+| `cosmoner webhooks test <webhook> [--event <event>]` | Sends a sample event; exits 1 when the delivery failed. |
+| `cosmoner webhooks rotate-secret <webhook>` | Replaces the signing secret, after asking. |
+
+A webhook's signing secret is printed once, by the command that creates or
+rotates it, because the API never returns it again. Save it then; every read
+shows it as `[hidden]`.
+
 ### `cosmoner deploy <app>`
 
 Deploys an image app — one that runs an image from a Cosmoner registry — and

@@ -63,11 +63,11 @@ export interface ReadableResource<T> {
   /** The scope writes need, named when the credential is missing. */
   writeScope?: string;
   /** Verbs beyond get, list and delete — create, update, verify — keyed by verb. */
-  actions?: Record<string, ProductAction>;
+  actions?: Record<string, ProductAction<T>>;
 }
 
 /** A product-specific verb, such as `cosmoner ssh-keys create`. */
-export interface ProductAction {
+export interface ProductAction<T> {
   /** The usage line after `cosmoner <product> `: `create <name> --public-key <file>`. */
   usage: string;
   /** Its help text, under the usage line. */
@@ -76,7 +76,8 @@ export interface ProductAction {
   valueFlags: readonly string[];
   /** Flags that take no value. `help` is always accepted. */
   switches?: readonly string[];
-  run: (args: ParsedArgs, env: NodeJS.ProcessEnv) => Promise<number>;
+  /** Runs the verb. `resource` is the product it belongs to, for resolving names. */
+  run: (args: ParsedArgs, env: NodeJS.ProcessEnv, resource: ReadableResource<T>) => Promise<number>;
 }
 
 /** Flags every read command takes. */
@@ -108,7 +109,7 @@ export function runProduct<T>(resource: ReadableResource<T>, args: ParsedArgs, e
   const action = verb === undefined ? undefined : resource.actions?.[verb];
   if (action) {
     rejectUnknownFlags(args, [...action.valueFlags, ...(action.switches ?? []), "help"]);
-    return action.run(args, env);
+    return action.run(args, env, resource);
   }
   return runRead(resource, args, env);
 }
@@ -127,7 +128,9 @@ export function productHelp<T>(resource: ReadableResource<T>): string {
 function deleteHelp<T>(resource: ReadableResource<T>): string {
   return `cosmoner ${resource.command} delete <${resource.noun}> [--yes]
 
-Deletes a ${resource.noun}, named by its ${resource.refHelp}. \`rm\` is the same.${resource.removeWarning ? ` ${resource.removeWarning}` : ""}
+Deletes the ${resource.noun} named by its ${resource.refHelp}, for good. \`rm\` is the
+same.${resource.removeWarning ? `\n${resource.removeWarning}` : ""}
+
 Asks first in a terminal; --yes skips the question. Without a terminal and
 without --yes it changes nothing and exits 2.
 
@@ -196,6 +199,16 @@ export async function runRead<T>(resource: ReadableResource<T>, args: ParsedArgs
   }
 }
 
+/**
+ * Finds the listed item a reference names, saying so on stderr when nothing
+ * matches. Write verbs resolve names the same way `get` does.
+ */
+export async function findRow<T>(resource: ReadableResource<T>, client: Cosmoner, ref: string): Promise<T | undefined> {
+  const row = (await resource.list(client)).find((candidate) => resource.matches(candidate, ref));
+  if (!row) console.error(`No ${resource.noun} "${ref}"${resource.projectScoped ? " in this project" : ""}.`);
+  return row;
+}
+
 /** Runs `cosmoner <product> delete <ref>`, returning the exit code. */
 async function runDelete<T>(resource: ReadableResource<T>, args: ParsedArgs, env: NodeJS.ProcessEnv): Promise<number> {
   rejectUnknownFlags(args, DELETE_FLAGS);
@@ -209,11 +222,8 @@ async function runDelete<T>(resource: ReadableResource<T>, args: ParsedArgs, env
   const client = await makeClient(args, env, scope, { requireProject: resource.projectScoped });
 
   try {
-    const row = (await resource.list(client)).find((candidate) => resource.matches(candidate, ref));
-    if (!row) {
-      console.error(`No ${resource.noun} "${ref}"${resource.projectScoped ? " in this project" : ""}.`);
-      return 1;
-    }
+    const row = await findRow(resource, client, ref);
+    if (!row) return 1;
 
     const summary = `This deletes ${resource.noun} "${ref}".${resource.removeWarning ? ` ${resource.removeWarning}` : ""} It cannot be undone.`;
     const refused = refusal(await confirm(args, summary, `Delete ${resource.noun} "${ref}"?`));

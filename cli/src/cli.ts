@@ -60,6 +60,11 @@ Reading what a project has
 
   cosmoner apps logs <app> prints an app's recent log lines.
 
+Changing what a project has
+  cosmoner <product> delete <name>  Delete one item. Asks first; --yes skips it.
+  ssh-keys create, domains create|verify, apps update,
+  webhooks create|update|test|rotate-secret.
+
   cosmoner <command> --help for a command's options.
 
 validate, fmt, init, schema and agents work offline: no account, no API key,
