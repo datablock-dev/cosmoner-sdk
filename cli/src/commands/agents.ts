@@ -152,7 +152,7 @@ export function agentsSection(options: { deploymentFile: string; exists: boolean
     "- Credentials come only from `COSMONER_API_KEY` and `COSMONER_PROJECT_ID` in the environment, or from `cosmoner login`, which reaches every project the user is a member of: pass `--project <project>` or rely on the default set with `cosmoner use`. No flag takes a key. Never write a key into a file, a command line or a commit. `cosmoner whoami` shows which credential and project are in use.",
     "- Secrets are write-only: a value is returned only by the call that sets it, and nothing reads it back. Never print, log or commit a secret value. Pipe it in, as `cosmoner secrets set <NAME> --environment <env>` reads stdin; `--value` leaves it in shell history.",
     "- `cosmoner webhooks create`, `cosmoner webhooks rotate-secret`, `cosmoner iam create`, `cosmoner email credentials create`, `cosmoner databases rotate-password` and `cosmoner ssh-keys generate` print a secret once, because the API never returns it again. Hand it to the user, or store it with `cosmoner secrets set`; never write it into a file or a commit. Prefer `cosmoner ssh-keys generate --out <file>`, which writes the private key to a file the user owns instead of printing it.",
-    "- A 403 when setting a secret or variable with a correctly scoped key means the key's owner is not a project owner or admin. Retrying will not help.",
+    "- A 403 when setting a secret or variable with a correctly scoped key means the role it acts with is not owner or admin: a project key's service account, or the user for a login or personal access token. Retrying will not help.",
     "",
     "### Docs",
     "",
