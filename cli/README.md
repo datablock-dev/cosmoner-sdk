@@ -186,6 +186,12 @@ Using Acme Web (acme-web) by default.
 the default project, after checking the login still works. `cosmoner logout`
 signs this machine out and deletes the saved login.
 
+With `COSMONER_API_KEY` set, `cosmoner whoami` shows which key it is and who it
+acts as. A project key acts as one of its project's service accounts, and
+`whoami` names that account and its role — the role a secret or variable write
+is checked against. A personal access token acts as you. A key the API refuses
+exits 1, so a CI job can check its key before it deploys.
+
 ### `cosmoner <product> get [<name>]`
 
 Reads what a project has. With no name it lists everything; with one it shows

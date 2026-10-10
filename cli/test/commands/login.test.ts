@@ -664,3 +664,82 @@ describe("cosmoner whoami with a session", () => {
     expect(result.stderr).toContain("expired");
   });
 });
+
+describe("cosmoner whoami with COSMONER_API_KEY", () => {
+  const KEY = { id: "k1", name: "github actions", start: "cos_pk_ab", expiresAt: null };
+
+  // The key's value does not say what role it writes with; the service
+  // account it acts as does, and that is what a 403 on a write comes down to.
+  it("names a project key's service account and its role", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      ok({
+        credential: "project_key",
+        key: KEY,
+        project: { id: "proj-1", name: "Acme", slug: "acme" },
+        serviceAccount: { id: "sa-1", name: "CI deployer", role: "developer" },
+      })
+    );
+
+    const result = await cli(["whoami"], { COSMONER_API_KEY: "cos_pk_live", COSMONER_PROJECT_ID: "acme" });
+
+    expect(result.code).toBe(0);
+    expect(fetchSpy.mock.calls[0][0]).toBe(`${BASE}/v1/cli/session`);
+    expect(authorizationOf(0)).toBe("Bearer cos_pk_live");
+    expect(result.stdout).toContain('project key "github actions" (cos_pk_ab…)');
+    expect(result.stdout).toContain('Acts as service account "CI deployer" with the developer role in Acme (acme)');
+    expect(result.stdout).not.toContain("only reaches");
+  });
+
+  it("says when COSMONER_PROJECT_ID names a project the key cannot reach", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      ok({
+        credential: "project_key",
+        key: { ...KEY, expiresAt: "2099-03-01T00:00:00.000Z" },
+        project: { id: "proj-1", name: "Acme", slug: "acme" },
+        serviceAccount: { id: "sa-1", name: "CI deployer", role: "admin" },
+      })
+    );
+
+    const result = await cli(["whoami"], { COSMONER_API_KEY: "cos_pk_live", COSMONER_PROJECT_ID: "other" });
+
+    expect(result.stdout).toContain("COSMONER_PROJECT_ID is other, but this key only reaches acme.");
+    expect(result.stdout).toContain("Key expires 2099-03-01.");
+  });
+
+  it("names a personal access token's holder", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      ok({
+        credential: "personal_access_token",
+        key: { ...KEY, name: "laptop", start: "cos_pat_x" },
+        user: { id: "u1", email: "dana@example.com", name: "Dana" },
+      })
+    );
+
+    const result = await cli(["whoami"], { COSMONER_API_KEY: "cos_pat_live" });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('personal access token "laptop" (cos_pat_x…) for dana@example.com');
+    expect(result.stdout).toContain("No project set");
+  });
+
+  it("exits 1 for a key the API refuses, with the API's reason", async () => {
+    fetchSpy.mockResolvedValueOnce(fail(401, "UNAUTHORIZED", "Unauthorized"));
+
+    const result = await cli(["whoami"], { COSMONER_API_KEY: "cos_pk_revoked" });
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("COSMONER_API_KEY was refused by https://api.test.dev: Unauthorized.");
+  });
+
+  // An API from before keys could describe themselves answers 400; the key
+  // still authenticated, so whoami says what it can rather than failing.
+  it("falls back to the old answer against an API that cannot describe keys", async () => {
+    fetchSpy.mockResolvedValueOnce(fail(400, "CLI_SESSION_REQUIRED"));
+
+    const result = await cli(["whoami"], { COSMONER_API_KEY: "cos_pk_live", COSMONER_PROJECT_ID: "proj-env" });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Using COSMONER_API_KEY against https://api.test.dev.");
+    expect(result.stdout).toContain("Project: proj-env");
+  });
+});
