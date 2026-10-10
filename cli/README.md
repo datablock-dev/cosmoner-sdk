@@ -448,9 +448,10 @@ non-terminal stdin with nothing behind it.
 
 Two API behaviours will otherwise look like bugs:
 
-- **Writing needs the key's owner to be an owner or admin** of the project. The
-  scope alone is not enough, so a member's key with `secrets:write` still gets
-  a 403.
+- **Writing needs an owner or admin role.** A project key acts with its
+  service account's role, a login or personal access token with yours. The
+  scope alone is not enough, so a key on a `developer` service account with
+  `secrets:write` still gets a 403.
 - **Creating is rate-limited** to 100 secrets per project every 10 minutes,
   shared by every key and machine working on the project. Past that, creating
   meets a 429 until the window resets.

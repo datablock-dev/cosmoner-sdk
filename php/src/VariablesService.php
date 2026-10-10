@@ -10,9 +10,10 @@ use InvalidArgumentException;
  * Manages a project's variables.
  *
  * Reads need the `variables:read` scope. Writes need `variables:write` *and*
- * an owner or admin: the API checks the member's role independently of the
- * key's scopes, so a plain member's key is refused even when it carries the
- * scope.
+ * an owner or admin role: the API checks the role the key acts with
+ * independently of its scopes. A project key acts with its service account's
+ * role, a personal access token with its holder's, so a key on a `developer`
+ * service account is refused even when it carries the scope.
  *
  * Unlike a secret, a variable's value is returned in full on every read. That
  * is the difference between the two resources — anything worth hiding belongs

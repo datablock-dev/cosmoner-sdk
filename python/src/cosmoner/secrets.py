@@ -67,9 +67,10 @@ class SecretsService:
     """Synchronous management of a project's secrets.
 
     Reads need the ``secrets:read`` scope. Writes need ``secrets:write`` *and*
-    an owner or admin: the API checks the member's role independently of the
-    key's scopes, so a plain member's key is refused even when it carries the
-    scope.
+    an owner or admin role: the API checks the role the key acts with
+    independently of its scopes. A project key acts with its service account's
+    role, a personal access token with its holder's, so a key on a
+    ``developer`` service account is refused even when it carries the scope.
 
     A secret's value is returned exactly once, by the call that sets it. There
     is no route that decrypts one afterwards.

@@ -29,12 +29,17 @@ export interface ProjectSecret {
   environment: ProjectEnvironment;
   /** Incremented every time the value is replaced. Starts at 1. */
   version: number;
-  /** Id of the member who created it. */
-  createdBy: string;
-  /** Id of the member who last changed it. */
-  updatedBy: string;
-  createdByUser: Actor;
-  updatedByUser: Actor;
+  /**
+   * Id of the member or service account that created it. Null once that
+   * account has been deleted; the secret stays with the project.
+   */
+  createdBy: string | null;
+  /** Id of the member or service account that last changed it. Null under the same rule. */
+  updatedBy: string | null;
+  /** Who created it. Null once that account has been deleted. */
+  createdByUser: Actor | null;
+  /** Who last changed it. Null once that account has been deleted. */
+  updatedByUser: Actor | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -83,8 +88,9 @@ export interface SecretAuditEntry {
   id: string;
   secretId: string;
   action: "CREATED" | "UPDATED" | "DELETED";
-  actorId: string;
-  actor: Actor;
+  /** Null once the account that acted has been deleted; the entry itself is kept. */
+  actorId: string | null;
+  actor: Actor | null;
   metadata: string | null;
   createdAt: string;
 }
@@ -133,8 +139,10 @@ export type GetSecretAuditResponse = Envelope<SecretAuditEntry[]>;
  * Manages a project's secrets.
  *
  * Reads need `secrets:read`. Writes need `secrets:write` *and* an owner or
- * admin: the API checks the member's role independently of the key's scopes,
- * so a plain member's key is refused even when it carries the scope.
+ * admin role: the API checks the role the key acts with independently of its
+ * scopes. A project key acts with its service account's role, a personal
+ * access token with its holder's, so a key on a `developer` service account is
+ * refused even when it carries the scope.
  */
 export class SecretsService {
   constructor(

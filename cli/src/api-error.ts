@@ -15,5 +15,22 @@ import type { CosmonerError } from "@cosmoner/sdk";
  */
 export function describeApiError(err: CosmonerError): string {
   const line = `${err.message} (${err.code})`;
-  return err.docsUrl ? `${line}\nSee ${err.docsUrl}` : line;
+  const hint = HINTS[err.code];
+  const lines = [line, ...(hint ? [hint] : []), ...(err.docsUrl ? [`See ${err.docsUrl}`] : [])];
+  return lines.join("\n");
 }
+
+/**
+ * What to do next, for refusals the API's own message cannot spell out in CLI
+ * terms.
+ *
+ * A project API key acts as its project's service account, and a few actions
+ * need a person behind the credential instead — someone to read a reply, pay
+ * at checkout or authorise a third party. The API refuses those with
+ * `SERVICE_ACCOUNT_NOT_ALLOWED`; from the CLI the way round is a credential
+ * that is a person.
+ */
+const HINTS: Readonly<Record<string, string>> = {
+  SERVICE_ACCOUNT_NOT_ALLOWED:
+    "This needs a person, not a project API key: unset COSMONER_API_KEY and run cosmoner login, or set it to a personal access token.",
+};

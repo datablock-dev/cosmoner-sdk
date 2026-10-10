@@ -56,8 +56,9 @@ Environment
   COSMONER_PROJECT_ID  Project to use when --project is not given.
   COSMONER_API_URL     API base URL. Defaults to https://api.cosmoner.com.
 
-Writing also needs the key's owner to be an owner or admin of the project; the
-scope alone is not enough.
+Writing also needs an owner or admin role: a project key's service account must
+hold one, or you must, for a login or a personal access token. The scope alone
+is not enough.
 
 Exit code is 0 when the change was made, 1 when the API refused it, and 2 when
 the command itself was wrong.`;

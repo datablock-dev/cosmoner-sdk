@@ -128,8 +128,9 @@ value is returned on every read, and a secret's is returned exactly once, by
 the call that sets it. Nothing decrypts a secret afterwards, so a lost value is
 replaced rather than recovered — and `cosmoner secrets` never prints one.
 
-Writing either needs an owner or admin on top of the `secrets:write` /
-`variables:write` scope.
+Writing either needs an owner or admin role on top of the `secrets:write` /
+`variables:write` scope: a project key's service account must hold one, or the
+holder of a personal access token.
 
 ## Documentation
 
