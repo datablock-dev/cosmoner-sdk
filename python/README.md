@@ -327,9 +327,11 @@ recovered.
 
 Two API behaviours are worth knowing before you debug them:
 
-- **Writes need an owner or admin.** The API checks the member's role
-  independently of the key's scopes, so a plain member's key is refused with a
-  403 even when it carries `secrets:write`.
+- **Writes need an owner or admin role.** The API checks the role the key acts
+  with independently of its scopes: a project key acts with its service
+  account's role, a personal access token with its holder's. A key on a
+  `developer` service account is refused with a 403 even when it carries
+  `secrets:write`.
 - **Creating is rate-limited** to 100 per project every 10 minutes, shared by
   every key and machine working on the project, and a project at its secret
   limit answers 402.
