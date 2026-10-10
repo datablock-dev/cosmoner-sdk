@@ -16,7 +16,11 @@ export const PROJECT_ENVIRONMENTS: readonly ProjectEnvironment[] = [
   "production",
 ];
 
-/** A project member, as embedded in the audit fields of a secret or variable. */
+/**
+ * Who touched a secret or variable, as embedded in its audit fields: a project
+ * member, or a service account when a project API key made the change. The
+ * fields that carry one are null once that account has been deleted.
+ */
 export interface Actor {
   id: string;
   name: string;

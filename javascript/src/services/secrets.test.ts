@@ -251,6 +251,34 @@ describe("SecretsService", () => {
       );
     });
 
+    // Deleting a member's or service account's account keeps what it wrote
+    // and nulls the attribution, so these fields arrive as null rather than
+    // being left out.
+    it("passes through a secret and audit entry whose author has been deleted", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        ok([{ ...secret(), createdBy: null, updatedBy: null, createdByUser: null, updatedByUser: null }])
+      );
+      const [listed] = (await client.secrets.list()).data;
+      expect(listed.createdByUser).toBeNull();
+      expect(listed.updatedBy).toBeNull();
+
+      fetchSpy.mockResolvedValueOnce(
+        ok([
+          {
+            id: "log-1",
+            secretId: "sec-1",
+            action: "UPDATED",
+            actorId: null,
+            actor: null,
+            metadata: null,
+            createdAt: "2026-09-01T12:00:00.000Z",
+          },
+        ])
+      );
+      const [entry] = (await client.secrets.audit("sec-1")).data;
+      expect(entry.actor).toBeNull();
+    });
+
     it("surfaces a duplicate name as a ConflictError", async () => {
       fetchSpy.mockResolvedValueOnce(
         fail(409, "CONFLICT", "A secret with that name already exists in this environment")
@@ -269,7 +297,7 @@ describe("SecretsService", () => {
       ).rejects.toMatchObject({ status: 402, code: "PAYMENT_REQUIRED" });
     });
 
-    it("surfaces a member's missing admin role as a 403", async () => {
+    it("surfaces a missing owner or admin role as a 403", async () => {
       fetchSpy.mockResolvedValueOnce(
         fail(403, "FORBIDDEN", "Only owners and admins can manage secrets")
       );
