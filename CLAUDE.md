@@ -96,9 +96,10 @@ else — including the CLI, where they live in `cli/test/`, not beside the sourc
   `cli/src/write/confirm.ts` prompts in a terminal, `--yes` answers for
   scripts, and with neither it exits 2 having changed nothing. Route every
   delete and every billed change through it.
-- **Writes to secrets and variables need an owner or admin**, checked
-  independently of the key's scopes. A 403 on a key that plainly carries
-  `secrets:write` is this, not a bug.
+- **Writes to secrets and variables need an owner or admin role**, checked
+  independently of the key's scopes. A project key acts with its service
+  account's role, a personal access token with its holder's. A 403 on a key
+  that plainly carries `secrets:write` is this, not a bug.
 
 ## Checks
 
