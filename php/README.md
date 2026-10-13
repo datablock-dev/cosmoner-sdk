@@ -167,6 +167,28 @@ app already names.
 `$client->apps->getDeployment($appId, $deploymentId)` fetches a single poll's
 worth of state.
 
+### `$client->apps->listDeployments(...)` and `$client->apps->rollback(...)`
+
+`listDeployments($appId)` returns the app's twenty most recent deployments,
+newest first. Each also carries `current`, whether its image is the one the app
+runs now, and `rollbackable`, whether the app can go back to it.
+
+`rollback($appId, $deploymentId)` puts the app back on the image that deployment
+ran, without building, and returns the new deployment without waiting. It works
+for apps built from a repository as well as image apps. Only the image goes
+back: the app keeps its current environment variables and settings.
+
+```php
+$history = $client->apps->listDeployments($appId)['data'];
+foreach ($history as $deployment) {
+    if ($deployment['rollbackable']) {
+        $started = $client->apps->rollback($appId, $deployment['id'])['data'];
+        $client->apps->waitForDeployment($appId, $started['id']);
+        break;
+    }
+}
+```
+
 ## Hosting
 
 Reads a project's shared hosting sites and where to reach their files. Needs an

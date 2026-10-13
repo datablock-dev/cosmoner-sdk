@@ -287,6 +287,38 @@ class AppsServiceTest extends TestCase
         $this->assertSame(self::BASE . '/app-1/deployments/dep-1', $this->http->requests[0]['url']);
     }
 
+    public function testListsDeployments(): void
+    {
+        $entry = $this->deploymentFixture('ACTIVE') + ['current' => false, 'rollbackable' => true];
+        $this->http->queueJson(200, ['success' => true, 'data' => [$entry]]);
+
+        $result = $this->client->apps->listDeployments('app-1');
+
+        $this->assertTrue($result['data'][0]['rollbackable']);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/app-1/deployments', $this->http->requests[0]['url']);
+    }
+
+    public function testRollsBackToADeployment(): void
+    {
+        $rolledBack = ['id' => 'dep-2', 'cause' => 'rollback'] + $this->deploymentFixture('DEPLOYING');
+        $this->http->queueJson(202, ['success' => true, 'data' => $rolledBack]);
+
+        $result = $this->client->apps->rollback('app-1', 'dep-1');
+
+        $this->assertSame('rollback', $result['data']['cause']);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/app-1/deployments/dep-1/rollback', $this->http->requests[0]['url']);
+    }
+
+    public function testThrowsWhenDeploymentIdIsEmptyOnRollback(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('deploymentId is required');
+
+        $this->client->apps->rollback('app-1', '');
+    }
+
     public function testTargetsAnotherProjectPerCall(): void
     {
         $this->http->queueJson(200, ['success' => true, 'data' => []]);

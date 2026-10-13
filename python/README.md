@@ -153,6 +153,8 @@ if deployment["phase"] != "ACTIVE":
 | `deploy(app_id, *, tag=None, digest=None, project_id=None)` | Starts a deployment and returns it without waiting |
 | `get_deployment(app_id, deployment_id, *, project_id=None)` | One deployment's current phase |
 | `wait_for_deployment(app_id, deployment_id, *, interval=3.0, timeout=600.0, on_poll=None, project_id=None)` | Polls until the deployment finishes |
+| `list_deployments(app_id, *, project_id=None)` | The twenty most recent deployments, newest first, each with `current` and `rollbackable` |
+| `rollback(app_id, deployment_id, *, project_id=None)` | Puts the app back on that deployment's image without building; returns the new deployment without waiting |
 | `preview(*, size, project_id=None)` | Prices an app of `size` without creating it |
 | `create_draft(*, size, region, name=None, app_type=None, git_provider=None, …, project_id=None)` | Saves the settings as a free draft and returns its `draftId` |
 | `create(*, draft_id, size, project_id=None)` | Creates the app from a draft and charges for it; returns `appId` |
@@ -181,6 +183,11 @@ image the app names now. Passing both raises `ValueError`.
 raises only when a request fails, or `TimeoutError` once `timeout` seconds pass,
 in which case the deployment keeps going server-side. `interval` and `timeout`
 are in seconds.
+
+`rollback` works for apps built from a repository as well as image apps, and
+only the image goes back: the app keeps its current environment variables and
+settings. Pick a deployment `list_deployments` marks `rollbackable`, then pass
+the new deployment's `id` to `wait_for_deployment`.
 
 ## Hosting
 

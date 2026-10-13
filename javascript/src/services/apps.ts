@@ -60,12 +60,20 @@ export interface AppDeployment {
   phase: DeploymentPhase;
   /** Why it happened, e.g. "registry push" or "api deploy". */
   cause: string | null;
-  /** The image reference that was deployed. */
+  /** The image reference that was deployed. Null until a build has produced its image. */
   imageRef: string | null;
   imageDigest: string | null;
   error: string | null;
   startedAt: string;
   finishedAt: string | null;
+}
+
+/** One deployment in an app's history, as `client.apps.listDeployments()` returns it. */
+export interface AppDeploymentHistoryEntry extends AppDeployment {
+  /** Whether this deployment's image is the one the app runs now. */
+  current: boolean;
+  /** Whether the app can be rolled back to this deployment. */
+  rollbackable: boolean;
 }
 
 /** Options accepted by every method, for working across projects. */
@@ -120,6 +128,8 @@ export type GetAppResponse = Envelope<App>;
 export type AppLogsResponse = Envelope<{ lines: AppLogLine[] }>;
 export type DeployAppResponse = Envelope<AppDeployment>;
 export type GetDeploymentResponse = Envelope<AppDeployment>;
+export type ListDeploymentsResponse = Envelope<AppDeploymentHistoryEntry[]>;
+export type RollbackAppResponse = Envelope<AppDeployment>;
 
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
 const DEFAULT_WAIT_TIMEOUT_MS = 10 * 60_000;
@@ -282,6 +292,38 @@ export class AppsService {
     return this.transport.request<GetDeploymentResponse>(
       "GET",
       `${this.basePath(params.projectId)}/${appId}/deployments/${deploymentId}`
+    );
+  }
+
+  /** Lists the app's most recent deployments, newest first. */
+  async listDeployments(appId: string, params: ProjectScopedParams = {}): Promise<ListDeploymentsResponse> {
+    if (!appId) throw new Error("appId is required");
+
+    return this.transport.request<ListDeploymentsResponse>(
+      "GET",
+      `${this.basePath(params.projectId)}/${appId}/deployments`
+    );
+  }
+
+  /**
+   * Rolls the app back to the image an earlier deployment ran, without
+   * building, and returns the new deployment without waiting.
+   *
+   * Only the image goes back: the app keeps its current environment variables
+   * and settings. Pick a deployment `listDeployments()` marks `rollbackable`,
+   * and pair with `waitForDeployment()` to learn whether the rollout succeeded.
+   */
+  async rollback(
+    appId: string,
+    deploymentId: string,
+    params: ProjectScopedParams = {}
+  ): Promise<RollbackAppResponse> {
+    if (!appId) throw new Error("appId is required");
+    if (!deploymentId) throw new Error("deploymentId is required");
+
+    return this.transport.request<RollbackAppResponse>(
+      "POST",
+      `${this.basePath(params.projectId)}/${appId}/deployments/${deploymentId}/rollback`
     );
   }
 

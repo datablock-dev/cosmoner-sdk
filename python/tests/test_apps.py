@@ -70,6 +70,9 @@ def sleeps(monkeypatch):
     return recorded
 
 
+ROLLED_BACK = {**deployment("DEPLOYING"), "id": "dep-2", "cause": "rollback"}
+
+
 class TestAppValidation:
     """Tests for client-side argument validation."""
 
@@ -96,6 +99,14 @@ class TestAppValidation:
     def test_requires_a_deployment_id(self, client):
         with pytest.raises(ValueError, match="deployment_id is required"):
             client.apps.get_deployment("app-1", "")
+
+    def test_rollback_requires_a_deployment_id(self, client):
+        with pytest.raises(ValueError, match="deployment_id is required"):
+            client.apps.rollback("app-1", "")
+
+    def test_list_deployments_requires_an_app_id(self, client):
+        with pytest.raises(ValueError, match="app_id is required"):
+            client.apps.list_deployments("")
 
     def test_rejects_a_non_positive_interval(self, client):
         with pytest.raises(ValueError, match="interval must be greater than 0"):
@@ -216,6 +227,30 @@ class TestApps:
         result = client.apps.get_deployment("app-1", "dep-1")
 
         assert result["data"]["phase"] == "DEPLOYING"
+
+    def test_lists_deployments(self, client, httpx_mock):
+        entry = {**deployment("ACTIVE"), "current": False, "rollbackable": True}
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/deployments",
+            json={"success": True, "data": [entry]},
+        )
+
+        result = client.apps.list_deployments("app-1")
+
+        assert result["data"] == [entry]
+        assert httpx_mock.get_request().method == "GET"
+
+    def test_rolls_back_to_a_deployment(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/deployments/dep-1/rollback",
+            status_code=202,
+            json={"success": True, "data": ROLLED_BACK},
+        )
+
+        result = client.apps.rollback("app-1", "dep-1")
+
+        assert result["data"]["cause"] == "rollback"
+        assert httpx_mock.get_request().method == "POST"
 
     def test_targets_another_project_per_call(self, client, httpx_mock):
         httpx_mock.add_response(
@@ -350,6 +385,40 @@ class TestAsyncApps:
 
         assert result["data"]["id"] == "dep-1"
         assert json.loads(httpx_mock.get_request().content) == {"tag": "1.1.0"}
+
+    async def test_lists_deployments(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/deployments",
+            json={"success": True, "data": []},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.apps.list_deployments("app-1")
+
+        assert result["data"] == []
+
+    async def test_rolls_back_to_a_deployment(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/app-1/deployments/dep-1/rollback",
+            status_code=202,
+            json={"success": True, "data": ROLLED_BACK},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.apps.rollback("app-1", "dep-1")
+
+        assert result["data"]["cause"] == "rollback"
+        assert httpx_mock.get_request().method == "POST"
 
     async def test_fetches_an_app(self, httpx_mock):
         httpx_mock.add_response(url=f"{BASE}/app-1", json={"success": True, "data": APP})

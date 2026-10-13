@@ -126,6 +126,26 @@ Needs `apps:read`.
 `client.apps.list()` and `client.apps.getDeployment(appId, deploymentId)` are
 the single calls underneath.
 
+### `client.apps.listDeployments(appId, params?)` and `client.apps.rollback(appId, deploymentId, params?)`
+
+`listDeployments` returns the app's twenty most recent deployments, newest
+first. Each also carries `current`, whether its image is the one the app runs
+now, and `rollbackable`, whether the app can go back to it. Needs `apps:read`.
+
+`rollback` puts the app back on the image an earlier deployment ran, without
+building, and returns the new deployment without waiting. It works for apps
+built from a repository as well as image apps. Only the image goes back: the app
+keeps its current environment variables and settings. Needs `apps:write`.
+
+```ts
+const { data: history } = await client.apps.listDeployments(appId);
+const previous = history.find((d) => d.rollbackable);
+if (previous) {
+  const { data: rollback } = await client.apps.rollback(appId, previous.id);
+  await client.apps.waitForDeployment(appId, rollback.id);
+}
+```
+
 ## Hosting
 
 Reads a project's shared hosting sites and where to reach their files. Needs an

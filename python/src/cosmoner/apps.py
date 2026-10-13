@@ -297,6 +297,34 @@ class AppsService:
         )
         return result
 
+    def list_deployments(
+        self, app_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Lists the app's most recent deployments, newest first."""
+        _require_app_id(app_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{app_id}/deployments"
+        )
+        return result
+
+    def rollback(
+        self, app_id: str, deployment_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Rolls the app back to the image an earlier deployment ran, without building.
+
+        Only the image goes back: the app keeps its current environment variables
+        and settings. Returns the new deployment without waiting; pair with
+        `wait_for_deployment()` to learn whether the rollout succeeded.
+        """
+        _require_deployment_ids(app_id, deployment_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST",
+            f"{self._base_path(project_id)}/{app_id}/deployments/{deployment_id}/rollback",
+        )
+        return result
+
     def wait_for_deployment(
         self,
         app_id: str,
@@ -600,6 +628,34 @@ class AsyncAppsService:
         result: dict[str, Any] = await self._transport.request(
             "GET",
             f"{self._base_path(project_id)}/{app_id}/deployments/{deployment_id}",
+        )
+        return result
+
+    async def list_deployments(
+        self, app_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Lists the app's most recent deployments, newest first."""
+        _require_app_id(app_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{app_id}/deployments"
+        )
+        return result
+
+    async def rollback(
+        self, app_id: str, deployment_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Rolls the app back to the image an earlier deployment ran, without building.
+
+        Only the image goes back: the app keeps its current environment variables
+        and settings. Returns the new deployment without waiting; pair with
+        `wait_for_deployment()` to learn whether the rollout succeeded.
+        """
+        _require_deployment_ids(app_id, deployment_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST",
+            f"{self._base_path(project_id)}/{app_id}/deployments/{deployment_id}/rollback",
         )
         return result
 
