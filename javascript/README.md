@@ -1,6 +1,8 @@
 # @cosmoner/sdk
 
-Official Cosmoner SDK for Node.js.
+Official Node.js SDK for [Cosmoner](https://cosmoner.com), the cloud platform
+for apps, databases, storage, domains and email. Full documentation is at
+<https://cosmoner.com/docs/sdk>.
 
 ## Installation
 

@@ -1,7 +1,8 @@
 # Cosmoner SDK
 
-Official Cosmoner SDKs for JavaScript, Python, and PHP, and the `cosmoner`
-command line tool.
+Official SDKs for [Cosmoner](https://cosmoner.com) in JavaScript, Python, and
+PHP, and the `cosmoner` command line tool. Documentation lives at
+<https://cosmoner.com/docs/sdk>.
 
 | Language   | Package         | Install                         |
 | ---------- | --------------- | ------------------------------- |
