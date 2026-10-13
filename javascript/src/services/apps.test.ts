@@ -72,6 +72,14 @@ describe("AppsService", () => {
         "deploymentId is required"
       );
     });
+
+    it("requires an appId on listDeployments", async () => {
+      await expect(client.apps.listDeployments("")).rejects.toThrow("appId is required");
+    });
+
+    it("requires a deploymentId on rollback", async () => {
+      await expect(client.apps.rollback("app-1", "")).rejects.toThrow("deploymentId is required");
+    });
   });
 
   describe("API calls", () => {
@@ -147,6 +155,43 @@ describe("AppsService", () => {
       expect(fetchSpy).toHaveBeenCalledWith(
         `${BASE}/app-1/deployments/dep-1`,
         expect.objectContaining({ method: "GET" })
+      );
+    });
+
+    it("lists deployments with which one runs and which can be rolled back to", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        ok([{ ...deployment("ACTIVE"), current: false, rollbackable: true }])
+      );
+
+      const result = await client.apps.listDeployments("app-1");
+
+      expect(result.data[0]).toMatchObject({ id: "dep-1", current: false, rollbackable: true });
+      expect(fetchSpy).toHaveBeenCalledWith(
+        `${BASE}/app-1/deployments`,
+        expect.objectContaining({ method: "GET" })
+      );
+    });
+
+    it("rolls back to a deployment and returns the new one", async () => {
+      fetchSpy.mockResolvedValueOnce(ok({ ...deployment("DEPLOYING"), id: "dep-2", cause: "rollback" }, 202));
+
+      const result = await client.apps.rollback("app-1", "dep-1");
+
+      expect(result.data).toMatchObject({ id: "dep-2", cause: "rollback", phase: "DEPLOYING" });
+      expect(fetchSpy).toHaveBeenCalledWith(
+        `${BASE}/app-1/deployments/dep-1/rollback`,
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+
+    it("rolls back in another project when asked", async () => {
+      fetchSpy.mockResolvedValueOnce(ok(deployment("DEPLOYING"), 202));
+
+      await client.apps.rollback("app-1", "dep-1", { projectId: "proj-2" });
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "https://api.test.dev/v1/projects/proj-2/apps/app-1/deployments/dep-1/rollback",
+        expect.anything()
       );
     });
   });

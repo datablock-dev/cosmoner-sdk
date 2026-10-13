@@ -477,6 +477,52 @@ class AppsService
     }
 
     /**
+     * Lists the app's most recent deployments, newest first.
+     *
+     * Each entry is a deployment with two more fields: `current`, whether its
+     * image is the one the app runs now, and `rollbackable`, whether the app
+     * can be rolled back to it.
+     *
+     * @return array{success: true, data: list<array<string, mixed>>}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function listDeployments(string $appId, ?string $projectId = null): array
+    {
+        self::requireAppId($appId);
+
+        /** @var array{success: true, data: list<array<string, mixed>>} */
+        return $this->transport->request('GET', $this->basePath($projectId) . "/{$appId}/deployments");
+    }
+
+    /**
+     * Rolls the app back to the image an earlier deployment ran, without building.
+     *
+     * Only the image goes back: the app keeps its current environment variables
+     * and settings. Returns the new deployment without waiting; pair with
+     * `waitForDeployment()` to learn whether the rollout succeeded.
+     *
+     * @return array{success: true, data: array<string, mixed>}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function rollback(string $appId, string $deploymentId, ?string $projectId = null): array
+    {
+        self::requireAppId($appId);
+        if ($deploymentId === '') {
+            throw new InvalidArgumentException('deploymentId is required');
+        }
+
+        /** @var array{success: true, data: array<string, mixed>} */
+        return $this->transport->request(
+            'POST',
+            $this->basePath($projectId) . "/{$appId}/deployments/{$deploymentId}/rollback",
+        );
+    }
+
+    /**
      * Polls a deployment until it finishes, and returns it in its final phase.
      *
      * Returns for every finished phase, failures included — check `phase` for
