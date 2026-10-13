@@ -28,8 +28,17 @@
   },
   "keywords": [
     "cosmoner",
-    "sdk"
+    "sdk",
+    "api-client",
+    "cloud",
+    "paas",
+    "hosting",
+    "deployment"
   ],
+  "homepage": "https://cosmoner.com/docs/sdk",
+  "bugs": {
+    "url": "https://github.com/datablock-dev/cosmoner-sdk/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/datablock-dev/cosmoner-sdk.git",

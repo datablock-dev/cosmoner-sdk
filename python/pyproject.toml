@@ -12,7 +12,7 @@ dependencies = [
   "httpx>=0.24",
   "pyyaml>=6.0",
 ]
-keywords = ["cosmoner", "sdk"]
+keywords = ["cosmoner", "sdk", "api-client", "cloud", "paas", "hosting"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cosmoner"]
@@ -66,3 +66,6 @@ warn_unused_ignores = true
 
 [project.urls]
 Homepage = "https://cosmoner.com"
+Documentation = "https://cosmoner.com/docs/sdk"
+Source = "https://github.com/datablock-dev/cosmoner-sdk"
+Issues = "https://github.com/datablock-dev/cosmoner-sdk/issues"

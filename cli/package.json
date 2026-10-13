@@ -22,8 +22,15 @@
   "keywords": [
     "cosmoner",
     "cli",
-    "deployment"
+    "deployment",
+    "cloud",
+    "paas",
+    "hosting"
   ],
+  "homepage": "https://cosmoner.com/docs/sdk/cli",
+  "bugs": {
+    "url": "https://github.com/datablock-dev/cosmoner-sdk/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/datablock-dev/cosmoner-sdk.git",

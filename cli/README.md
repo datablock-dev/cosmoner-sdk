@@ -1,8 +1,8 @@
 # @cosmoner/cli
 
 Command line tools for `.cosmoner/deployment.yaml`, the file you commit to
-describe how a repository deploys on Cosmoner, for deploying image apps, and
-for uploading to web hosting sites.
+describe how a repository deploys on [Cosmoner](https://cosmoner.com), for
+deploying image apps, and for uploading to web hosting sites.
 
 The file commands — `validate`, `fmt`, `init`, `schema` and `agents` — work
 offline. There is no account, no API key and no network call: a check that
@@ -10,6 +10,8 @@ reaches the network is a check that fails when the network does, which is not
 what you want guarding a push. `deploy`, `upload`, `secrets` and `variables` talk to the API
 by nature, and only they read a credential — from `cosmoner login` on your own
 machine, or `COSMONER_API_KEY` in CI.
+
+Full documentation is at <https://cosmoner.com/docs/sdk/cli>.
 
 ```bash
 npx @cosmoner/cli validate

@@ -32,6 +32,16 @@
   },
   "keywords": [
     "cosmoner",
-    "sdk"
-  ]
+    "sdk",
+    "api-client",
+    "cloud",
+    "paas",
+    "hosting"
+  ],
+  "homepage": "https://cosmoner.com/docs/sdk",
+  "support": {
+    "docs": "https://cosmoner.com/docs/sdk",
+    "issues": "https://github.com/datablock-dev/cosmoner-sdk/issues",
+    "source": "https://github.com/datablock-dev/cosmoner-sdk"
+  }
 }
