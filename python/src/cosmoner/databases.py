@@ -84,6 +84,9 @@ class DatabasesService:
 
         ``connectionUri`` is a full connection URI including the password, and
         needs only the ``databases:read`` scope, so guard the key accordingly.
+        It addresses the in-cluster host apps on Cosmoner use;
+        ``publicConnectionUri``, when not ``None``, is the same credential for
+        ``publicHost``, reachable from anywhere over TLS.
         """
         _require_database_id(database_id)
 
@@ -228,6 +231,9 @@ class AsyncDatabasesService:
 
         ``connectionUri`` is a full connection URI including the password, and
         needs only the ``databases:read`` scope, so guard the key accordingly.
+        It addresses the in-cluster host apps on Cosmoner use;
+        ``publicConnectionUri``, when not ``None``, is the same credential for
+        ``publicHost``, reachable from anywhere over TLS.
         """
         _require_database_id(database_id)
 

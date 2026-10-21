@@ -37,8 +37,14 @@ export interface DedicatedDatabase {
   numNodes: number;
   storageGb: number | null;
   status: string;
+  /** The address apps on Cosmoner connect to; in-cluster only. */
   host: string | null;
   port: number | null;
+  /**
+   * The hostname to connect to from outside Cosmoner, on port 5432 with TLS
+   * required. Null where there is none.
+   */
+  publicHost: string | null;
   defaultDb: string | null;
   defaultUser: string | null;
   createdAt: string;
@@ -52,6 +58,11 @@ export interface DedicatedDatabaseDetail extends DedicatedDatabase {
    * guard the key accordingly.
    */
   connectionUri: string | null;
+  /**
+   * The connection URI for `publicHost`, with `sslmode=require` — also
+   * **including the password**. Null where there is no public host.
+   */
+  publicConnectionUri: string | null;
 }
 
 /** A database on the shared cluster. No password is ever returned for one. */
