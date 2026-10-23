@@ -21,7 +21,7 @@
       "maxLength": 100
     },
     "region": {
-      "description": "Region slug to preselect, e.g. `ams`. Ignored when the slug is not one you can deploy to.",
+      "description": "Region slug to preselect, e.g. `se-sto` (Stockholm). Ignored when the slug is not one you can deploy to.",
       "type": "string",
       "maxLength": 32
     },
