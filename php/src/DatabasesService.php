@@ -42,6 +42,7 @@ use InvalidArgumentException;
  *     status: string,
  *     host: ?string,
  *     port: ?int,
+ *     publicHost: ?string,
  *     defaultDb: ?string,
  *     defaultUser: ?string,
  *     createdAt: string,
@@ -63,6 +64,8 @@ use InvalidArgumentException;
  *     defaultDb: ?string,
  *     defaultUser: ?string,
  *     connectionUri: string,
+ *     publicHost: ?string,
+ *     publicConnectionUri: ?string,
  *     createdAt: string,
  *     ...
  * }
@@ -134,7 +137,9 @@ class DatabasesService
      *
      * `connectionUri` is always present and is a full connection URI including
      * the password. It needs only the `databases:read` scope, so guard the key
-     * accordingly.
+     * accordingly. `connectionUri` addresses the in-cluster host apps on
+     * Cosmoner use; `publicConnectionUri`, when not null, is the same
+     * credential for `publicHost`, reachable from anywhere over TLS.
      *
      * @return array{success: true, data: DedicatedDatabaseDetail}
      *
