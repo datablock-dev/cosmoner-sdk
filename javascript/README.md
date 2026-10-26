@@ -161,6 +161,39 @@ const { data: access } = await client.hosting.access(sites[0].id);
 `sftpPassword`. It needs no scope beyond `hosting:read`, so guard the key
 accordingly.
 
+### Site image, PHP version and email
+
+A site runs one exact build of the site image and never changes build on its
+own, except for a fix to a critical or known-exploited vulnerability, which is
+applied during the night after `forcedUpdate.deadline`.
+
+```ts
+const { data: image } = await client.hosting.image(siteId);
+// image.current.tag, image.update (null when up to date), image.forcedUpdate,
+// image.rollback (with `until`), image.php.{version, securitySupportEnds, offered}
+
+if (image.update) await client.hosting.updateImage(siteId);
+await client.hosting.rollbackImage(siteId); // within 7 days of the last change
+await client.hosting.setPhpVersion(siteId, { phpVersion: image.php.offered[0] });
+```
+
+`updateImage`, `rollbackImage` and `setPhpVersion` restart the site before
+they answer, and each returns the image status afterwards. Only the versions in
+`php.offered` are accepted; the API owns that list, so the SDK does not check
+it. They need `hosting:write`.
+
+```ts
+const { data: mail } = await client.hosting.mail(siteId);
+// mail.enabled, mail.fromAddress, mail.domains — the verified email domains it can send from
+await client.hosting.enableMail(siteId, { emailDomainId: mail.domains[0].id, localPart: "wordpress" });
+await client.hosting.disableMail(siteId);
+```
+
+`enableMail` lets the site's PHP `mail()` send as `<localPart>@<domain>`
+through a new SMTP credential, and every email it sends is billed on the
+project's email plan. `enableMail` and `disableMail` need `email:write` as well
+as `hosting:write`.
+
 ## Resource namespaces
 
 Each of these works on one kind of resource and returns the API envelope.

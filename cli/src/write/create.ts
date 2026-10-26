@@ -383,8 +383,9 @@ export const HOSTING_ORDER_ACTIONS: Record<string, ProductAction<Row>> = {
     usage: "create <site> [--tier <tier>] [--php <version>] [--database <name>] [--extra-storage <gb>] [--yes]",
     help: `Orders a PHP hosting site. <site> is 3–40 lowercase letters, digits and
 underscores, starting with a letter. --tier is starter, growth or scale
-(starter by default; cosmoner hosting plans lists the prices). --php is 8.1,
-8.2 or 8.3. --database creates a MySQL database alongside it.
+(starter by default; cosmoner hosting plans lists the prices). --php picks
+one of the offered PHP versions; without it the site gets the API's default.
+--database creates a MySQL database alongside it.
 --extra-storage adds storage in 10 GB blocks, up to 50.
 
 ${ORDER_NOTE}

@@ -204,6 +204,34 @@ $access = $client->hosting->access($sites[0]['id'])['data'];
 `sftpPassword`. It needs no scope beyond `hosting:read`, so guard the key
 accordingly.
 
+### Site image, PHP version and email
+
+```php
+$image = $client->hosting->image($siteId)['data'];
+// $image['current']['tag'], $image['update'] (null when up to date), $image['forcedUpdate'],
+// $image['rollback'] (with 'until'), $image['php']['offered']
+
+$client->hosting->updateImage($siteId);
+$client->hosting->rollbackImage($siteId); // within 7 days of the last change
+$client->hosting->setPhpVersion($siteId, '8.4');
+
+$mail = $client->hosting->mail($siteId)['data'];
+$client->hosting->enableMail($siteId, ['emailDomainId' => $mail['domains'][0]['id'], 'localPart' => 'wordpress']);
+$client->hosting->disableMail($siteId);
+```
+
+`updateImage()`, `rollbackImage()` and `setPhpVersion()` restart the site
+before they return, and each returns the image status afterwards. Only the
+versions in `php.offered` are accepted; the API owns that list, so the SDK does
+not check it. A site never changes build on its own, except for a fix to a
+critical or known-exploited vulnerability, applied during the night after
+`forcedUpdate.deadline`. These need `hosting:write`.
+
+`enableMail()` lets the site's PHP `mail()` send as `<localPart>@<domain>`
+through a new SMTP credential, and every email it sends is billed on the
+project's email plan. `enableMail()` and `disableMail()` need `email:write` as
+well as `hosting:write`.
+
 ## Reading resources
 
 Each of these reads one kind of resource and returns the API envelope. Every
@@ -250,7 +278,7 @@ Every delete is permanent.
 | `servers` | `update($serverId, ['name' => …])`, `powerOn($serverId)`, `powerOff($serverId)`, `reboot($serverId)`, `delete($serverId)` |
 | `buckets` | `delete($bucketId)` — with every object in it and its access credentials |
 | `registries` | `delete($registryId)` — with every repository and image in it |
-| `hosting` | `delete($siteId)` |
+| `hosting` | `updateImage($siteId)`, `rollbackImage($siteId)`, `setPhpVersion($siteId, $phpVersion)`, `enableMail($siteId, ['emailDomainId' => …, 'localPart' => …])`, `disableMail($siteId)`, `delete($siteId)` |
 | `email` | `createDomain($domainId)`, `createExternalDomain($domainName)`, `verifyDomain($emailDomainId)`, `createCredential($emailDomainId, ['label' => …, 'fromAddress' => …])`, `deleteCredential($emailDomainId, $credentialId)` — returns nothing, `deleteDomain($emailDomainId)` — returns nothing |
 | `iam` | `create(['label' => …, 'storage' => […], 'registry' => […]])`, `delete($iamUserName)` — returns nothing |
 

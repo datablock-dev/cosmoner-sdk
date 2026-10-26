@@ -7,9 +7,53 @@ namespace Cosmoner\Sdk;
 use InvalidArgumentException;
 
 /**
- * Prices, creates, reads and deletes a project's shared hosting sites.
+ * Prices, creates, reads and deletes a project's shared hosting sites, and
+ * manages the site image each one runs and whether it can send email.
+ *
+ * The API returns more fields than the shapes below declare.
  *
  * @phpstan-import-type CheckoutPreview from CatalogService
+ * @phpstan-type HostingImageBuild array{
+ *     phpVersion: string,
+ *     tag: ?string,
+ *     digest: ?string,
+ *     ...
+ * }
+ * @phpstan-type HostingImageStatus array{
+ *     current: HostingImageBuild,
+ *     updatedAt: ?string,
+ *     update: ?array{
+ *         phpVersion: string,
+ *         tag: string,
+ *         digest: string,
+ *         builtAt: ?string,
+ *         critical: bool,
+ *         knownExploited: bool,
+ *         cves: list<string>,
+ *         phpPatch: ?string,
+ *         phpRelease: bool,
+ *         ...
+ *     },
+ *     forcedUpdate: ?array{deadline: string, ...},
+ *     rollback: ?array{phpVersion: string, tag: ?string, digest: ?string, until: string, ...},
+ *     php: array{
+ *         version: string,
+ *         securitySupportEnds: ?string,
+ *         deprecated: bool,
+ *         offered: list<string>,
+ *         ...
+ *     },
+ *     ...
+ * }
+ * @phpstan-type HostingMailStatus array{
+ *     available: bool,
+ *     enabled: bool,
+ *     fromAddress: ?string,
+ *     credentialId: ?string,
+ *     emailDomainId: ?string,
+ *     domains: list<array{id: string, name: string, ...}>,
+ *     ...
+ * }
  */
 class HostingService
 {
@@ -193,6 +237,164 @@ class HostingService
 
         /** @var array{success: true, data: array{}} */
         return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$siteId}");
+    }
+
+    /**
+     * Reads which build of the site image a site runs and what it can move to.
+     *
+     * `current` is the build it runs; `update` a newer patched build of its PHP
+     * version, or null when it is up to date; `forcedUpdate` the deadline after
+     * which a critical or known-exploited fix is applied automatically;
+     * `rollback` the build it can return to until `until`; and `php.offered` the
+     * versions `setPhpVersion()` accepts. A tag and digest are null only for a
+     * site created before images were pinned that has not changed since.
+     *
+     * @return array{success: true, data: HostingImageStatus}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function image(string $siteId, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+
+        /** @var array{success: true, data: HostingImageStatus} */
+        return $this->transport->request('GET', $this->basePath($projectId) . "/{$siteId}/image");
+    }
+
+    /**
+     * Moves a site to the newest patched build of its PHP version.
+     *
+     * The site restarts before this returns, which interrupts it for a few
+     * seconds; `rollbackImage()` restores the previous build for 7 days. A site
+     * that already runs the newest build fails with `ConflictError`.
+     *
+     * @return array{success: true, data: HostingImageStatus} The status afterwards.
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function updateImage(string $siteId, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+
+        /** @var array{success: true, data: HostingImageStatus} */
+        return $this->transport->request('POST', $this->basePath($projectId) . "/{$siteId}/image/update");
+    }
+
+    /**
+     * Returns a site to the build it ran before its last change, PHP version included.
+     *
+     * Accepted until `rollback.until` in `image()`, 7 days after the change. The
+     * site restarts before this returns. A rollback cannot itself be rolled back,
+     * and rolling back a forced security update only postpones it.
+     *
+     * @return array{success: true, data: HostingImageStatus} The status afterwards.
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function rollbackImage(string $siteId, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+
+        /** @var array{success: true, data: HostingImageStatus} */
+        return $this->transport->request('POST', $this->basePath($projectId) . "/{$siteId}/image/rollback");
+    }
+
+    /**
+     * Moves a site to another PHP version, onto its newest patched build.
+     *
+     * The site restarts before this returns, and `rollbackImage()` restores the
+     * previous version for 7 days.
+     *
+     * @param string $phpVersion One of `php.offered` from `image()`; the API owns that list.
+     *
+     * @return array{success: true, data: HostingImageStatus} The status afterwards.
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function setPhpVersion(string $siteId, string $phpVersion, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+        if ($phpVersion === '') {
+            throw new InvalidArgumentException('phpVersion is required');
+        }
+
+        /** @var array{success: true, data: HostingImageStatus} */
+        return $this->transport->request(
+            'PATCH',
+            $this->basePath($projectId) . "/{$siteId}/php-version",
+            ['phpVersion' => $phpVersion],
+        );
+    }
+
+    /**
+     * Reads whether a site's PHP `mail()` sends, and as whom.
+     *
+     * `domains` lists the project's verified email domains it could send from.
+     *
+     * @return array{success: true, data: HostingMailStatus}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function mail(string $siteId, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+
+        /** @var array{success: true, data: HostingMailStatus} */
+        return $this->transport->request('GET', $this->basePath($projectId) . "/{$siteId}/mail");
+    }
+
+    /**
+     * Lets a site's PHP `mail()` send as `<localPart>@<domain>`.
+     *
+     * It sends through a new SMTP credential on the verified email domain, and
+     * every email is billed on the project's email plan. Called again with
+     * another address, it replaces the site's credential. Needs `email:write` as
+     * well as `hosting:write`.
+     *
+     * @param array{emailDomainId: string, localPart: string} $params
+     *     `emailDomainId` is one of `domains` from `mail()`; `localPart` is the
+     *     part before the @, such as `wordpress`.
+     *
+     * @return array{success: true, data: HostingMailStatus} The status afterwards.
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function enableMail(string $siteId, array $params, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+        Params::check($params, ['emailDomainId', 'localPart'], ['emailDomainId', 'localPart']);
+
+        /** @var array{success: true, data: HostingMailStatus} */
+        return $this->transport->request(
+            'PUT',
+            $this->basePath($projectId) . "/{$siteId}/mail",
+            ['emailDomainId' => $params['emailDomainId'], 'localPart' => $params['localPart']],
+        );
+    }
+
+    /**
+     * Stops a site sending email and deletes its SMTP credential.
+     *
+     * Afterwards `mail()` returns `false`. Needs `email:write` as well as
+     * `hosting:write`.
+     *
+     * @return array{success: true, data: HostingMailStatus} The status afterwards.
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function disableMail(string $siteId, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+
+        /** @var array{success: true, data: HostingMailStatus} */
+        return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$siteId}/mail");
     }
 
     /** Builds the collection route for the resolved project. */

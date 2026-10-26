@@ -1,4 +1,8 @@
-"""Hosting service namespace — shared web hosting sites and how to reach their files."""
+"""Hosting service namespace — shared web hosting sites and what they run.
+
+Covers the sites themselves, how to reach their files, the build of the site image
+each one runs, and whether its PHP ``mail()`` can send.
+"""
 
 from __future__ import annotations
 
@@ -49,6 +53,22 @@ def _create_payload(
         payload["extraStorageGb"] = extra_storage_gb
 
     return payload
+
+
+def _require_php_version(php_version: str) -> None:
+    """Rejects an empty PHP version; which versions are offered is the API's call."""
+    if not php_version:
+        raise ValueError("php_version is required")
+
+
+def _mail_payload(email_domain_id: str, local_part: str) -> dict[str, Any]:
+    """Validates the address a site sends as and shapes it into the request body."""
+    if not email_domain_id:
+        raise ValueError("email_domain_id is required")
+    if not local_part:
+        raise ValueError("local_part is required")
+
+    return {"emailDomainId": email_domain_id, "localPart": local_part}
 
 
 class HostingService:
@@ -158,6 +178,122 @@ class HostingService:
 
         result: dict[str, Any] = self._transport.request(
             "POST", self._base_path(project_id), json=payload
+        )
+        return result
+
+    def image(self, site_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Reads which build of the site image a site runs and what it can move to.
+
+        The status carries ``current``, the patched ``update`` it can take (or
+        ``None``), ``forcedUpdate`` with the deadline after which a critical fix is
+        applied automatically, the ``rollback`` it can return to, and ``php`` with
+        the versions ``set_php_version`` accepts under ``offered``.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{site_id}/image"
+        )
+        return result
+
+    def update_image(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Moves a site to the newest patched build of its PHP version.
+
+        The site restarts before this returns, a few seconds' interruption, and
+        ``rollback_image`` restores the previous build for 7 days. Answers 409 when
+        the site already runs the newest build. Returns the new image status.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", f"{self._base_path(project_id)}/{site_id}/image/update"
+        )
+        return result
+
+    def rollback_image(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Returns a site to the build it ran before its last change, PHP included.
+
+        Accepted until ``rollback.until`` in ``image``. The site restarts before this
+        returns. A rollback cannot itself be rolled back, and rolling back a forced
+        security update only postpones it. Returns the new image status.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", f"{self._base_path(project_id)}/{site_id}/image/rollback"
+        )
+        return result
+
+    def set_php_version(
+        self, site_id: str, *, php_version: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Moves a site to ``php_version``, onto its newest patched build.
+
+        Only the versions in ``php.offered`` from ``image`` are accepted; the API
+        owns that list. The site restarts before this returns, and
+        ``rollback_image`` restores the previous version for 7 days.
+        """
+        _require_site_id(site_id)
+        _require_php_version(php_version)
+
+        result: dict[str, Any] = self._transport.request(
+            "PATCH",
+            f"{self._base_path(project_id)}/{site_id}/php-version",
+            json={"phpVersion": php_version},
+        )
+        return result
+
+    def mail(self, site_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Reads whether a site's PHP ``mail()`` sends, and as whom.
+
+        ``domains`` lists the project's verified email domains it could send from.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{site_id}/mail"
+        )
+        return result
+
+    def enable_mail(
+        self,
+        site_id: str,
+        *,
+        email_domain_id: str,
+        local_part: str,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Lets a site's PHP ``mail()`` send as ``<local_part>@<domain>``.
+
+        It sends through a new SMTP credential on the verified email domain
+        ``email_domain_id``, and every email is billed on the project's email plan.
+        Called again with another address, it replaces the site's credential.
+        Needs ``email:write`` as well as ``hosting:write``.
+        """
+        _require_site_id(site_id)
+        payload = _mail_payload(email_domain_id, local_part)
+
+        result: dict[str, Any] = self._transport.request(
+            "PUT", f"{self._base_path(project_id)}/{site_id}/mail", json=payload
+        )
+        return result
+
+    def disable_mail(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Stops a site sending email and deletes its SMTP credential.
+
+        Afterwards ``mail()`` returns ``false``. Needs ``email:write`` as well as
+        ``hosting:write``.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{site_id}/mail"
         )
         return result
 
@@ -273,5 +409,125 @@ class AsyncHostingService:
 
         result: dict[str, Any] = await self._transport.request(
             "POST", self._base_path(project_id), json=payload
+        )
+        return result
+
+    async def image(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Reads which build of the site image a site runs and what it can move to.
+
+        The status carries ``current``, the patched ``update`` it can take (or
+        ``None``), ``forcedUpdate`` with the deadline after which a critical fix is
+        applied automatically, the ``rollback`` it can return to, and ``php`` with
+        the versions ``set_php_version`` accepts under ``offered``.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{site_id}/image"
+        )
+        return result
+
+    async def update_image(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Moves a site to the newest patched build of its PHP version.
+
+        The site restarts before this returns, a few seconds' interruption, and
+        ``rollback_image`` restores the previous build for 7 days. Answers 409 when
+        the site already runs the newest build. Returns the new image status.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", f"{self._base_path(project_id)}/{site_id}/image/update"
+        )
+        return result
+
+    async def rollback_image(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Returns a site to the build it ran before its last change, PHP included.
+
+        Accepted until ``rollback.until`` in ``image``. The site restarts before this
+        returns. A rollback cannot itself be rolled back, and rolling back a forced
+        security update only postpones it. Returns the new image status.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", f"{self._base_path(project_id)}/{site_id}/image/rollback"
+        )
+        return result
+
+    async def set_php_version(
+        self, site_id: str, *, php_version: str, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Moves a site to ``php_version``, onto its newest patched build.
+
+        Only the versions in ``php.offered`` from ``image`` are accepted; the API
+        owns that list. The site restarts before this returns, and
+        ``rollback_image`` restores the previous version for 7 days.
+        """
+        _require_site_id(site_id)
+        _require_php_version(php_version)
+
+        result: dict[str, Any] = await self._transport.request(
+            "PATCH",
+            f"{self._base_path(project_id)}/{site_id}/php-version",
+            json={"phpVersion": php_version},
+        )
+        return result
+
+    async def mail(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Reads whether a site's PHP ``mail()`` sends, and as whom.
+
+        ``domains`` lists the project's verified email domains it could send from.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{site_id}/mail"
+        )
+        return result
+
+    async def enable_mail(
+        self,
+        site_id: str,
+        *,
+        email_domain_id: str,
+        local_part: str,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Lets a site's PHP ``mail()`` send as ``<local_part>@<domain>``.
+
+        It sends through a new SMTP credential on the verified email domain
+        ``email_domain_id``, and every email is billed on the project's email plan.
+        Called again with another address, it replaces the site's credential.
+        Needs ``email:write`` as well as ``hosting:write``.
+        """
+        _require_site_id(site_id)
+        payload = _mail_payload(email_domain_id, local_part)
+
+        result: dict[str, Any] = await self._transport.request(
+            "PUT", f"{self._base_path(project_id)}/{site_id}/mail", json=payload
+        )
+        return result
+
+    async def disable_mail(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Stops a site sending email and deletes its SMTP credential.
+
+        Afterwards ``mail()`` returns ``false``. Needs ``email:write`` as well as
+        ``hosting:write``.
+        """
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{site_id}/mail"
         )
         return result

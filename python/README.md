@@ -203,8 +203,23 @@ API key with `hosting:read`.
 | `prices(*, project_id=None)` | Each tier's `monthly` price in minor units, with its `currency` |
 | `preview(*, tier, extra_storage_gb=0, project_id=None)` | Prices a site without creating it |
 | `create(*, site_name, tier=None, php_version=None, database=None, extra_storage_gb=None, project_id=None)` | Creates a site and charges for it; `database` names a database to create with it |
+| `image(site_id, *, project_id=None)` | The build the site runs, the `update` it can take, any `forcedUpdate` deadline, the `rollback` it can return to, and `php` with the `offered` versions |
+| `update_image(site_id, *, project_id=None)` | Moves the site to the newest patched build of its PHP version |
+| `rollback_image(site_id, *, project_id=None)` | Returns the site to the build before its last change, within 7 days |
+| `set_php_version(site_id, *, php_version, project_id=None)` | Moves the site to another offered PHP version |
+| `mail(site_id, *, project_id=None)` | Whether the site's PHP `mail()` sends, as whom, and the verified `domains` it could send from |
+| `enable_mail(site_id, *, email_domain_id, local_part, project_id=None)` | Lets the site send as `<local_part>@<domain>`; every email is billed |
+| `disable_mail(site_id, *, project_id=None)` | Stops the site sending and deletes its SMTP credential |
 
 The password needs no scope beyond `hosting:read`, so guard the key accordingly.
+
+`update_image`, `rollback_image` and `set_php_version` restart the site before
+they return, and each returns the image status afterwards. Only the versions in
+`php.offered` are accepted; the API owns that list, so the SDK does not check
+it. A site never changes build on its own, except for a fix to a critical or
+known-exploited vulnerability, applied during the night after
+`forcedUpdate.deadline`. These need `hosting:write`; `enable_mail` and
+`disable_mail` need `email:write` as well.
 
 ## Other namespaces
 

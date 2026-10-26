@@ -310,6 +310,10 @@ no resources, and only by its owner. The other write commands are:
 | `cosmoner servers start\|stop\|reboot <server>` | Powers it on, cuts its power or restarts it; stop and reboot ask first. A stopped server is still billed. |
 | `cosmoner email create <domain>` | Sets a domain up for sending and prints the DNS records to publish. A domain not yet in the project is added as pending. |
 | `cosmoner email verify <domain>` | Checks those records and turns sending on; exits 1 until they are all visible. Asks first when it would start billing an email plan with a monthly price. |
+| `cosmoner hosting image <site>` | Shows the build a site runs, the patched build it can update to and any automatic-update deadline, what it can roll back to, and the PHP versions offered. |
+| `cosmoner hosting update <site>` / `rollback <site>` | Moves the site to the newest patched build of its PHP version, or back to the build it ran before its last change, within 7 days. Both restart the site and ask first. |
+| `cosmoner hosting php <site> <version>` | Moves the site to another offered PHP version. Restarts the site; asks first. |
+| `cosmoner hosting mail <site> [on --from <address> \| off]` | Shows whether the site's PHP `mail()` sends; `on` lets it send as `<address>` on a verified email domain, billing every email, and `off` stops it and deletes its SMTP credential. Both ask first. |
 
 ### Credentials
 

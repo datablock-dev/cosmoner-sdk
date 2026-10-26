@@ -233,3 +233,160 @@ describe("HostingService paid creates", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+/** A site's image status with an update and a rollback available. */
+function imageStatus() {
+  return {
+    current: { phpVersion: "8.4", tag: "8.4-20261001", digest: `sha256:${"a".repeat(64)}` },
+    updatedAt: "2026-10-01T03:00:00.000Z",
+    update: {
+      phpVersion: "8.4",
+      tag: "8.4-20261025",
+      digest: `sha256:${"b".repeat(64)}`,
+      builtAt: "2026-10-25T02:00:00.000Z",
+      critical: true,
+      knownExploited: false,
+      cves: ["CVE-2026-0001"],
+      phpPatch: "8.4.28",
+      phpRelease: true,
+    },
+    forcedUpdate: { deadline: "2026-10-30T00:00:00.000Z" },
+    rollback: { phpVersion: "8.3", tag: "8.3-20260901", digest: `sha256:${"c".repeat(64)}`, until: "2026-10-08T03:00:00.000Z" },
+    php: { version: "8.4", securitySupportEnds: "2028-12-31", deprecated: false, offered: ["8.3", "8.4"] },
+  };
+}
+
+/** A site's mail status with email turned on. */
+function mailStatus() {
+  return {
+    available: true,
+    enabled: true,
+    fromAddress: "wordpress@example.com",
+    credentialId: "cred-1",
+    emailDomainId: "ed-1",
+    domains: [{ id: "ed-1", name: "example.com" }],
+  };
+}
+
+describe("HostingService image and PHP version", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("image reads the site's image status", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply(imageStatus()));
+
+    const result = await client.hosting.image("site-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/hosting/shared/site-1/image`, body: undefined });
+    expect(result.data.update?.tag).toBe("8.4-20261025");
+    expect(result.data.php.offered).toEqual(["8.3", "8.4"]);
+  });
+
+  it("updateImage posts with no body and returns the new status", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ ...imageStatus(), update: null, forcedUpdate: null }));
+
+    const result = await client.hosting.updateImage("site-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: `${P}/hosting/shared/site-1/image/update`, body: undefined });
+    expect(result.data.update).toBeNull();
+  });
+
+  it("rollbackImage posts to the rollback route", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({ ...imageStatus(), rollback: null }));
+
+    await client.hosting.rollbackImage("site-1", { projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "POST",
+      url: "https://api.test.dev/v1/projects/proj-2/hosting/shared/site-1/image/rollback",
+      body: undefined,
+    });
+  });
+
+  it("setPhpVersion patches the version and leaves which ones are offered to the API", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply(imageStatus()));
+
+    await client.hosting.setPhpVersion("site-1", { phpVersion: "9.0" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "PATCH", url: `${P}/hosting/shared/site-1/php-version`, body: { phpVersion: "9.0" } });
+  });
+
+  it("requires a site id and a version before any request", async () => {
+    await expect(client.hosting.image("")).rejects.toThrow("siteId is required");
+    await expect(client.hosting.updateImage("")).rejects.toThrow("siteId is required");
+    await expect(client.hosting.rollbackImage("")).rejects.toThrow("siteId is required");
+    await expect(client.hosting.setPhpVersion("", { phpVersion: "8.4" })).rejects.toThrow("siteId is required");
+    await expect(client.hosting.setPhpVersion("site-1", { phpVersion: "" })).rejects.toThrow("phpVersion is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("HostingService mail", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("mail reads the site's mail status", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply(mailStatus()));
+
+    const result = await client.hosting.mail("site-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: `${P}/hosting/shared/site-1/mail`, body: undefined });
+    expect(result.data.fromAddress).toBe("wordpress@example.com");
+  });
+
+  it("enableMail puts the domain and local part", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply(mailStatus()));
+
+    const result = await client.hosting.enableMail("site-1", { emailDomainId: "ed-1", localPart: "wordpress" });
+
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "PUT",
+      url: `${P}/hosting/shared/site-1/mail`,
+      body: { emailDomainId: "ed-1", localPart: "wordpress" },
+    });
+    expect(result.data.enabled).toBe(true);
+  });
+
+  it("disableMail deletes and returns the status", async () => {
+    const off = { ...mailStatus(), enabled: false, fromAddress: null, credentialId: null, emailDomainId: null };
+    fetchSpy.mockResolvedValueOnce(writeReply(off));
+
+    const result = await client.hosting.disableMail("site-1", { projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "DELETE",
+      url: "https://api.test.dev/v1/projects/proj-2/hosting/shared/site-1/mail",
+      body: undefined,
+    });
+    expect(result.data.enabled).toBe(false);
+  });
+
+  it("requires a site id, domain and local part before any request", async () => {
+    await expect(client.hosting.mail("")).rejects.toThrow("siteId is required");
+    await expect(client.hosting.disableMail("")).rejects.toThrow("siteId is required");
+    await expect(client.hosting.enableMail("", { emailDomainId: "ed-1", localPart: "wp" })).rejects.toThrow("siteId is required");
+    await expect(client.hosting.enableMail("site-1", { emailDomainId: "", localPart: "wp" })).rejects.toThrow("emailDomainId is required");
+    await expect(client.hosting.enableMail("site-1", { emailDomainId: "ed-1", localPart: "" })).rejects.toThrow("localPart is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

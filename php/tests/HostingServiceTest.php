@@ -329,4 +329,208 @@ class HostingServiceTest extends TestCase
 
         $this->assertSame(0, $this->http->callCount());
     }
+
+    /** @return array<string, mixed> */
+    private function imageFixture(): array
+    {
+        return [
+            'current' => ['phpVersion' => '8.4', 'tag' => '8.4-20261001', 'digest' => 'sha256:' . str_repeat('a', 64)],
+            'updatedAt' => '2026-10-01T03:00:00.000Z',
+            'update' => [
+                'phpVersion' => '8.4',
+                'tag' => '8.4-20261025',
+                'digest' => 'sha256:' . str_repeat('b', 64),
+                'builtAt' => '2026-10-25T02:00:00.000Z',
+                'critical' => true,
+                'knownExploited' => false,
+                'cves' => ['CVE-2026-0001'],
+                'phpPatch' => '8.4.28',
+                'phpRelease' => true,
+            ],
+            'forcedUpdate' => ['deadline' => '2026-10-30T00:00:00.000Z'],
+            'rollback' => [
+                'phpVersion' => '8.3',
+                'tag' => '8.3-20260901',
+                'digest' => 'sha256:' . str_repeat('c', 64),
+                'until' => '2026-10-08T03:00:00.000Z',
+            ],
+            'php' => [
+                'version' => '8.4',
+                'securitySupportEnds' => '2028-12-31',
+                'deprecated' => false,
+                'offered' => ['8.3', '8.4'],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function mailFixture(): array
+    {
+        return [
+            'available' => true,
+            'enabled' => true,
+            'fromAddress' => 'wordpress@example.com',
+            'credentialId' => 'cred-1',
+            'emailDomainId' => 'ed-1',
+            'domains' => [['id' => 'ed-1', 'name' => 'example.com']],
+        ];
+    }
+
+    public function testReadsTheImageStatus(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->imageFixture()]);
+
+        $result = $this->client->hosting->image('site-1');
+
+        $this->assertSame(['success' => true, 'data' => $this->imageFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/site-1/image', $this->http->requests[0]['url']);
+    }
+
+    public function testUpdatesTheImageWithNoBody(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->imageFixture()]);
+
+        $this->client->hosting->updateImage('site-1');
+
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/site-1/image/update', $this->http->requests[0]['url']);
+        $this->assertNull($this->http->requests[0]['body']);
+    }
+
+    public function testRollsBackTheImageInAnotherProject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->imageFixture()]);
+
+        $this->client->hosting->rollbackImage('site-1', 'proj-2');
+
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/hosting/shared/site-1/image/rollback',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testSendsAnyPhpVersionAndLeavesTheOfferToTheApi(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->imageFixture()]);
+
+        $this->client->hosting->setPhpVersion('site-1', '9.0');
+
+        $this->assertSame('PATCH', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/site-1/php-version', $this->http->requests[0]['url']);
+        $this->assertSame('{"phpVersion":"9.0"}', $this->http->requests[0]['body']);
+    }
+
+    public function testRejectsAnEmptyPhpVersionWithoutSendingARequest(): void
+    {
+        try {
+            $this->client->hosting->setPhpVersion('site-1', '');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('phpVersion is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testReadsTheMailStatus(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->mailFixture()]);
+
+        $result = $this->client->hosting->mail('site-1');
+
+        $this->assertSame(['success' => true, 'data' => $this->mailFixture()], $result);
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/site-1/mail', $this->http->requests[0]['url']);
+    }
+
+    public function testEnablesMailWithTheDomainAndLocalPart(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => $this->mailFixture()]);
+
+        $this->client->hosting->enableMail('site-1', ['emailDomainId' => 'ed-1', 'localPart' => 'wordpress']);
+
+        $this->assertSame('PUT', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/site-1/mail', $this->http->requests[0]['url']);
+        $this->assertSame('{"emailDomainId":"ed-1","localPart":"wordpress"}', $this->http->requests[0]['body']);
+    }
+
+    public function testDisablesMail(): void
+    {
+        $off = [
+            ...$this->mailFixture(),
+            'enabled' => false,
+            'fromAddress' => null,
+            'credentialId' => null,
+            'emailDomainId' => null,
+        ];
+        $this->http->queueJson(200, ['success' => true, 'data' => $off]);
+
+        $result = $this->client->hosting->disableMail('site-1', 'proj-2');
+
+        $this->assertFalse($result['data']['enabled']);
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/hosting/shared/site-1/mail',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testRejectsAnEmptySiteIdOnImageAndMailWithoutSendingARequest(): void
+    {
+        $calls = [
+            'image' => fn () => $this->client->hosting->image(''),
+            'updateImage' => fn () => $this->client->hosting->updateImage(''),
+            'rollbackImage' => fn () => $this->client->hosting->rollbackImage(''),
+            'setPhpVersion' => fn () => $this->client->hosting->setPhpVersion('', '8.4'),
+            'mail' => fn () => $this->client->hosting->mail(''),
+            'enableMail' => fn () => $this->client->hosting->enableMail(
+                '',
+                ['emailDomainId' => 'ed-1', 'localPart' => 'wp'],
+            ),
+            'disableMail' => fn () => $this->client->hosting->disableMail(''),
+        ];
+
+        foreach ($calls as $method => $call) {
+            try {
+                $call();
+                $this->fail("Expected an InvalidArgumentException from {$method}");
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame('siteId is required', $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testRejectsInvalidEnableMailInputWithoutSendingARequest(): void
+    {
+        $valid = ['emailDomainId' => 'ed-1', 'localPart' => 'wordpress'];
+        $cases = [
+            'emailDomainId is required' => fn () => $this->client->hosting->enableMail(
+                'site-1',
+                ['emailDomainId' => '', 'localPart' => 'wordpress'],
+            ),
+            'localPart is required' => fn () => $this->client->hosting->enableMail(
+                'site-1',
+                ['emailDomainId' => 'ed-1', 'localPart' => ''],
+            ),
+            'Unknown field "local_part"' => fn () => $this->client->hosting->enableMail(
+                'site-1',
+                [...$valid, 'local_part' => 'wordpress'],
+            ),
+        ];
+
+        foreach ($cases as $message => $call) {
+            try {
+                $call();
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }
