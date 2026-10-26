@@ -408,3 +408,238 @@ class TestAsyncHostingCreate:
                 await client.hosting.preview(tier="")
 
         assert httpx_mock.get_requests() == []
+
+
+IMAGE = {
+    "current": {
+        "phpVersion": "8.4",
+        "tag": "8.4-20261001",
+        "digest": "sha256:" + "a" * 64,
+    },
+    "updatedAt": "2026-10-01T03:00:00.000Z",
+    "update": {
+        "phpVersion": "8.4",
+        "tag": "8.4-20261025",
+        "digest": "sha256:" + "b" * 64,
+        "builtAt": "2026-10-25T02:00:00.000Z",
+        "critical": True,
+        "knownExploited": False,
+        "cves": ["CVE-2026-0001"],
+        "phpPatch": "8.4.28",
+        "phpRelease": True,
+    },
+    "forcedUpdate": {"deadline": "2026-10-30T00:00:00.000Z"},
+    "rollback": {
+        "phpVersion": "8.3",
+        "tag": "8.3-20260901",
+        "digest": "sha256:" + "c" * 64,
+        "until": "2026-10-08T03:00:00.000Z",
+    },
+    "php": {
+        "version": "8.4",
+        "securitySupportEnds": "2028-12-31",
+        "deprecated": False,
+        "offered": ["8.3", "8.4"],
+    },
+}
+
+MAIL = {
+    "available": True,
+    "enabled": True,
+    "fromAddress": "wordpress@example.com",
+    "credentialId": "cred-1",
+    "emailDomainId": "ed-1",
+    "domains": [{"id": "ed-1", "name": "example.com"}],
+}
+
+
+class TestHostingImage:
+    """Tests for the site image and PHP version routes via mocked HTTP."""
+
+    def test_reads_the_image_status(self, client, httpx_mock):
+        envelope = {"success": True, "data": IMAGE}
+        httpx_mock.add_response(url=f"{BASE}/site-1/image", json=envelope)
+
+        assert client.hosting.image("site-1") == envelope
+        assert httpx_mock.get_request().method == "GET"
+
+    def test_updates_the_image_with_no_body(self, client, httpx_mock):
+        envelope = {
+            "success": True,
+            "data": {**IMAGE, "update": None, "forcedUpdate": None},
+        }
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/image/update", method="POST", json=envelope
+        )
+
+        assert client.hosting.update_image("site-1") == envelope
+        assert httpx_mock.get_request().content == b""
+
+    def test_rolls_back_in_another_project(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url="https://api.test.dev/v1/projects/proj-2/hosting/shared/site-1/image/rollback",
+            method="POST",
+            json={"success": True, "data": {**IMAGE, "rollback": None}},
+        )
+
+        client.hosting.rollback_image("site-1", project_id="proj-2")
+
+        assert httpx_mock.get_request().method == "POST"
+
+    def test_sends_any_php_version_and_leaves_the_offer_to_the_api(
+        self, client, httpx_mock
+    ):
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/php-version",
+            method="PATCH",
+            json={"success": True, "data": IMAGE},
+        )
+
+        client.hosting.set_php_version("site-1", php_version="9.0")
+
+        assert json.loads(httpx_mock.get_request().content) == {"phpVersion": "9.0"}
+
+    def test_requires_a_site_id_and_version_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="site_id is required"):
+            client.hosting.image("")
+        with pytest.raises(ValueError, match="site_id is required"):
+            client.hosting.update_image("")
+        with pytest.raises(ValueError, match="site_id is required"):
+            client.hosting.rollback_image("")
+        with pytest.raises(ValueError, match="site_id is required"):
+            client.hosting.set_php_version("", php_version="8.4")
+        with pytest.raises(ValueError, match="php_version is required"):
+            client.hosting.set_php_version("site-1", php_version="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestHostingMail:
+    """Tests for a site's email routes via mocked HTTP."""
+
+    def test_reads_the_mail_status(self, client, httpx_mock):
+        envelope = {"success": True, "data": MAIL}
+        httpx_mock.add_response(url=f"{BASE}/site-1/mail", json=envelope)
+
+        assert client.hosting.mail("site-1") == envelope
+
+    def test_enables_mail_with_the_domain_and_local_part(self, client, httpx_mock):
+        envelope = {"success": True, "data": MAIL}
+        httpx_mock.add_response(url=f"{BASE}/site-1/mail", method="PUT", json=envelope)
+
+        result = client.hosting.enable_mail(
+            "site-1", email_domain_id="ed-1", local_part="wordpress"
+        )
+
+        assert result == envelope
+        assert json.loads(httpx_mock.get_request().content) == {
+            "emailDomainId": "ed-1",
+            "localPart": "wordpress",
+        }
+
+    def test_disables_mail(self, client, httpx_mock):
+        off = {**MAIL, "enabled": False, "fromAddress": None, "credentialId": None}
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/mail",
+            method="DELETE",
+            json={"success": True, "data": off},
+        )
+
+        assert client.hosting.disable_mail("site-1")["data"]["enabled"] is False
+
+    def test_requires_its_arguments_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="site_id is required"):
+            client.hosting.mail("")
+        with pytest.raises(ValueError, match="site_id is required"):
+            client.hosting.disable_mail("")
+        with pytest.raises(ValueError, match="site_id is required"):
+            client.hosting.enable_mail("", email_domain_id="ed-1", local_part="wp")
+        with pytest.raises(ValueError, match="email_domain_id is required"):
+            client.hosting.enable_mail("site-1", email_domain_id="", local_part="wp")
+        with pytest.raises(ValueError, match="local_part is required"):
+            client.hosting.enable_mail("site-1", email_domain_id="ed-1", local_part="")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncHostingImageAndMail:
+    """Tests for the image, PHP version and mail routes through the async client."""
+
+    async def test_image_routes(self, httpx_mock):
+        envelope = {"success": True, "data": IMAGE}
+        httpx_mock.add_response(url=f"{BASE}/site-1/image", json=envelope)
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/image/update", method="POST", json=envelope
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/image/rollback", method="POST", json=envelope
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/php-version", method="PATCH", json=envelope
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.hosting.image("site-1") == envelope
+            assert await client.hosting.update_image("site-1") == envelope
+            assert await client.hosting.rollback_image("site-1") == envelope
+            assert (
+                await client.hosting.set_php_version("site-1", php_version="8.3")
+                == envelope
+            )
+
+        requests = httpx_mock.get_requests()
+        assert [r.method for r in requests] == ["GET", "POST", "POST", "PATCH"]
+        assert json.loads(requests[3].content) == {"phpVersion": "8.3"}
+
+    async def test_mail_routes(self, httpx_mock):
+        envelope = {"success": True, "data": MAIL}
+        httpx_mock.add_response(url=f"{BASE}/site-1/mail", method="GET", json=envelope)
+        httpx_mock.add_response(url=f"{BASE}/site-1/mail", method="PUT", json=envelope)
+        httpx_mock.add_response(url=f"{BASE}/site-1/mail", method="DELETE", json=envelope)
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            assert await client.hosting.mail("site-1") == envelope
+            assert (
+                await client.hosting.enable_mail(
+                    "site-1", email_domain_id="ed-1", local_part="wordpress"
+                )
+                == envelope
+            )
+            assert await client.hosting.disable_mail("site-1") == envelope
+
+        requests = httpx_mock.get_requests()
+        assert [r.method for r in requests] == ["GET", "PUT", "DELETE"]
+        assert json.loads(requests[1].content) == {
+            "emailDomainId": "ed-1",
+            "localPart": "wordpress",
+        }
+
+    async def test_validates_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="site_id is required"):
+                await client.hosting.image("")
+            with pytest.raises(ValueError, match="php_version is required"):
+                await client.hosting.set_php_version("site-1", php_version="")
+            with pytest.raises(ValueError, match="local_part is required"):
+                await client.hosting.enable_mail(
+                    "site-1", email_domain_id="ed-1", local_part=""
+                )
+            with pytest.raises(ValueError, match="site_id is required"):
+                await client.hosting.disable_mail("")
+
+        assert httpx_mock.get_requests() == []

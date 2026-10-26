@@ -3,7 +3,10 @@
    returned promise rather than throw synchronously, so one `.catch()` covers both
    client-side and server-side failures. */
 
-/** Hosting service namespace — shared web hosting sites and how to reach their files. */
+/**
+ * Hosting service namespace — shared web hosting sites, how to reach their
+ * files, the site image they run and whether they can send email.
+ */
 
 import { resolveProjectId, type ResolvedConfig } from "../config";
 import type { CheckoutPreview } from "./preview";
@@ -104,7 +107,7 @@ export interface CreateHostingSiteParams extends ProjectScopedParams {
   siteName: string;
   /** Defaults to `STARTER` server-side. */
   tier?: HostingTier;
-  /** `8.1`, `8.2` or `8.3`; defaults to `8.3` server-side. */
+  /** One of the offered PHP versions; the API owns that list and picks a default when left out. */
   phpVersion?: string;
   /** Creates a MySQL database with this name alongside the site. */
   database?: string;
@@ -121,7 +124,99 @@ export type CreateHostingSiteResponse = Envelope<{
   databaseError?: string;
 }>;
 
-/** Read operations on a project's shared hosting sites. */
+/** One build of the site image. */
+export interface HostingImageBuild {
+  phpVersion: string;
+  /**
+   * The build's dated tag, e.g. `8.4-20261025`. Null for a site created before
+   * images were pinned that has not been updated since.
+   */
+  tag: string | null;
+  /** The build's image digest, `sha256:…`. Null exactly when `tag` is. */
+  digest: string | null;
+}
+
+/** A newer patched build of the site's PHP version. */
+export interface HostingImageUpdate {
+  phpVersion: string;
+  tag: string;
+  digest: string;
+  /** When the build was made, when known. */
+  builtAt: string | null;
+  /** The build fixes a vulnerability rated critical. */
+  critical: boolean;
+  /** The build fixes a vulnerability known to be exploited. */
+  knownExploited: boolean;
+  /** The critical or known-exploited vulnerabilities it fixes, by CVE id, when known. */
+  cves: string[];
+  /** The PHP release inside the build, e.g. `8.4.28`, when known. */
+  phpPatch: string | null;
+  /** The build carries a newer PHP release than the site runs; PHP's own security fixes show up here rather than in `cves`. */
+  phpRelease: boolean;
+}
+
+/** Which build of the site image a site runs, what it can update to, and what it can roll back to. */
+export interface HostingImageStatus {
+  /** The build the site runs. It changes only through an update, a rollback, a PHP version change or a forced security update. */
+  current: HostingImageBuild;
+  /** When the current build was applied. Null before the site's first change. */
+  updatedAt: string | null;
+  /** A newer patched build of the site's PHP version, or null when the site is up to date. */
+  update: HostingImageUpdate | null;
+  /**
+   * Set when the update fixes a critical or known-exploited vulnerability; it
+   * is then applied automatically during the night after `deadline`.
+   */
+  forcedUpdate: { deadline: string } | null;
+  /** The build the site ran before its last change, while `until` has not passed. */
+  rollback: (HostingImageBuild & { until: string }) | null;
+  php: {
+    version: string;
+    /** The last day the version receives security fixes, as `YYYY-MM-DD`. */
+    securitySupportEnds: string | null;
+    /** No longer offered for new sites; the site should be upgraded. */
+    deprecated: boolean;
+    /** The versions `setPhpVersion()` accepts. */
+    offered: string[];
+  };
+}
+
+/** Whether a site's PHP `mail()` can send, and as whom. */
+export interface HostingMailStatus {
+  /** Whether sites in this environment can send email at all. When false, `enableMail()` answers 503. */
+  available: boolean;
+  /** Whether the site's `mail()` sends. While false it returns `false`. */
+  enabled: boolean;
+  /** The address the site sends as. Null while email is off. */
+  fromAddress: string | null;
+  /** The SMTP credential the site sends with, listed under the project's email domains. Null while email is off. */
+  credentialId: string | null;
+  /** The email domain of that credential. Null while email is off. */
+  emailDomainId: string | null;
+  /** The project's verified email domains the site can send from. */
+  domains: Array<{ id: string; name: string }>;
+}
+
+/** Arguments accepted by `client.hosting.setPhpVersion()`. */
+export interface SetHostingPhpVersionParams extends ProjectScopedParams {
+  /** One of `php.offered` from `image()`. */
+  phpVersion: string;
+}
+
+/** Arguments accepted by `client.hosting.enableMail()`. */
+export interface EnableHostingMailParams extends ProjectScopedParams {
+  /** A verified email domain of the project, from `mail()` or `client.email.listDomains()`. */
+  emailDomainId: string;
+  /** The part before the @ of the address the site sends as, e.g. `wordpress`. */
+  localPart: string;
+}
+
+/** Every image route answers with the site's image status as it stands afterwards. */
+export type HostingImageStatusResponse = Envelope<HostingImageStatus>;
+/** Every mail route answers with the site's mail status as it stands afterwards. */
+export type HostingMailStatusResponse = Envelope<HostingMailStatus>;
+
+/** Operations on a project's shared hosting sites. */
 export class HostingService {
   constructor(
     private readonly transport: Transport,
@@ -204,5 +299,82 @@ export class HostingService {
         extraStorageGb: params.extraStorageGb,
       },
     });
+  }
+
+  /**
+   * Reads which build of the site image a site runs, the patched build it can
+   * update to, whether that update will be applied automatically and when,
+   * what it can roll back to, and where its PHP version stands.
+   */
+  async image(siteId: string, params: ProjectScopedParams = {}): Promise<HostingImageStatusResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    return this.transport.request<HostingImageStatusResponse>("GET", `${this.basePath(params.projectId)}/${siteId}/image`);
+  }
+
+  /**
+   * Moves a site to the newest patched build of its PHP version, the `update`
+   * in `image()`. The site restarts before this answers, which interrupts it
+   * for a few seconds; `rollbackImage()` restores the previous build for 7 days.
+   * Answers 409 when the site already runs the newest build.
+   */
+  async updateImage(siteId: string, params: ProjectScopedParams = {}): Promise<HostingImageStatusResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    return this.transport.request<HostingImageStatusResponse>("POST", `${this.basePath(params.projectId)}/${siteId}/image/update`);
+  }
+
+  /**
+   * Returns a site to the build it ran before its last update or PHP version
+   * change, PHP version included, until `rollback.until` in `image()`. The site
+   * restarts before this answers. A rollback cannot itself be rolled back, and
+   * rolling back a forced security update only postpones it.
+   */
+  async rollbackImage(siteId: string, params: ProjectScopedParams = {}): Promise<HostingImageStatusResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    return this.transport.request<HostingImageStatusResponse>("POST", `${this.basePath(params.projectId)}/${siteId}/image/rollback`);
+  }
+
+  /**
+   * Moves a site to another PHP version, onto its newest patched build. Only
+   * the versions in `php.offered` from `image()` are accepted; the API owns
+   * that list. The site restarts before this answers, and `rollbackImage()`
+   * restores the previous version for 7 days.
+   */
+  async setPhpVersion(siteId: string, params: SetHostingPhpVersionParams): Promise<HostingImageStatusResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    if (!params?.phpVersion) throw new Error("phpVersion is required");
+    return this.transport.request<HostingImageStatusResponse>("PATCH", `${this.basePath(params.projectId)}/${siteId}/php-version`, {
+      body: { phpVersion: params.phpVersion },
+    });
+  }
+
+  /** Reads whether a site's PHP `mail()` can send, the address it sends as, and the domains it could send from. */
+  async mail(siteId: string, params: ProjectScopedParams = {}): Promise<HostingMailStatusResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    return this.transport.request<HostingMailStatusResponse>("GET", `${this.basePath(params.projectId)}/${siteId}/mail`);
+  }
+
+  /**
+   * Lets a site's PHP `mail()` send as `<localPart>@<domain>`, through a new
+   * SMTP credential on the verified email domain `emailDomainId`. Every email
+   * the site sends is billed on the project's email plan. Sent again with
+   * another address, it replaces the site's credential. Needs `email:write` as
+   * well as `hosting:write`.
+   */
+  async enableMail(siteId: string, params: EnableHostingMailParams): Promise<HostingMailStatusResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    if (!params?.emailDomainId) throw new Error("emailDomainId is required");
+    if (!params.localPart) throw new Error("localPart is required");
+    return this.transport.request<HostingMailStatusResponse>("PUT", `${this.basePath(params.projectId)}/${siteId}/mail`, {
+      body: { emailDomainId: params.emailDomainId, localPart: params.localPart },
+    });
+  }
+
+  /**
+   * Stops a site sending email and deletes its SMTP credential; afterwards
+   * `mail()` returns `false`. Needs `email:write` as well as `hosting:write`.
+   */
+  async disableMail(siteId: string, params: ProjectScopedParams = {}): Promise<HostingMailStatusResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    return this.transport.request<HostingMailStatusResponse>("DELETE", `${this.basePath(params.projectId)}/${siteId}/mail`);
   }
 }

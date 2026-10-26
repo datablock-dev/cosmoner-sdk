@@ -7,11 +7,13 @@ import { askYesNo, stdinIsTty } from "../../src/stdin";
 /**
  * Drives the verbs that change something already there — server rename and
  * power, project rename and delete, email domain setup, shared-database
- * password rotation — through the real entry point against a mocked API.
+ * password rotation, a hosting site's image, PHP version and email — through
+ * the real entry point against a mocked API.
  *
  * What is pinned down: names resolve to the ids the API wants; stop, reboot,
- * rotate-password, project delete and a billed email verification ask first
- * and change nothing unasked; and a rotated password is printed once.
+ * rotate-password, project delete, a billed email verification, and every
+ * hosting change that restarts a site, bills or deletes a credential ask
+ * first and change nothing unasked; and a rotated password is printed once.
  */
 
 vi.mock("../../src/stdin", async (importOriginal) => ({
@@ -292,5 +294,197 @@ describe("cosmoner databases rotate-password", () => {
     expect((await cli(["databases", "rotate-password", "big", "--yes"])).code).toBe(2);
 
     expect(requested().filter((key) => key.startsWith("POST"))).toEqual([]);
+  });
+});
+
+describe("cosmoner hosting image|update|rollback|php|mail", () => {
+  const H = `${P}/hosting/shared`;
+  const SITES = [{ id: "site-1", siteName: "blog", phpVersion: "8.3", status: "ACTIVE" }];
+  const CURRENT = { phpVersion: "8.3", tag: "8.3-20261001", digest: `sha256:${"a".repeat(64)}` };
+  const UPDATE = {
+    phpVersion: "8.3",
+    tag: "8.3-20261025",
+    digest: `sha256:${"b".repeat(64)}`,
+    builtAt: null,
+    critical: true,
+    knownExploited: false,
+    cves: ["CVE-2026-0001"],
+    phpPatch: "8.3.27",
+    phpRelease: true,
+  };
+  const PHP = { version: "8.3", securitySupportEnds: "2027-12-31", deprecated: false, offered: ["8.3", "8.4"] };
+  const IMAGE = {
+    current: CURRENT,
+    updatedAt: "2026-10-01T03:00:00.000Z",
+    update: UPDATE,
+    forcedUpdate: { deadline: "2026-10-30T00:00:00.000Z" },
+    rollback: null,
+    php: PHP,
+  };
+  const UPDATED = {
+    ...IMAGE,
+    current: { phpVersion: "8.3", tag: UPDATE.tag, digest: UPDATE.digest },
+    update: null,
+    forcedUpdate: null,
+    rollback: { ...CURRENT, until: "2026-11-02T03:00:00.000Z" },
+  };
+  const MAIL_OFF = {
+    available: true,
+    enabled: false,
+    fromAddress: null,
+    credentialId: null,
+    emailDomainId: null,
+    domains: [{ id: "ed-1", name: "example.com" }],
+  };
+  const MAIL_ON = { ...MAIL_OFF, enabled: true, fromAddress: "wordpress@example.com", credentialId: "cred-1", emailDomainId: "ed-1" };
+
+  it("image shows the build, the update and its deadline", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/image`]: [IMAGE] });
+
+    const result = await cli(["hosting", "image", "blog"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Site "blog" runs PHP 8.3, build 8.3-20261001, since 2026-10-01.');
+    expect(result.stdout).toContain("Update available: 8.3-20261025 (PHP 8.3.27, CVE-2026-0001) — critical.");
+    expect(result.stdout).toContain("applied automatically during the night after 2026-10-30T00:00:00.000Z");
+    expect(result.stdout).toContain("Offered: 8.3, 8.4.");
+  });
+
+  it("image prints the API's object in JSON", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/image`]: [IMAGE] });
+
+    const result = await cli(["hosting", "image", "blog", "--format", "json"]);
+
+    expect(JSON.parse(result.stdout)).toEqual(IMAGE);
+  });
+
+  it("update asks first, then moves the site to the new build", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/image`]: [IMAGE], [`POST ${H}/site-1/image/update`]: [UPDATED] });
+
+    const result = await cli(["hosting", "update", "blog"]);
+
+    expect(result.code).toBe(0);
+    expect(askYesNo).toHaveBeenCalledWith('Update site "blog"?');
+    expect(result.stderr).toContain("from 8.3-20261001 to 8.3-20261025");
+    expect(result.stdout).toBe('Site "blog" runs 8.3-20261025.');
+  });
+
+  it("update leaves a site already on the newest build alone", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/image`]: [UPDATED] });
+
+    const result = await cli(["hosting", "update", "blog"]);
+
+    expect(result.code).toBe(0);
+    expect(askYesNo).not.toHaveBeenCalled();
+    expect(result.stdout).toBe('Site "blog" already runs the newest build, 8.3-20261025.');
+    expect(requested().filter((key) => key.startsWith("POST"))).toEqual([]);
+  });
+
+  it("rollback --yes returns the site to its previous build", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/image`]: [UPDATED], [`POST ${H}/site-1/image/rollback`]: [IMAGE] });
+
+    const result = await cli(["hosting", "rollback", "blog", "--yes"]);
+
+    expect(result.code).toBe(0);
+    expect(askYesNo).not.toHaveBeenCalled();
+    expect(result.stdout).toBe('Site "blog" runs 8.3-20261001 again.');
+  });
+
+  it("rollback exits 1 with nothing to roll back to", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/image`]: [IMAGE] });
+
+    const result = await cli(["hosting", "rollback", "blog", "--yes"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("nothing to roll back to");
+    expect(requested().filter((key) => key.startsWith("POST"))).toEqual([]);
+  });
+
+  it("php asks first and sends the version as given, leaving the offer to the API", async () => {
+    const moved = { ...UPDATED, current: { phpVersion: "8.4", tag: "8.4-20261025", digest: UPDATE.digest }, php: { ...PHP, version: "8.4" } };
+    routes({ [`GET ${H}`]: [SITES], [`PATCH ${H}/site-1/php-version`]: [moved] });
+
+    const result = await cli(["hosting", "php", "blog", "8.4"]);
+
+    expect(result.code).toBe(0);
+    expect(askYesNo).toHaveBeenCalledWith('Move site "blog" to PHP 8.4?');
+    expect(result.stderr).toContain("from PHP 8.3 to PHP 8.4");
+    expect(bodyOf(`PATCH ${H}/site-1/php-version`)).toEqual({ phpVersion: "8.4" });
+    expect(result.stdout).toBe('Site "blog" runs PHP 8.4, build 8.4-20261025.');
+  });
+
+  it("php reports the API's refusal of a version it does not offer", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`PATCH ${H}/site-1/php-version`]: ["Invalid PHP version", 400] });
+
+    const result = await cli(["hosting", "php", "blog", "7.4", "--yes"]);
+
+    expect(result.code).toBe(1);
+    expect(bodyOf(`PATCH ${H}/site-1/php-version`)).toEqual({ phpVersion: "7.4" });
+  });
+
+  it("update, rollback, php and mail on|off change nothing unasked or declined", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/image`]: [UPDATED], [`GET ${H}/site-1/mail`]: [MAIL_ON] });
+
+    vi.mocked(stdinIsTty).mockReturnValue(false);
+    expect((await cli(["hosting", "rollback", "blog"])).code).toBe(2);
+    expect((await cli(["hosting", "php", "blog", "8.4"])).code).toBe(2);
+    expect((await cli(["hosting", "mail", "blog", "on", "--from", "noreply@example.com"])).code).toBe(2);
+    expect((await cli(["hosting", "mail", "blog", "off"])).code).toBe(2);
+    vi.mocked(stdinIsTty).mockReturnValue(true);
+    vi.mocked(askYesNo).mockResolvedValue(false);
+    expect((await cli(["hosting", "rollback", "blog"])).code).toBe(1);
+
+    expect(requested().filter((key) => !key.startsWith("GET"))).toEqual([]);
+  });
+
+  it("mail shows whether the site sends, and from where it could", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/mail`]: [MAIL_OFF] });
+
+    const result = await cli(["hosting", "mail", "blog"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Email is off for site "blog"');
+    expect(result.stdout).toContain("on one of: example.com");
+  });
+
+  it("mail on resolves the domain of --from, asks, and sends its id with the local part", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/mail`]: [MAIL_OFF], [`PUT ${H}/site-1/mail`]: [MAIL_ON] });
+
+    const result = await cli(["hosting", "mail", "blog", "on", "--from", "wordpress@Example.com"]);
+
+    expect(result.code).toBe(0);
+    expect(askYesNo).toHaveBeenCalledWith('Turn on email for site "blog"?');
+    expect(result.stderr).toContain("billed on the project's email plan");
+    expect(bodyOf(`PUT ${H}/site-1/mail`)).toEqual({ emailDomainId: "ed-1", localPart: "wordpress" });
+    expect(result.stdout).toBe('Site "blog" sends email as wordpress@example.com.');
+  });
+
+  it("mail on refuses a domain that is not verified, before asking", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/mail`]: [MAIL_OFF] });
+
+    const result = await cli(["hosting", "mail", "blog", "on", "--from", "wp@other.org", "--yes"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("other.org is not a verified email domain of this project. Verified: example.com.");
+    expect(requested().filter((key) => key.startsWith("PUT"))).toEqual([]);
+  });
+
+  it("mail off --yes turns it off", async () => {
+    routes({ [`GET ${H}`]: [SITES], [`GET ${H}/site-1/mail`]: [MAIL_ON], [`DELETE ${H}/site-1/mail`]: [MAIL_OFF] });
+
+    const result = await cli(["hosting", "mail", "blog", "off", "--yes"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe('Email is off for site "blog".');
+  });
+
+  it("mail rejects a bad command line with exit 2", async () => {
+    expect((await cli(["hosting", "mail", "blog", "maybe"])).code).toBe(2);
+    expect((await cli(["hosting", "mail", "blog", "on"])).code).toBe(2);
+    expect((await cli(["hosting", "mail", "blog", "off", "--from", "a@example.com"])).code).toBe(2);
+    expect((await cli(["hosting", "mail", "blog", "on", "--from", "example.com"])).code).toBe(2);
+    expect((await cli(["hosting", "php", "blog"])).code).toBe(2);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

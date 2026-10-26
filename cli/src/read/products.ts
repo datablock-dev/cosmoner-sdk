@@ -19,7 +19,7 @@ import {
   SERVER_ORDER_ACTIONS,
 } from "../write/create";
 import { EMAIL_CREDENTIAL_ACTIONS, IAM_CREDENTIAL_ACTIONS, SSH_KEY_GENERATE_ACTIONS } from "../write/credentials";
-import { DATABASE_ACTIONS, EMAIL_DOMAIN_ACTIONS, PROJECT_ACTIONS, SERVER_ACTIONS } from "../write/lifecycle";
+import { DATABASE_ACTIONS, EMAIL_DOMAIN_ACTIONS, HOSTING_SITE_ACTIONS, PROJECT_ACTIONS, SERVER_ACTIONS } from "../write/lifecycle";
 import type { ReadableResource } from "./resource";
 
 /** True when `ref` is any of the given identifiers, compared exactly. */
@@ -327,7 +327,7 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
     notes: "cosmoner upload <site> <dir> uploads to a site.",
     remove: (client, row) => client.hosting.delete(row.id),
     removeWarning: "Its files, databases and domains go with it, and its billing stops.",
-    actions: HOSTING_ORDER_ACTIONS,
+    actions: { ...HOSTING_ORDER_ACTIONS, ...HOSTING_SITE_ACTIONS },
   },
 
   webhooks: {
