@@ -128,6 +128,20 @@
             "description": "Deploy automatically on every push to the selected branch.",
             "type": "boolean"
           },
+          "previews": {
+            "description": "Pull request previews. GitHub repositories only.",
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Build a preview of every pull request against the selected branch. Previews are billed per preview for each hour they run, so this only preselects the option in the deploy wizard, where the price is shown; a commit never turns previews on or off."
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
           "envs": {
             "description": "Environment variables available at build and run time.",
             "maxItems": 100,
