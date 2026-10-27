@@ -126,7 +126,9 @@ final class DeploymentDriftTest extends TestCase
         // ever restructured so the walk no longer reaches them.
         self::assertArrayHasKey('build', Deployment::serviceFields());
         self::assertArrayHasKey('envs', Deployment::serviceFields());
+        self::assertArrayHasKey('previews', Deployment::serviceFields());
         self::assertNotEmpty(Deployment::buildFields());
         self::assertNotEmpty(Deployment::envFields());
+        self::assertNotEmpty(Deployment::previewsFields());
     }
 }

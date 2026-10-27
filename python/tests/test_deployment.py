@@ -19,6 +19,17 @@ def test_applies_the_defaults_the_platform_applies() -> None:
     }
 
 
+def test_carries_previews_into_the_template_including_a_false_enabled() -> None:
+    # `False` is a setting, not an absence: it preselects previews off in the
+    # wizard, so it has to arrive rather than be dropped as falsy.
+    result = validate_deployment(
+        "services:\n  - name: web\n    previews:\n      enabled: false\n"
+    )
+
+    assert result.template is not None
+    assert result.template["services"][0]["previews"] == {"enabled": False}
+
+
 def test_drops_unknown_keys_as_the_platform_does() -> None:
     # The warning says the field is ignored; the template has to show it being
     # ignored, or the two halves of the answer disagree.

@@ -1,0 +1,5 @@
+services:
+  - name: web
+    previews:
+      enabled: true
+      branches: [main]
