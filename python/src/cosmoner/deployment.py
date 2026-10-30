@@ -213,6 +213,13 @@ BUILD_FIELDS: dict[str, _Field] = {
     "output_dir": _Field(kind="string", max_length=512),
 }
 
+#: ``enabled`` only preselects pull request previews in the deploy wizard, which
+#: shows their hourly price there. Previews are billed, so the platform never
+#: switches them on or off from a commit to this file.
+PREVIEWS_FIELDS: dict[str, _Field] = {
+    "enabled": _Field(kind="boolean", required=True),
+}
+
 SERVICE_FIELDS: dict[str, _Field] = {
     "name": _Field(
         kind="string",
@@ -239,6 +246,7 @@ SERVICE_FIELDS: dict[str, _Field] = {
     "instance_size": _Field(kind="string", max_length=64),
     "instances": _Field(kind="integer", minimum=1, maximum=10),
     "autodeploy": _Field(kind="boolean"),
+    "previews": _Field(kind="object", fields=PREVIEWS_FIELDS),
     "envs": _Field(
         kind="array", max_items=100, item=_Field(kind="object", fields=ENV_FIELDS)
     ),

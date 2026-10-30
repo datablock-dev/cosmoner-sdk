@@ -138,6 +138,17 @@ export const BUILD_FIELDS: FieldTable = {
   output_dir: { kind: "string", maxLength: 512 },
 };
 
+/**
+ * Fields of a service's `previews` mapping.
+ *
+ * `enabled` only preselects pull request previews in the deploy wizard, which
+ * shows their hourly price there. Previews are billed, so the platform never
+ * switches them on or off from a commit to this file.
+ */
+export const PREVIEWS_FIELDS: FieldTable = {
+  enabled: { kind: "boolean", required: true },
+};
+
 /** Fields of one entry under `services`. */
 export const SERVICE_FIELDS: FieldTable = {
   name: {
@@ -159,6 +170,7 @@ export const SERVICE_FIELDS: FieldTable = {
   instance_size: { kind: "string", maxLength: 64 },
   instances: { kind: "integer", minimum: 1, maximum: 10 },
   autodeploy: { kind: "boolean" },
+  previews: { kind: "object", fields: PREVIEWS_FIELDS },
   envs: { kind: "array", maxItems: 100, item: { kind: "object", fields: ENV_FIELDS } },
 };
 

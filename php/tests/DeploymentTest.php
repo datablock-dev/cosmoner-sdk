@@ -23,6 +23,19 @@ final class DeploymentTest extends TestCase
         );
     }
 
+    public function testCarriesPreviewsIntoTheTemplateIncludingAFalseEnabled(): void
+    {
+        // `false` is a setting, not an absence: it preselects previews off in
+        // the wizard, so it has to arrive rather than be dropped as falsy.
+        $result = Deployment::validate("services:\n  - name: web\n    previews:\n      enabled: false\n");
+
+        self::assertNotNull($result->template);
+        $services = $result->template['services'];
+        self::assertIsArray($services);
+        self::assertIsArray($services[0]);
+        self::assertSame(['enabled' => false], $services[0]['previews']);
+    }
+
     public function testDropsUnknownKeysAsThePlatformDoes(): void
     {
         // The warning says the field is ignored; the template has to show it

@@ -36,6 +36,7 @@ export type {
   DeploymentEnvVar,
   DeploymentIssue,
   DeploymentIssueSeverity,
+  DeploymentPreviews,
   DeploymentService,
   DeploymentTemplate,
   DeploymentValidationResult,

@@ -21,6 +21,7 @@ from cosmoner.deployment import (
     APP_SCHEMA_URL,
     BUILD_FIELDS,
     ENV_FIELDS,
+    PREVIEWS_FIELDS,
     ROOT_FIELDS,
     SERVICE_FIELDS,
     _Field,
@@ -92,4 +93,5 @@ def test_walk_reaches_the_nested_tables() -> None:
     # restructured so the walk no longer reaches them.
     assert "build" in SERVICE_FIELDS
     assert "envs" in SERVICE_FIELDS
-    assert BUILD_FIELDS and ENV_FIELDS
+    assert "previews" in SERVICE_FIELDS
+    assert BUILD_FIELDS and ENV_FIELDS and PREVIEWS_FIELDS

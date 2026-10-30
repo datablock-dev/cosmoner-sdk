@@ -40,6 +40,17 @@ export interface DeploymentBuild {
   output_dir?: string;
 }
 
+/**
+ * Pull request previews for a service. GitHub repositories only.
+ *
+ * Previews are billed per preview for each hour they run, so `enabled` only
+ * preselects the option in the deploy wizard, where the price is shown. A
+ * commit never turns previews on or off.
+ */
+export interface DeploymentPreviews {
+  enabled: boolean;
+}
+
 /** One service defined by the file. Each deploy sets up one of them. */
 export interface DeploymentService {
   name: string;
@@ -56,6 +67,7 @@ export interface DeploymentService {
   instance_size?: string;
   instances?: number;
   autodeploy?: boolean;
+  previews?: DeploymentPreviews;
   envs?: DeploymentEnvVar[];
 }
 

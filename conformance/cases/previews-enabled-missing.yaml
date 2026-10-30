@@ -1,0 +1,4 @@
+services:
+  - name: web
+    previews:
+      enable: true
