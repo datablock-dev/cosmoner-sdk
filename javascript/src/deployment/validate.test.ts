@@ -13,6 +13,16 @@ describe("validateDeployment", () => {
     });
   });
 
+  it("carries previews into the template, including a false enabled", () => {
+    // `false` is a setting, not an absence: it preselects previews off in the
+    // wizard, so it has to arrive rather than be dropped as falsy.
+    const { template } = validateDeployment(
+      "services:\n  - name: web\n    previews:\n      enabled: false\n"
+    );
+
+    expect(template?.services[0].previews).toEqual({ enabled: false });
+  });
+
   it("drops unknown keys, as the platform does", () => {
     // The warning says the field is ignored; the template has to show it being
     // ignored, or the two halves of the answer disagree.

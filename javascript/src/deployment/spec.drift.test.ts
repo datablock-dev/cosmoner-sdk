@@ -4,7 +4,15 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { APP_SCHEMA_URL, BUILD_FIELDS, ENV_FIELDS, ROOT_FIELDS, SERVICE_FIELDS, type FieldTable } from "./spec";
+import {
+  APP_SCHEMA_URL,
+  BUILD_FIELDS,
+  ENV_FIELDS,
+  PREVIEWS_FIELDS,
+  ROOT_FIELDS,
+  SERVICE_FIELDS,
+  type FieldTable,
+} from "./spec";
 
 /**
  * Holds the field table to the platform's published JSON Schema.
@@ -92,12 +100,14 @@ describe("spec matches the published schema", () => {
   });
 
   it("reaches the nested tables the walk covers", () => {
-    // expectTableMatches recurses, so SERVICE_FIELDS and the two below it are
+    // expectTableMatches recurses, so SERVICE_FIELDS and the three below it are
     // already compared. Naming them here keeps the assertion honest if the
     // document is ever restructured so the walk no longer reaches them.
     expect(Object.keys(SERVICE_FIELDS)).toContain("build");
     expect(Object.keys(SERVICE_FIELDS)).toContain("envs");
+    expect(Object.keys(SERVICE_FIELDS)).toContain("previews");
     expect(Object.keys(BUILD_FIELDS).length).toBeGreaterThan(0);
+    expect(Object.keys(PREVIEWS_FIELDS).length).toBeGreaterThan(0);
     expect(Object.keys(ENV_FIELDS).length).toBeGreaterThan(0);
   });
 });

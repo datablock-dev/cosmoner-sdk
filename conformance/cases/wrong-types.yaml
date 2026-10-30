@@ -5,5 +5,6 @@ services:
     port: "3000"
     instances: 1.5
     autodeploy: sometimes
+    previews: true
     build: nixpacks
     envs: 5

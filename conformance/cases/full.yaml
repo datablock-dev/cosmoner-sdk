@@ -14,6 +14,8 @@ services:
     instance_size: k8s-s
     instances: 2
     autodeploy: true
+    previews:
+      enabled: true
     envs:
       - key: NODE_ENV
         value: production

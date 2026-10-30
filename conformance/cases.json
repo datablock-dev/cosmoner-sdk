@@ -66,6 +66,20 @@
       { "path": "services.0.build.output_dir", "severity": "error", "message": "output_dir only applies to static sites" }
     ] },
 
+    { "name": "previews-not-a-mapping", "valid": false, "issues": [
+      { "path": "services.0.previews", "severity": "error", "message": "Expected a mapping" }
+    ] },
+    { "name": "previews-enabled-missing", "valid": false, "issues": [
+      { "path": "services.0.previews.enable", "severity": "warning", "message": "Unknown field \"enable\" — it will be ignored" },
+      { "path": "services.0.previews.enabled", "severity": "error", "message": "Required" }
+    ] },
+    { "name": "previews-enabled-not-boolean", "valid": false, "issues": [
+      { "path": "services.0.previews.enabled", "severity": "error", "message": "Expected a boolean" }
+    ] },
+    { "name": "previews-unknown-field", "valid": true, "issues": [
+      { "path": "services.0.previews.branches", "severity": "warning", "message": "Unknown field \"branches\" — it will be ignored" }
+    ] },
+
     { "name": "env-no-source", "valid": false, "issues": [
       { "path": "services.0.envs.0.value", "severity": "error", "message": "Set one of value, secret, from_variable, or from_secret" }
     ] },
@@ -93,6 +107,7 @@
       { "path": "services.0.port", "severity": "error", "message": "Expected an integer" },
       { "path": "services.0.instances", "severity": "error", "message": "Expected an integer" },
       { "path": "services.0.autodeploy", "severity": "error", "message": "Expected a boolean" },
+      { "path": "services.0.previews", "severity": "error", "message": "Expected a mapping" },
       { "path": "services.0.envs", "severity": "error", "message": "Expected a list" }
     ] },
     { "name": "out-of-range", "valid": false, "issues": [

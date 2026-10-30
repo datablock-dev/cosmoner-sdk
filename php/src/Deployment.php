@@ -125,6 +125,22 @@ final class Deployment
     }
 
     /**
+     * Fields of a service's `previews` mapping.
+     *
+     * `enabled` only preselects pull request previews in the deploy wizard,
+     * which shows their hourly price there. Previews are billed, so the
+     * platform never switches them on or off from a commit to this file.
+     *
+     * @return array<string,DeploymentField>
+     */
+    public static function previewsFields(): array
+    {
+        return [
+            'enabled' => new DeploymentField(kind: DeploymentField::KIND_BOOLEAN, required: true),
+        ];
+    }
+
+    /**
      * Fields of one entry under `services`.
      *
      * @return array<string,DeploymentField>
@@ -170,6 +186,10 @@ final class Deployment
             'instance_size' => new DeploymentField(kind: DeploymentField::KIND_STRING, maxLength: 64),
             'instances' => new DeploymentField(kind: DeploymentField::KIND_INTEGER, minimum: 1, maximum: 10),
             'autodeploy' => new DeploymentField(kind: DeploymentField::KIND_BOOLEAN),
+            'previews' => new DeploymentField(
+                kind: DeploymentField::KIND_OBJECT,
+                fields: self::previewsFields(),
+            ),
             'envs' => new DeploymentField(
                 kind: DeploymentField::KIND_ARRAY,
                 maxItems: 100,
