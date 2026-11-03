@@ -257,6 +257,166 @@ class TestAsyncEmailSend:
         assert exc_info.value.status == 401
 
 
+class TestEmailTemplateSend:
+    """Sending a stored template in place of a subject and bodies."""
+
+    def test_sends_the_template_instead_of_content(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=URL, json={"success": True, "data": {"messageId": "msg-tpl"}}
+        )
+
+        client.email.send(
+            "cred-1",
+            "user@test.com",
+            template_id="welcome",
+            template_version=3,
+            template_variables={"name": "Ada", "items": [1, 2]},
+            reply_to="reply@test.com",
+        )
+
+        body = json.loads(httpx_mock.get_request().content)
+        assert body == {
+            "credentialId": "cred-1",
+            "to": "user@test.com",
+            "template": {
+                "id": "welcome",
+                "version": 3,
+                "variables": {"name": "Ada", "items": [1, 2]},
+            },
+            "replyTo": "reply@test.com",
+        }
+
+    def test_leaves_out_an_unset_version_and_variables(self, client, httpx_mock):
+        httpx_mock.add_response(url=URL, json={"success": True, "data": {}})
+
+        client.email.send(
+            credential_id="cred-1", to="user@test.com", template_id="welcome"
+        )
+
+        body = json.loads(httpx_mock.get_request().content)
+        assert body["template"] == {"id": "welcome"}
+        assert "subject" not in body
+        assert "html" not in body
+        assert "text" not in body
+
+    def test_surfaces_the_rendered_template(self, client, httpx_mock):
+        template = {"id": "tpl_1", "alias": "welcome", "version": 4}
+        httpx_mock.add_response(
+            url=URL,
+            json={
+                "success": True,
+                "data": {"messageId": "msg-tpl", "template": template},
+            },
+        )
+
+        result = client.email.send(
+            credential_id="cred-1", to="user@test.com", template_id="welcome"
+        )
+
+        assert result["data"]["messageId"] == "msg-tpl"
+        assert result["data"]["template"] == template
+
+    @pytest.mark.parametrize("field", ["subject", "html", "text"])
+    def test_rejects_a_template_with_raw_content(self, client, field):
+        with pytest.raises(ValueError, match=f"Omit {field} when sending a template"):
+            client.email.send(
+                credential_id="cred-1",
+                to="user@test.com",
+                template_id="welcome",
+                **{field: "x"},
+            )
+
+    def test_rejects_a_positional_subject_with_a_template(self, client):
+        with pytest.raises(ValueError, match="Omit subject when sending a template"):
+            client.email.send("cred-1", "user@test.com", "Hi", template_id="welcome")
+
+    def test_rejects_neither_a_subject_nor_a_template(self, client):
+        with pytest.raises(ValueError, match="subject is required"):
+            client.email.send(credential_id="cred-1", to="user@test.com", text="body")
+
+    def test_rejects_template_options_without_a_template(self, client):
+        with pytest.raises(ValueError, match="template_id is required"):
+            client.email.send(
+                credential_id="cred-1",
+                to="user@test.com",
+                subject="Hi",
+                text="body",
+                template_version=2,
+            )
+
+    def test_rejects_an_empty_template_id(self, client):
+        with pytest.raises(ValueError, match="template_id is required"):
+            client.email.send(credential_id="cred-1", to="user@test.com", template_id="")
+
+    @pytest.mark.parametrize("version", [0, -1, 1.5, "2", True])
+    def test_rejects_a_bad_template_version(self, client, version):
+        with pytest.raises(
+            ValueError, match="template_version must be a positive integer"
+        ):
+            client.email.send(
+                credential_id="cred-1",
+                to="user@test.com",
+                template_id="welcome",
+                template_version=version,
+            )
+
+
+class TestAsyncEmailTemplateSend:
+    """The async client sends and validates a template the same way."""
+
+    async def test_sends_the_template(self, httpx_mock):
+        template = {"id": "tpl_1", "alias": "welcome", "version": 1}
+        httpx_mock.add_response(
+            url=URL,
+            json={
+                "success": True,
+                "data": {"messageId": "msg-tpl", "template": template},
+            },
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            result = await client.email.send(
+                credential_id="cred-1",
+                to="user@test.com",
+                template_id="welcome",
+                template_variables={"name": "Ada"},
+            )
+
+        body = json.loads(httpx_mock.get_request().content)
+        assert body["template"] == {"id": "welcome", "variables": {"name": "Ada"}}
+        assert "subject" not in body
+        assert result["data"]["template"] == template
+
+    async def test_rejects_a_template_with_a_subject(self):
+        async with AsyncCosmoner(
+            api_key="key-123", project_id="proj-1", max_retries=0
+        ) as client:
+            with pytest.raises(ValueError, match="Omit subject when sending a template"):
+                await client.email.send(
+                    credential_id="cred-1",
+                    to="user@test.com",
+                    subject="Hi",
+                    template_id="welcome",
+                )
+
+    async def test_rejects_a_bad_template_version(self):
+        async with AsyncCosmoner(
+            api_key="key-123", project_id="proj-1", max_retries=0
+        ) as client:
+            with pytest.raises(ValueError, match="template_version must be a positive"):
+                await client.email.send(
+                    credential_id="cred-1",
+                    to="user@test.com",
+                    template_id="welcome",
+                    template_version=0,
+                )
+
+
 class TestEmailDomains:
     """Tests for sending-domain reads via mocked HTTP."""
 

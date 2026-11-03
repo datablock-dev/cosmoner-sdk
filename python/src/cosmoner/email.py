@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Union
 
 from ._config import ClientConfig, resolve_project_id
@@ -13,28 +14,68 @@ Recipients = Union[str, "list[str]"]
 def _build_payload(
     credential_id: str,
     to: Recipients,
-    subject: str,
+    subject: str | None,
     html: str | None,
     text: str | None,
     reply_to: Recipients | None,
+    template_id: str | None = None,
+    template_version: int | None = None,
+    template_variables: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Validates send arguments and shapes them into the API request body."""
-    if not html and not text:
-        raise ValueError("Either html or text must be provided")
+    """Validates send arguments and shapes them into the API request body.
 
-    payload: dict[str, Any] = {
-        "credentialId": credential_id,
-        "to": to,
-        "subject": subject,
-    }
-    if html is not None:
-        payload["html"] = html
-    if text is not None:
-        payload["text"] = text
+    A send carries either a subject with ``html`` or ``text``, or a template that
+    supplies all three; never both.
+    """
+    payload: dict[str, Any] = {"credentialId": credential_id, "to": to}
+
+    if template_id is not None:
+        for field, value in (("subject", subject), ("html", html), ("text", text)):
+            if value is not None:
+                raise ValueError(f"Omit {field} when sending a template")
+        payload["template"] = _template_payload(
+            template_id, template_version, template_variables
+        )
+    else:
+        if template_version is not None or template_variables is not None:
+            raise ValueError("template_id is required to send a template")
+        if subject is None:
+            raise ValueError("subject is required")
+        if not html and not text:
+            raise ValueError("Either html or text must be provided")
+        payload["subject"] = subject
+        if html is not None:
+            payload["html"] = html
+        if text is not None:
+            payload["text"] = text
+
     if reply_to is not None:
         payload["replyTo"] = reply_to
 
     return payload
+
+
+def _template_payload(
+    template_id: str,
+    version: int | None,
+    variables: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Validates a template reference and shapes it into the ``template`` object."""
+    if not template_id:
+        raise ValueError("template_id is required")
+    # bool is an int subclass, so it is refused by name.
+    if version is not None and (
+        not isinstance(version, int) or isinstance(version, bool) or version < 1
+    ):
+        raise ValueError("template_version must be a positive integer")
+
+    template: dict[str, Any] = {"id": template_id}
+    if version is not None:
+        template["version"] = version
+    if variables is not None:
+        template["variables"] = dict(variables)
+
+    return template
 
 
 def _require_email_domain_id(email_domain_id: str) -> None:
@@ -91,19 +132,38 @@ class EmailService:
         self,
         credential_id: str,
         to: Recipients,
-        subject: str,
+        subject: str | None = None,
         *,
         html: str | None = None,
         text: str | None = None,
         reply_to: Recipients | None = None,
+        template_id: str | None = None,
+        template_version: int | None = None,
+        template_variables: Mapping[str, Any] | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
         """Sends a transactional email and returns the API envelope with its message id.
 
-        At least one of ``html`` or ``text`` is required. ``project_id`` overrides
-        the client-level default for this call.
+        Pass either ``subject`` with at least one of ``html`` or ``text``, or
+        ``template_id`` (a template's id or alias), which supplies all three.
+        ``template_version`` picks a version, by default the published one, and
+        ``template_variables`` fills the variables the template declares. A template
+        send needs a key with ``email-templates:read`` as well as ``email:write``,
+        and its response names what it rendered under ``data["template"]``
+        (``id``, ``alias``, ``version``). ``project_id`` overrides the client-level
+        default for this call.
         """
-        payload = _build_payload(credential_id, to, subject, html, text, reply_to)
+        payload = _build_payload(
+            credential_id,
+            to,
+            subject,
+            html,
+            text,
+            reply_to,
+            template_id,
+            template_version,
+            template_variables,
+        )
 
         result: dict[str, Any] = self._transport.request(
             "POST", f"{self._base_path(project_id)}/send", json=payload
@@ -255,19 +315,38 @@ class AsyncEmailService:
         self,
         credential_id: str,
         to: Recipients,
-        subject: str,
+        subject: str | None = None,
         *,
         html: str | None = None,
         text: str | None = None,
         reply_to: Recipients | None = None,
+        template_id: str | None = None,
+        template_version: int | None = None,
+        template_variables: Mapping[str, Any] | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
         """Sends a transactional email and returns the API envelope with its message id.
 
-        At least one of ``html`` or ``text`` is required. ``project_id`` overrides
-        the client-level default for this call.
+        Pass either ``subject`` with at least one of ``html`` or ``text``, or
+        ``template_id`` (a template's id or alias), which supplies all three.
+        ``template_version`` picks a version, by default the published one, and
+        ``template_variables`` fills the variables the template declares. A template
+        send needs a key with ``email-templates:read`` as well as ``email:write``,
+        and its response names what it rendered under ``data["template"]``
+        (``id``, ``alias``, ``version``). ``project_id`` overrides the client-level
+        default for this call.
         """
-        payload = _build_payload(credential_id, to, subject, html, text, reply_to)
+        payload = _build_payload(
+            credential_id,
+            to,
+            subject,
+            html,
+            text,
+            reply_to,
+            template_id,
+            template_version,
+            template_variables,
+        )
 
         result: dict[str, Any] = await self._transport.request(
             "POST", f"{self._base_path(project_id)}/send", json=payload

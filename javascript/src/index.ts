@@ -144,12 +144,16 @@ export {
   type EmailDomainDetail,
   type EmailDomainVerification,
   type EmailLimits,
+  type EmailTemplateRef,
   type GetEmailDomainResponse,
   type GetEmailLimitsResponse,
   type ListEmailDomainsResponse,
   type NewSmtpCredential,
   type SendEmailParams,
   type SendEmailResponse,
+  type SendRawEmailParams,
+  type SendTemplateEmailParams,
+  type SentEmailTemplate,
   type VerifyEmailDomainResponse,
 } from "./services/email";
 export {

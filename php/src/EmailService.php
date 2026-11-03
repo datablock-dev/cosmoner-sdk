@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmoner\Sdk;
 
 use InvalidArgumentException;
+use stdClass;
 
 /**
  * Email operations for a project.
@@ -91,6 +92,15 @@ use InvalidArgumentException;
  *     pendingRequest: ?array{id: string, requestedLimit: int, createdAt: string, ...},
  *     ...
  * }
+ * @phpstan-type EmailTemplateRef array{
+ *     id: string,
+ *     version?: int,
+ *     variables?: array<string, mixed>,
+ * }
+ * @phpstan-type SentEmail array{
+ *     messageId: string,
+ *     template?: array{id: string, alias: string, version: int},
+ * }
  */
 class EmailService
 {
@@ -103,15 +113,24 @@ class EmailService
     /**
      * Sends a transactional email and returns the API envelope with its message id.
      *
-     * @param string               $credentialId SMTP credential ID.
-     * @param string|string[]      $to           Recipient(s), max 50.
-     * @param string               $subject      Email subject line.
-     * @param string|null          $html         HTML body (at least one of html/text required).
-     * @param string|null          $text         Plain text body.
-     * @param string|string[]|null $replyTo      Reply-to address(es), max 5.
-     * @param string|null          $projectId    Overrides the client-level default project.
+     * Pass either `$subject` with at least one of `$html` or `$text`, or a
+     * `$template`, which supplies all three. A template send needs a key with
+     * `email-templates:read` as well as `email:write`, and its response names
+     * the version it rendered under `data.template`.
      *
-     * @return array{success: true, data: array{messageId: string}}
+     * @param string                $credentialId SMTP credential ID.
+     * @param string|string[]       $to           Recipient(s), max 50.
+     * @param string|null           $subject      Email subject line; required unless sending a template.
+     * @param string|null           $html         HTML body (at least one of html/text required).
+     * @param string|null           $text         Plain text body.
+     * @param string|string[]|null  $replyTo      Reply-to address(es), max 5.
+     * @param string|null           $projectId    Overrides the client-level default project.
+     * @param EmailTemplateRef|null $template     A stored template to send: `id` is its id or
+     *                                            alias, `version` a positive integer (the
+     *                                            published one when left out), `variables`
+     *                                            the values for what it declares.
+     *
+     * @return array{success: true, data: SentEmail}
      *
      * @throws CosmonerError On API errors.
      * @throws InvalidArgumentException On invalid input.
@@ -119,35 +138,48 @@ class EmailService
     public function send(
         string $credentialId,
         string|array $to,
-        string $subject,
+        ?string $subject = null,
         ?string $html = null,
         ?string $text = null,
         string|array|null $replyTo = null,
         ?string $projectId = null,
+        ?array $template = null,
     ): array {
-        if ($html === null && $text === null) {
-            throw new InvalidArgumentException('Either html or text must be provided');
-        }
-
         $payload = [
             'credentialId' => $credentialId,
             'to' => $to,
-            'subject' => $subject,
         ];
 
-        if ($html !== null) {
-            $payload['html'] = $html;
+        if ($template !== null) {
+            foreach (['subject' => $subject, 'html' => $html, 'text' => $text] as $field => $value) {
+                if ($value !== null) {
+                    throw new InvalidArgumentException("Omit {$field} when sending a template");
+                }
+            }
+            $payload['template'] = self::templatePayload($template);
+        } else {
+            if ($subject === null) {
+                throw new InvalidArgumentException('subject is required');
+            }
+            if ($html === null && $text === null) {
+                throw new InvalidArgumentException('Either html or text must be provided');
+            }
+            $payload['subject'] = $subject;
+            if ($html !== null) {
+                $payload['html'] = $html;
+            }
+            if ($text !== null) {
+                $payload['text'] = $text;
+            }
         }
-        if ($text !== null) {
-            $payload['text'] = $text;
-        }
+
         if ($replyTo !== null) {
             $payload['replyTo'] = $replyTo;
         }
 
         $project = $this->config->resolveProjectId($projectId);
 
-        /** @var array{success: true, data: array{messageId: string}} */
+        /** @var array{success: true, data: SentEmail} */
         return $this->transport->request('POST', "/v1/projects/{$project}/email/send", $payload);
     }
 
@@ -359,5 +391,42 @@ class EmailService
         if ($emailDomainId === '') {
             throw new InvalidArgumentException('emailDomainId is required');
         }
+    }
+
+    /**
+     * Checks a template reference and copies only the fields the API takes.
+     *
+     * @param array<string, mixed> $template
+     *
+     * @return array<string, mixed>
+     *
+     * @throws InvalidArgumentException On invalid input.
+     */
+    private static function templatePayload(array $template): array
+    {
+        Params::check($template, ['id', 'version', 'variables'], ['id'], 'template.');
+        if (!is_string($template['id'])) {
+            throw new InvalidArgumentException('template.id must be a string');
+        }
+
+        $ref = ['id' => $template['id']];
+        $version = $template['version'] ?? null;
+        if ($version !== null) {
+            if (!is_int($version) || $version < 1) {
+                throw new InvalidArgumentException('template.version must be a positive integer');
+            }
+            $ref['version'] = $version;
+        }
+        $variables = $template['variables'] ?? null;
+        if ($variables !== null) {
+            if (!is_array($variables)) {
+                throw new InvalidArgumentException('template.variables must be an array');
+            }
+            // json_encode([]) emits "[]", which the API refuses as variables,
+            // so an empty stdClass stands in for "{}".
+            $ref['variables'] = $variables === [] ? new stdClass() : $variables;
+        }
+
+        return $ref;
     }
 }

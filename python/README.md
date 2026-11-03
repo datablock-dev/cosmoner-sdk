@@ -94,17 +94,43 @@ Set `max_retries=0` to disable retries entirely.
 
 ### `client.email.send(...)`
 
-| Parameter       | Type                     | Required | Description                          |
-| --------------- | ------------------------ | -------- | ------------------------------------ |
-| `credential_id` | `str`                    | Yes      | SMTP credential ID                   |
-| `to`            | `str \| list[str]`       | Yes      | Recipient(s), max 50                 |
-| `subject`       | `str`                    | Yes      | Email subject line                   |
-| `html`          | `str`                    | No*      | HTML body                            |
-| `text`          | `str`                    | No*      | Plain text body                      |
-| `reply_to`      | `str \| list[str]`       | No       | Reply-to address(es), max 5          |
-| `project_id`    | `str`                    | No       | Overrides the client-level project   |
+Takes either raw content — a `subject` with `html`, `text` or both — or a
+stored template named by `template_id`, which supplies all three. Mixing the
+two raises `ValueError` before anything is sent.
 
-\* At least one of `html` or `text` must be provided.
+| Parameter            | Type                     | Required | Description                          |
+| -------------------- | ------------------------ | -------- | ------------------------------------ |
+| `credential_id`      | `str`                    | Yes      | SMTP credential ID                   |
+| `to`                 | `str \| list[str]`       | Yes      | Recipient(s), max 50                 |
+| `subject`            | `str`                    | Yes*     | Email subject line                   |
+| `html`               | `str`                    | No*      | HTML body                            |
+| `text`               | `str`                    | No*      | Plain text body                      |
+| `template_id`        | `str`                    | No*      | A stored template's id or alias      |
+| `template_version`   | `int`                    | No       | Positive integer; defaults to the published version |
+| `template_variables` | `Mapping[str, Any]`      | No       | Values for the variables the template declares |
+| `reply_to`           | `str \| list[str]`       | No       | Reply-to address(es), max 5          |
+| `project_id`         | `str`                    | No       | Overrides the client-level project   |
+
+\* Pass `subject` with at least one of `html` or `text`, or pass `template_id`
+and none of the three. `credential_id`, `to` and `subject` may be passed
+positionally; everything else is keyword-only.
+
+```python
+result = client.email.send(
+    credential_id="your-credential-id",
+    to="recipient@example.com",
+    template_id="welcome",
+    template_variables={"name": "Ada"},
+)
+print(result["data"]["messageId"], result["data"]["template"]["version"])
+```
+
+A template send's response names what was rendered under `data["template"]`
+(`id`, `alias`, `version`). It needs an API key with `email-templates:read` as
+well as `email:write`. The API answers 404 for an unknown template or version,
+409 (`EMAIL_TEMPLATE_NOT_PUBLISHED`) when no version has been published, 422
+when the variables do not match what the template declares or rendering hits a
+limit, and 503 when the template is briefly unavailable.
 
 ### Sending domains
 

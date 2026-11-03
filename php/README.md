@@ -104,17 +104,45 @@ $client = new Cosmoner(apiKey: 'your-api-key', httpClient: new MyHttpClient());
 
 ### `$client->email->send(...)`
 
+Takes either raw content — a `subject` with `html`, `text` or both — or a
+stored `template`, which supplies all three. Mixing the two throws
+`InvalidArgumentException` before anything is sent.
+
 | Parameter      | Type                     | Required | Description                          |
 | -------------- | ------------------------ | -------- | ------------------------------------ |
 | `credentialId` | `string`                 | Yes      | SMTP credential ID                   |
 | `to`           | `string \| string[]`     | Yes      | Recipient(s), max 50                 |
-| `subject`      | `string`                 | Yes      | Email subject line                   |
+| `subject`      | `string \| null`         | Yes*     | Email subject line                   |
 | `html`         | `string \| null`         | No*      | HTML body                            |
 | `text`         | `string \| null`         | No*      | Plain text body                      |
 | `replyTo`      | `string \| string[]`     | No       | Reply-to address(es), max 5          |
 | `projectId`    | `string \| null`         | No       | Overrides the client-level project   |
+| `template`     | `array \| null`          | No*      | A stored template to send instead    |
 
-\* At least one of `html` or `text` must be provided.
+\* Pass `subject` with at least one of `html` or `text`, or pass `template`
+and none of the three.
+
+`template` is `['id' => …, 'version' => …, 'variables' => […]]`: `id` is the
+template's id or its alias, `version` a positive integer (the published version
+when left out), and `variables` the values for the variables the template
+declares. Pass it by name:
+
+```php
+$result = $client->email->send(
+    credentialId: 'your-credential-id',
+    to: 'recipient@example.com',
+    template: ['id' => 'welcome', 'variables' => ['name' => 'Ada']],
+);
+
+echo $result['data']['messageId'], ' ', $result['data']['template']['version'];
+```
+
+A template send's response names what was rendered under `data.template`
+(`id`, `alias`, `version`). It needs an API key with `email-templates:read` as
+well as `email:write`. The API answers 404 for an unknown template or version,
+409 (`EMAIL_TEMPLATE_NOT_PUBLISHED`) when no version has been published, 422
+when the variables do not match what the template declares or rendering hits a
+limit, and 503 when the template is briefly unavailable.
 
 ## Apps
 
