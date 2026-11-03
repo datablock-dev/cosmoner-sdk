@@ -110,6 +110,135 @@ class EmailServiceTest extends TestCase
         $this->assertSame(['a@test.com', 'b@test.com'], $this->sentBody()['to']);
     }
 
+    public function testSendsATemplateInsteadOfASubjectAndBodies(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['messageId' => 'msg-tpl']]);
+
+        $this->client->email->send(
+            'cred-1',
+            'user@test.com',
+            replyTo: 'reply@test.com',
+            template: ['id' => 'welcome', 'version' => 3, 'variables' => ['name' => 'Ada', 'items' => [1, 2]]],
+        );
+
+        $this->assertSame('https://api.test.dev/v1/projects/proj-1/email/send', $this->http->requests[0]['url']);
+        $this->assertSame(
+            [
+                'credentialId' => 'cred-1',
+                'to' => 'user@test.com',
+                'template' => ['id' => 'welcome', 'version' => 3, 'variables' => ['name' => 'Ada', 'items' => [1, 2]]],
+                'replyTo' => 'reply@test.com',
+            ],
+            $this->sentBody(),
+        );
+    }
+
+    public function testLeavesOutAnUnsetTemplateVersionAndVariables(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['messageId' => 'msg-tpl']]);
+
+        $this->client->email->send('cred-1', 'user@test.com', template: ['id' => 'welcome']);
+
+        $body = $this->sentBody();
+        $this->assertSame(['id' => 'welcome'], $body['template']);
+        $this->assertArrayNotHasKey('subject', $body);
+        $this->assertArrayNotHasKey('html', $body);
+        $this->assertArrayNotHasKey('text', $body);
+    }
+
+    public function testSendsEmptyTemplateVariablesAsAnObject(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => ['messageId' => 'msg-tpl']]);
+
+        $this->client->email->send('cred-1', 'user@test.com', template: ['id' => 'welcome', 'variables' => []]);
+
+        $this->assertStringContainsString('"variables":{}', (string) $this->http->requests[0]['body']);
+    }
+
+    public function testSurfacesTheTemplateASendRendered(): void
+    {
+        $template = ['id' => 'tpl_1', 'alias' => 'welcome', 'version' => 4];
+        $this->http->queueJson(200, ['success' => true, 'data' => ['messageId' => 'msg-tpl', 'template' => $template]]);
+
+        $result = $this->client->email->send('cred-1', 'user@test.com', template: ['id' => 'welcome']);
+
+        $this->assertSame('msg-tpl', $result['data']['messageId']);
+        $this->assertSame($template, $result['data']['template'] ?? null);
+    }
+
+    public function testRejectsATemplateSentWithRawContentWithoutSendingARequest(): void
+    {
+        $template = ['id' => 'welcome'];
+        $cases = [
+            'Omit subject when sending a template' => fn () => $this->client->email->send(
+                'cred-1',
+                'user@test.com',
+                'Hi',
+                template: $template,
+            ),
+            'Omit html when sending a template' => fn () => $this->client->email->send(
+                'cred-1',
+                'user@test.com',
+                html: '<p>Hi</p>',
+                template: $template,
+            ),
+            'Omit text when sending a template' => fn () => $this->client->email->send(
+                'cred-1',
+                'user@test.com',
+                text: 'Hi',
+                template: $template,
+            ),
+        ];
+
+        foreach ($cases as $message => $call) {
+            try {
+                $call();
+                $this->fail('Expected an InvalidArgumentException');
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testRejectsASendWithNeitherASubjectNorATemplate(): void
+    {
+        try {
+            $this->client->email->send('cred-1', 'user@test.com', text: 'body');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $err) {
+            $this->assertSame('subject is required', $err->getMessage());
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
+    public function testRejectsAnInvalidTemplateWithoutSendingARequest(): void
+    {
+        $cases = [
+            'template.id is required' => [['id' => '']],
+            'Unknown field "template.vars"' => [['id' => 'welcome', 'vars' => ['name' => 'Ada']]],
+            'template.version must be a positive integer' => [
+                ['id' => 'welcome', 'version' => 0],
+                ['id' => 'welcome', 'version' => -1],
+            ],
+        ];
+
+        foreach ($cases as $message => $templates) {
+            foreach ($templates as $template) {
+                try {
+                    $this->client->email->send('cred-1', 'user@test.com', template: $template);
+                    $this->fail('Expected an InvalidArgumentException');
+                } catch (InvalidArgumentException $err) {
+                    $this->assertSame($message, $err->getMessage());
+                }
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
+
     /** @return array<string, mixed> */
     private function emailDomainFixture(): array
     {

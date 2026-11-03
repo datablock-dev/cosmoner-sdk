@@ -3,22 +3,62 @@
 import { resolveProjectId, type ResolvedConfig } from "../config";
 import type { Transport } from "../transport";
 
-/** Arguments accepted by `client.email.send()`. */
-export interface SendEmailParams {
+/** The envelope fields shared by both forms of `client.email.send()`. */
+interface SendEmailBaseParams {
   credentialId: string;
   to: string | string[];
-  subject: string;
-  html?: string;
-  text?: string;
   replyTo?: string | string[];
   /** Overrides the client-level default project for this call. */
   projectId?: string;
 }
 
+/** Sends content carried in the request: a subject and at least one of `html` or `text`. */
+export interface SendRawEmailParams extends SendEmailBaseParams {
+  subject: string;
+  html?: string;
+  text?: string;
+  template?: never;
+}
+
+/** Names a stored template to render the email from. */
+export interface EmailTemplateRef {
+  /** The template's id or its alias. */
+  id: string;
+  /** A positive integer. Leave it out to send the published version. */
+  version?: number;
+  /** Values for the variables the template declares. */
+  variables?: Record<string, unknown>;
+}
+
+/**
+ * Sends a stored template, which supplies the subject and both bodies. Needs
+ * an API key with `email-templates:read` as well as `email:write`.
+ */
+export interface SendTemplateEmailParams extends SendEmailBaseParams {
+  template: EmailTemplateRef;
+  subject?: never;
+  html?: never;
+  text?: never;
+}
+
+/** Arguments accepted by `client.email.send()`: raw content or a template, never both. */
+export type SendEmailParams = SendRawEmailParams | SendTemplateEmailParams;
+
+/** The template version a template send rendered. */
+export interface SentEmailTemplate {
+  id: string;
+  alias: string;
+  version: number;
+}
+
 /** Envelope returned by a successful send. */
 export interface SendEmailResponse {
   success: true;
-  data: { messageId: string };
+  data: {
+    messageId: string;
+    /** Present only on a template send. */
+    template?: SentEmailTemplate;
+  };
 }
 
 /** A project's sending domain. SMTP passwords and the DKIM private key are never returned. */
@@ -146,6 +186,16 @@ export interface CreateSmtpCredentialResponse {
   data: NewSmtpCredential;
 }
 
+/** Checks a template reference and copies only the fields the API accepts. */
+function templatePayload(template: EmailTemplateRef): EmailTemplateRef {
+  if (typeof template !== "object" || template === null) throw new Error("template must be an object");
+  if (typeof template.id !== "string" || !template.id) throw new Error("template.id is required");
+  if (template.version !== undefined && !(Number.isInteger(template.version) && template.version > 0)) {
+    throw new Error("template.version must be a positive integer");
+  }
+  return { id: template.id, version: template.version, variables: template.variables };
+}
+
 /** Email operations for a project. */
 export class EmailService {
   constructor(
@@ -156,14 +206,26 @@ export class EmailService {
   /**
    * Sends a transactional email and resolves with the API envelope.
    *
-   * At least one of `html` or `text` is required.
+   * Pass either `subject` with at least one of `html` or `text`, or a
+   * `template`, which supplies all three. A template send's response names
+   * the version it rendered under `data.template`.
    */
   // eslint-disable-next-line require-await -- `async` makes the validation below reject rather than throw synchronously.
   async send(params: SendEmailParams): Promise<SendEmailResponse> {
     if (!params.to) throw new Error("to is required");
-    if (!params.subject) throw new Error("subject is required");
-    if (!params.html && !params.text) {
-      throw new Error("Either html or text must be provided");
+
+    let content: Record<string, unknown>;
+    if (params.template !== undefined) {
+      for (const field of ["subject", "html", "text"] as const) {
+        if (params[field] !== undefined) throw new Error(`Omit ${field} when sending a template`);
+      }
+      content = { template: templatePayload(params.template) };
+    } else {
+      if (!params.subject) throw new Error("subject is required");
+      if (!params.html && !params.text) {
+        throw new Error("Either html or text must be provided");
+      }
+      content = { subject: params.subject, html: params.html, text: params.text };
     }
 
     const projectId = resolveProjectId(this.config, params.projectId);
@@ -175,9 +237,7 @@ export class EmailService {
         body: {
           credentialId: params.credentialId,
           to: params.to,
-          subject: params.subject,
-          html: params.html,
-          text: params.text,
+          ...content,
           replyTo: params.replyTo,
         },
       }

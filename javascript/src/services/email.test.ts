@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Cosmoner, RateLimitError } from "../index";
-import type { CosmonerError } from "../index";
+import type { CosmonerError, SendEmailParams } from "../index";
 
 const URL = "https://api.test.dev/v1/projects/proj-1/email/send";
 
@@ -239,6 +239,117 @@ describe("EmailService", () => {
           expect(err.details).toEqual({ to: "must be an email" });
         });
     });
+  });
+});
+
+describe("EmailService template sends", () => {
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = makeClient();
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it("sends the template instead of a subject and bodies", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true, data: { messageId: "msg-tpl" } }), { status: 200 })
+    );
+
+    await client.email.send({
+      credentialId: "cred-1",
+      to: "user@test.com",
+      template: { id: "welcome", version: 3, variables: { name: "Ada", items: [1, 2] } },
+      replyTo: "reply@test.com",
+    });
+
+    expect(fetchSpy.mock.calls[0][0]).toBe(URL);
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+    expect(body).toEqual({
+      credentialId: "cred-1",
+      to: "user@test.com",
+      template: { id: "welcome", version: 3, variables: { name: "Ada", items: [1, 2] } },
+      replyTo: "reply@test.com",
+    });
+    expect(body).not.toHaveProperty("subject");
+    expect(body).not.toHaveProperty("html");
+    expect(body).not.toHaveProperty("text");
+  });
+
+  it("leaves out an unset version and variables, so the published version is sent", async () => {
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }));
+
+    await client.email.send({ credentialId: "cred-1", to: "user@test.com", template: { id: "welcome" } });
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+    expect(body.template).toEqual({ id: "welcome" });
+  });
+
+  it("surfaces the template version the send rendered", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { messageId: "msg-tpl", template: { id: "tpl_1", alias: "welcome", version: 4 } },
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await client.email.send({ credentialId: "cred-1", to: "user@test.com", template: { id: "welcome" } });
+
+    expect(result.data.messageId).toBe("msg-tpl");
+    expect(result.data.template).toEqual({ id: "tpl_1", alias: "welcome", version: 4 });
+  });
+
+  it.each(["subject", "html", "text"] as const)("rejects a template sent with %s", async (field) => {
+    await expect(
+      client.email.send({
+        credentialId: "cred-1",
+        to: "user@test.com",
+        template: { id: "welcome" },
+        [field]: "x",
+      } as unknown as SendEmailParams)
+    ).rejects.toThrow(`Omit ${field} when sending a template`);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not let TypeScript mix a template with raw content", async () => {
+    await expect(
+      // @ts-expect-error -- the union refuses a template alongside a subject.
+      client.email.send({ credentialId: "cred-1", to: "user@test.com", subject: "Hi", template: { id: "welcome" } })
+    ).rejects.toThrow("Omit subject when sending a template");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a send with neither a subject nor a template", async () => {
+    await expect(
+      // @ts-expect-error -- one of the two forms is required.
+      client.email.send({ credentialId: "cred-1", to: "user@test.com" })
+    ).rejects.toThrow("subject is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a template without an id", async () => {
+    await expect(
+      client.email.send({ credentialId: "cred-1", to: "user@test.com", template: { id: "" } })
+    ).rejects.toThrow("template.id is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, "2"])("rejects template version %s", async (version) => {
+    await expect(
+      client.email.send({
+        credentialId: "cred-1",
+        to: "user@test.com",
+        template: { id: "welcome", version: version as number },
+      })
+    ).rejects.toThrow("template.version must be a positive integer");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 

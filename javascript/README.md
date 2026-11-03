@@ -76,17 +76,45 @@ Set `maxRetries: 0` to disable retries entirely.
 
 ### `client.email.send(params)`
 
+Takes either raw content — a `subject` with `html`, `text` or both — or a
+stored `template`, which supplies all three. The two forms are a union type, so
+TypeScript refuses a call that mixes them, and the client rejects one at
+runtime before sending anything.
+
 | Parameter      | Type                 | Required | Description                          |
 | -------------- | -------------------- | -------- | ------------------------------------ |
 | `credentialId` | `string`             | Yes      | SMTP credential ID                   |
 | `to`           | `string \| string[]` | Yes      | Recipient(s), max 50                 |
-| `subject`      | `string`             | Yes      | Email subject line                   |
+| `subject`      | `string`             | Yes*     | Email subject line                   |
 | `html`         | `string`             | No*      | HTML body                            |
 | `text`         | `string`             | No*      | Plain text body                      |
+| `template`     | `EmailTemplateRef`   | No*      | A stored template to send instead    |
 | `replyTo`      | `string \| string[]` | No       | Reply-to address(es), max 5          |
 | `projectId`    | `string`             | No       | Overrides the client-level project   |
 
-\* At least one of `html` or `text` must be provided.
+\* Pass `subject` with at least one of `html` or `text`, or pass `template`
+and none of the three.
+
+`template` is `{ id, version?, variables? }`: `id` is the template's id or its
+alias, `version` a positive integer (the published version when left out), and
+`variables` the values for the variables the template declares. The response
+names what was rendered under `data.template` (`id`, `alias`, `version`).
+
+```typescript
+const { data } = await client.email.send({
+  credentialId: "your-credential-id",
+  to: "recipient@example.com",
+  template: { id: "welcome", variables: { name: "Ada" } },
+});
+
+console.log(data.messageId, data.template?.version);
+```
+
+Sending a template needs an API key with `email-templates:read` as well as
+`email:write`. The API answers 404 for an unknown template or version, 409
+(`EMAIL_TEMPLATE_NOT_PUBLISHED`) when no version has been published, 422 when
+the variables do not match what the template declares or rendering hits a
+limit, and 503 when the template is briefly unavailable.
 
 ## Apps
 
