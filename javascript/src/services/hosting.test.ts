@@ -390,3 +390,78 @@ describe("HostingService mail", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("HostingService domains", () => {
+  const P = "https://api.test.dev/v1/projects/proj-1/hosting/shared/site-1/domains";
+  let client: Cosmoner;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new Cosmoner({ apiKey: "key-123", projectId: "proj-1", baseUrl: "https://api.test.dev", maxRetries: 0 });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("domains lists what a site answers on", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply([{ id: "dom-1", hostname: "example.com", kind: "SITE" }]));
+
+    const result = await client.hosting.domains("site-1");
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "GET", url: P, body: undefined });
+    expect(result.data[0]?.hostname).toBe("example.com");
+  });
+
+  it("attachDomain posts the hostname and only the behaviour given", async () => {
+    const attached = {
+      domainId: "dom-2",
+      hostname: "shop.example.com",
+      dnsRecordsCreated: true,
+      instructions: { recordType: "CNAME", name: "shop.example.com", value: "sites.cosmoner.com", ownershipVerification: null, status: "pending" },
+    };
+    fetchSpy.mockResolvedValueOnce(writeReply(attached, 201));
+
+    const result = await client.hosting.attachDomain("site-1", { hostname: "shop.example.com", path: "example.com/shop" });
+
+    expect(writeSent(fetchSpy)).toEqual({ method: "POST", url: P, body: { hostname: "shop.example.com", path: "example.com/shop" } });
+    expect(result.data.dnsRecordsCreated).toBe(true);
+  });
+
+  it("updateDomain sends the whole behaviour, a website by default", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({}));
+    fetchSpy.mockResolvedValueOnce(writeReply({}));
+
+    await client.hosting.updateDomain("site-1", "dom-1", { kind: "REDIRECT", redirectTarget: "https://example.com", redirectStatus: 302 });
+    await client.hosting.updateDomain("site-1", "dom-1");
+
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "PATCH",
+      url: `${P}/dom-1`,
+      body: { kind: "REDIRECT", redirectTarget: "https://example.com", redirectStatus: 302 },
+    });
+    const second = fetchSpy.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(second[1].body as string)).toEqual({ kind: "SITE" });
+  });
+
+  it("detachDomain deletes, in another project when asked", async () => {
+    fetchSpy.mockResolvedValueOnce(writeReply({}));
+
+    await client.hosting.detachDomain("site-1", "dom-1", { projectId: "proj-2" });
+
+    expect(writeSent(fetchSpy)).toEqual({
+      method: "DELETE",
+      url: "https://api.test.dev/v1/projects/proj-2/hosting/shared/site-1/domains/dom-1",
+      body: undefined,
+    });
+  });
+
+  it("requires a site id, hostname and domain id before any request", async () => {
+    await expect(client.hosting.domains("")).rejects.toThrow("siteId is required");
+    await expect(client.hosting.attachDomain("site-1", { hostname: "" })).rejects.toThrow("hostname is required");
+    await expect(client.hosting.updateDomain("site-1", "")).rejects.toThrow("domainId is required");
+    await expect(client.hosting.detachDomain("", "dom-1")).rejects.toThrow("siteId is required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

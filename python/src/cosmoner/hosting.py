@@ -1,7 +1,7 @@
 """Hosting service namespace — shared web hosting sites and what they run.
 
 Covers the sites themselves, how to reach their files, the build of the site image
-each one runs, and whether its PHP ``mail()`` can send.
+each one runs, whether its PHP ``mail()`` can send, and the domains it answers on.
 """
 
 from __future__ import annotations
@@ -69,6 +69,60 @@ def _mail_payload(email_domain_id: str, local_part: str) -> dict[str, Any]:
         raise ValueError("local_part is required")
 
     return {"emailDomainId": email_domain_id, "localPart": local_part}
+
+
+def _require_domain_id(domain_id: str) -> None:
+    """Rejects an empty domain id before it becomes a malformed route."""
+    if not domain_id:
+        raise ValueError("domain_id is required")
+
+
+def _behaviour(
+    kind: str | None,
+    path: str | None,
+    redirect_target: str | None,
+    redirect_status: int | None,
+) -> dict[str, Any]:
+    """Shapes what a hostname does into the request body, leaving out what was not set.
+
+    Which fields fit which kind is the API's call; it answers 400 with the reason.
+    """
+    body: dict[str, Any] = {}
+    if kind is not None:
+        body["kind"] = kind
+    if path is not None:
+        body["path"] = path
+    if redirect_target is not None:
+        body["redirectTarget"] = redirect_target
+    if redirect_status is not None:
+        body["redirectStatus"] = redirect_status
+    return body
+
+
+def _attach_payload(
+    hostname: str,
+    kind: str | None,
+    path: str | None,
+    redirect_target: str | None,
+    redirect_status: int | None,
+) -> dict[str, Any]:
+    """Validates an attach's hostname and shapes the request body."""
+    if not hostname:
+        raise ValueError("hostname is required")
+    return {
+        "hostname": hostname,
+        **_behaviour(kind, path, redirect_target, redirect_status),
+    }
+
+
+def _update_payload(
+    kind: str | None,
+    path: str | None,
+    redirect_target: str | None,
+    redirect_status: int | None,
+) -> dict[str, Any]:
+    """The whole behaviour for a change, a website unless another kind is given."""
+    return {"kind": "SITE", **_behaviour(kind, path, redirect_target, redirect_status)}
 
 
 class HostingService:
@@ -294,6 +348,79 @@ class HostingService:
 
         result: dict[str, Any] = self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/{site_id}/mail"
+        )
+        return result
+
+    def domains(self, site_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Lists the hostnames attached to a site, newest first, and what each does."""
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{site_id}/domains"
+        )
+        return result
+
+    def attach_domain(
+        self,
+        site_id: str,
+        *,
+        hostname: str,
+        kind: str | None = None,
+        path: str | None = None,
+        redirect_target: str | None = None,
+        redirect_status: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Attaches one of the project's verified domains, or a subdomain of one.
+
+        ``kind`` is ``SITE`` (the default), ``REDIRECT`` or ``PARKED``. Without
+        ``path`` a website gets its own folder. ``data.dnsRecordsCreated`` says
+        whether the DNS records were added for you or are yours to add.
+        """
+        _require_site_id(site_id)
+        payload = _attach_payload(hostname, kind, path, redirect_target, redirect_status)
+
+        result: dict[str, Any] = self._transport.request(
+            "POST", f"{self._base_path(project_id)}/{site_id}/domains", json=payload
+        )
+        return result
+
+    def update_domain(
+        self,
+        site_id: str,
+        domain_id: str,
+        *,
+        kind: str | None = None,
+        path: str | None = None,
+        redirect_target: str | None = None,
+        redirect_status: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Changes what an attached hostname does, replacing its whole behaviour.
+
+        Called with no kind it serves its default folder. Its DNS records and
+        certificate are untouched.
+        """
+        _require_site_id(site_id)
+        _require_domain_id(domain_id)
+        payload = _update_payload(kind, path, redirect_target, redirect_status)
+
+        result: dict[str, Any] = self._transport.request(
+            "PATCH",
+            f"{self._base_path(project_id)}/{site_id}/domains/{domain_id}",
+            json=payload,
+        )
+        return result
+
+    def detach_domain(
+        self, site_id: str, domain_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Detaches a hostname from a site. A folder it served stays, with its files."""
+        _require_site_id(site_id)
+        _require_domain_id(domain_id)
+
+        result: dict[str, Any] = self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{site_id}/domains/{domain_id}"
         )
         return result
 
@@ -529,5 +656,80 @@ class AsyncHostingService:
 
         result: dict[str, Any] = await self._transport.request(
             "DELETE", f"{self._base_path(project_id)}/{site_id}/mail"
+        )
+        return result
+
+    async def domains(
+        self, site_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Lists the hostnames attached to a site, newest first, and what each does."""
+        _require_site_id(site_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "GET", f"{self._base_path(project_id)}/{site_id}/domains"
+        )
+        return result
+
+    async def attach_domain(
+        self,
+        site_id: str,
+        *,
+        hostname: str,
+        kind: str | None = None,
+        path: str | None = None,
+        redirect_target: str | None = None,
+        redirect_status: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Attaches one of the project's verified domains, or a subdomain of one.
+
+        ``kind`` is ``SITE`` (the default), ``REDIRECT`` or ``PARKED``. Without
+        ``path`` a website gets its own folder. ``data.dnsRecordsCreated`` says
+        whether the DNS records were added for you or are yours to add.
+        """
+        _require_site_id(site_id)
+        payload = _attach_payload(hostname, kind, path, redirect_target, redirect_status)
+
+        result: dict[str, Any] = await self._transport.request(
+            "POST", f"{self._base_path(project_id)}/{site_id}/domains", json=payload
+        )
+        return result
+
+    async def update_domain(
+        self,
+        site_id: str,
+        domain_id: str,
+        *,
+        kind: str | None = None,
+        path: str | None = None,
+        redirect_target: str | None = None,
+        redirect_status: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Changes what an attached hostname does, replacing its whole behaviour.
+
+        Called with no kind it serves its default folder. Its DNS records and
+        certificate are untouched.
+        """
+        _require_site_id(site_id)
+        _require_domain_id(domain_id)
+        payload = _update_payload(kind, path, redirect_target, redirect_status)
+
+        result: dict[str, Any] = await self._transport.request(
+            "PATCH",
+            f"{self._base_path(project_id)}/{site_id}/domains/{domain_id}",
+            json=payload,
+        )
+        return result
+
+    async def detach_domain(
+        self, site_id: str, domain_id: str, *, project_id: str | None = None
+    ) -> dict[str, Any]:
+        """Detaches a hostname from a site. A folder it served stays, with its files."""
+        _require_site_id(site_id)
+        _require_domain_id(domain_id)
+
+        result: dict[str, Any] = await self._transport.request(
+            "DELETE", f"{self._base_path(project_id)}/{site_id}/domains/{domain_id}"
         )
         return result

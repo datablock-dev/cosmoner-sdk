@@ -5,7 +5,8 @@
 
 /**
  * Hosting service namespace — shared web hosting sites, how to reach their
- * files, the site image they run and whether they can send email.
+ * files, the site image they run, whether they can send email, and the
+ * domains they answer on.
  */
 
 import { resolveProjectId, type ResolvedConfig } from "../config";
@@ -211,6 +212,93 @@ export interface EnableHostingMailParams extends ProjectScopedParams {
   localPart: string;
 }
 
+/** What an attached hostname does: serve a folder of the site, redirect, or show a placeholder. */
+export type HostingDomainKind = "SITE" | "REDIRECT" | "PARKED";
+
+/** A hostname attached to a site. */
+export interface HostingDomain {
+  id: string;
+  tenantId: string;
+  /** Lower-cased, e.g. `example.com` or `shop.example.com`. */
+  hostname: string;
+  kind: HostingDomainKind;
+  /** The folder served, as an absolute path inside the site's container. Null unless `kind` is `SITE`. */
+  documentRoot: string | null;
+  /** Where visitors are sent, with the requested path appended. Null unless `kind` is `REDIRECT`. */
+  redirectTarget: string | null;
+  redirectStatus: 301 | 302 | null;
+  status: "PROVISIONING" | "ACTIVE" | "ERROR";
+  /** `VERIFYING` until the hostname's DNS and certificate are in place, then `ACTIVE`. */
+  routingStatus: string;
+  createdAt: string;
+}
+
+/** The DNS records a newly attached hostname needs. */
+export interface HostingDomainDnsInstructions {
+  recordType: "CNAME";
+  name: string;
+  value: string;
+  /** A second record proving control of the hostname, when one is needed. */
+  ownershipVerification: { type: string; name: string; value: string } | null;
+  status: string;
+}
+
+/** A hostname just attached to a site. */
+export interface HostingDomainAttached {
+  domainId: string;
+  hostname: string;
+  instructions: HostingDomainDnsInstructions;
+  /**
+   * `true` when Cosmoner runs the domain's DNS and added `instructions` for
+   * you; `false` when they are yours to add at your DNS provider.
+   */
+  dnsRecordsCreated: boolean;
+}
+
+/**
+ * What a hostname does. The whole behaviour is sent each time: `{ kind: "SITE" }`
+ * alone serves the hostname's default folder.
+ */
+export interface HostingDomainBehaviour {
+  /** Defaults to `SITE`. */
+  kind?: HostingDomainKind;
+  /**
+   * `SITE` only: the folder to serve, relative to the site's home folder, e.g.
+   * `example.com/public_html`. Omitted, it is `<hostname>/public_html`, or for a
+   * subdomain of a domain the site already serves a folder inside that one's.
+   * The folder is created if it does not exist.
+   */
+  path?: string;
+  /** `REDIRECT` only: a full `http` or `https` address without a query string. */
+  redirectTarget?: string;
+  /** `REDIRECT` only: `301` (the default) or `302`. */
+  redirectStatus?: 301 | 302;
+}
+
+/** Arguments accepted by `client.hosting.attachDomain()`. */
+export interface AttachHostingDomainParams extends ProjectScopedParams, HostingDomainBehaviour {
+  /** One of the project's verified domains, or a subdomain of one. */
+  hostname: string;
+}
+
+/** Arguments accepted by `client.hosting.updateDomain()`. */
+export interface UpdateHostingDomainParams extends ProjectScopedParams, HostingDomainBehaviour {}
+
+export type ListHostingDomainsResponse = Envelope<HostingDomain[]>;
+export type AttachHostingDomainResponse = Envelope<HostingDomainAttached>;
+export type UpdateHostingDomainResponse = Envelope<Record<string, never>>;
+export type DetachHostingDomainResponse = Envelope<Record<string, never>>;
+
+/** The behaviour fields of a call, without the project override or undefined values. */
+function behaviourBody(params: HostingDomainBehaviour): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (params.kind !== undefined) body.kind = params.kind;
+  if (params.path !== undefined) body.path = params.path;
+  if (params.redirectTarget !== undefined) body.redirectTarget = params.redirectTarget;
+  if (params.redirectStatus !== undefined) body.redirectStatus = params.redirectStatus;
+  return body;
+}
+
 /** Every image route answers with the site's image status as it stands afterwards. */
 export type HostingImageStatusResponse = Envelope<HostingImageStatus>;
 /** Every mail route answers with the site's mail status as it stands afterwards. */
@@ -376,5 +464,50 @@ export class HostingService {
   async disableMail(siteId: string, params: ProjectScopedParams = {}): Promise<HostingMailStatusResponse> {
     if (!siteId) throw new Error("siteId is required");
     return this.transport.request<HostingMailStatusResponse>("DELETE", `${this.basePath(params.projectId)}/${siteId}/mail`);
+  }
+
+  /** Lists the hostnames attached to a site, newest first, and what each does. */
+  async domains(siteId: string, params: ProjectScopedParams = {}): Promise<ListHostingDomainsResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    return this.transport.request<ListHostingDomainsResponse>("GET", `${this.basePath(params.projectId)}/${siteId}/domains`);
+  }
+
+  /**
+   * Attaches a hostname to a site: one of the project's verified domains, or a
+   * subdomain of one. Anything else is refused with a 422. When Cosmoner runs
+   * the domain's DNS, the records are added for you (`dnsRecordsCreated`);
+   * otherwise add `instructions` at your DNS provider.
+   */
+  async attachDomain(siteId: string, params: AttachHostingDomainParams): Promise<AttachHostingDomainResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    if (!params?.hostname) throw new Error("hostname is required");
+    return this.transport.request<AttachHostingDomainResponse>("POST", `${this.basePath(params.projectId)}/${siteId}/domains`, {
+      body: { hostname: params.hostname, ...behaviourBody(params) },
+    });
+  }
+
+  /**
+   * Changes what an attached hostname does. The whole behaviour is replaced:
+   * `{ kind: "SITE" }` alone moves it back to its default folder. Its DNS
+   * records and certificate are untouched.
+   */
+  async updateDomain(siteId: string, domainId: string, params: UpdateHostingDomainParams = {}): Promise<UpdateHostingDomainResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    if (!domainId) throw new Error("domainId is required");
+    return this.transport.request<UpdateHostingDomainResponse>(
+      "PATCH",
+      `${this.basePath(params.projectId)}/${siteId}/domains/${domainId}`,
+      { body: { kind: "SITE", ...behaviourBody(params) } }
+    );
+  }
+
+  /**
+   * Detaches a hostname from a site. Any folder it served stays, with its
+   * files; DNS records Cosmoner added for it are removed.
+   */
+  async detachDomain(siteId: string, domainId: string, params: ProjectScopedParams = {}): Promise<DetachHostingDomainResponse> {
+    if (!siteId) throw new Error("siteId is required");
+    if (!domainId) throw new Error("domainId is required");
+    return this.transport.request<DetachHostingDomainResponse>("DELETE", `${this.basePath(params.projectId)}/${siteId}/domains/${domainId}`);
   }
 }

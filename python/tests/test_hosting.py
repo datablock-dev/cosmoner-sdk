@@ -643,3 +643,158 @@ class TestAsyncHostingImageAndMail:
                 await client.hosting.disable_mail("")
 
         assert httpx_mock.get_requests() == []
+
+
+ATTACHED = {
+    "domainId": "dom-2",
+    "hostname": "shop.example.com",
+    "dnsRecordsCreated": True,
+    "instructions": {
+        "recordType": "CNAME",
+        "name": "shop.example.com",
+        "value": "sites.cosmoner.com",
+        "ownershipVerification": None,
+        "status": "pending",
+    },
+}
+
+
+class TestHostingDomains:
+    """Tests for a site's domain routes via mocked HTTP."""
+
+    def test_lists_the_domains(self, client, httpx_mock):
+        envelope = {"success": True, "data": [{"id": "dom-1", "hostname": "example.com"}]}
+        httpx_mock.add_response(url=f"{BASE}/site-1/domains", json=envelope)
+
+        assert client.hosting.domains("site-1") == envelope
+
+    def test_attaches_with_only_the_behaviour_given(self, client, httpx_mock):
+        envelope = {"success": True, "data": ATTACHED}
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/domains", method="POST", status_code=201, json=envelope
+        )
+
+        result = client.hosting.attach_domain(
+            "site-1", hostname="shop.example.com", path="example.com/shop"
+        )
+
+        assert result["data"]["dnsRecordsCreated"] is True
+        assert json.loads(httpx_mock.get_request().content) == {
+            "hostname": "shop.example.com",
+            "path": "example.com/shop",
+        }
+
+    def test_updates_the_whole_behaviour_a_website_by_default(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/domains/dom-1",
+            method="PATCH",
+            json={"success": True, "data": {}},
+            is_reusable=True,
+        )
+
+        client.hosting.update_domain(
+            "site-1",
+            "dom-1",
+            kind="REDIRECT",
+            redirect_target="https://example.com",
+            redirect_status=302,
+        )
+        client.hosting.update_domain("site-1", "dom-1")
+
+        bodies = [json.loads(r.content) for r in httpx_mock.get_requests()]
+        assert bodies == [
+            {
+                "kind": "REDIRECT",
+                "redirectTarget": "https://example.com",
+                "redirectStatus": 302,
+            },
+            {"kind": "SITE"},
+        ]
+
+    def test_detaches(self, client, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/domains/dom-1",
+            method="DELETE",
+            json={"success": True, "data": {}},
+        )
+
+        assert client.hosting.detach_domain("site-1", "dom-1") == {
+            "success": True,
+            "data": {},
+        }
+
+    def test_requires_its_arguments_before_any_request(self, client, httpx_mock):
+        with pytest.raises(ValueError, match="site_id is required"):
+            client.hosting.domains("")
+        with pytest.raises(ValueError, match="hostname is required"):
+            client.hosting.attach_domain("site-1", hostname="")
+        with pytest.raises(ValueError, match="domain_id is required"):
+            client.hosting.update_domain("site-1", "")
+        with pytest.raises(ValueError, match="domain_id is required"):
+            client.hosting.detach_domain("site-1", "")
+
+        assert httpx_mock.get_requests() == []
+
+
+class TestAsyncHostingDomains:
+    """Tests for the domain routes through the async client."""
+
+    async def test_domain_routes(self, httpx_mock):
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/domains", method="GET", json={"success": True, "data": []}
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/domains",
+            method="POST",
+            status_code=201,
+            json={"success": True, "data": ATTACHED},
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/domains/dom-2",
+            method="PATCH",
+            json={"success": True, "data": {}},
+        )
+        httpx_mock.add_response(
+            url=f"{BASE}/site-1/domains/dom-2",
+            method="DELETE",
+            json={"success": True, "data": {}},
+        )
+
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            await client.hosting.domains("site-1")
+            attached = await client.hosting.attach_domain(
+                "site-1", hostname="shop.example.com", kind="PARKED"
+            )
+            await client.hosting.update_domain("site-1", "dom-2", path="example.com/shop")
+            await client.hosting.detach_domain("site-1", "dom-2")
+
+        assert attached["data"]["domainId"] == "dom-2"
+        requests = httpx_mock.get_requests()
+        assert [r.method for r in requests] == ["GET", "POST", "PATCH", "DELETE"]
+        assert json.loads(requests[1].content) == {
+            "hostname": "shop.example.com",
+            "kind": "PARKED",
+        }
+        assert json.loads(requests[2].content) == {
+            "kind": "SITE",
+            "path": "example.com/shop",
+        }
+
+    async def test_validates_before_any_request(self, httpx_mock):
+        async with AsyncCosmoner(
+            api_key="key-123",
+            project_id="proj-1",
+            base_url="https://api.test.dev",
+            max_retries=0,
+        ) as client:
+            with pytest.raises(ValueError, match="hostname is required"):
+                await client.hosting.attach_domain("site-1", hostname="")
+            with pytest.raises(ValueError, match="domain_id is required"):
+                await client.hosting.detach_domain("site-1", "")
+
+        assert httpx_mock.get_requests() == []

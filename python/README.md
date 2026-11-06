@@ -236,6 +236,10 @@ API key with `hosting:read`.
 | `mail(site_id, *, project_id=None)` | Whether the site's PHP `mail()` sends, as whom, and the verified `domains` it could send from |
 | `enable_mail(site_id, *, email_domain_id, local_part, project_id=None)` | Lets the site send as `<local_part>@<domain>`; every email is billed |
 | `disable_mail(site_id, *, project_id=None)` | Stops the site sending and deletes its SMTP credential |
+| `domains(site_id, *, project_id=None)` | The hostnames attached to the site and what each does |
+| `attach_domain(site_id, *, hostname, kind=None, path=None, redirect_target=None, redirect_status=None, project_id=None)` | Attaches one of the project's verified domains, or a subdomain of one; `data.dnsRecordsCreated` says whether the DNS records were added for you |
+| `update_domain(site_id, domain_id, *, kind=None, path=None, redirect_target=None, redirect_status=None, project_id=None)` | Replaces what an attached hostname does; with no `kind` it serves its default folder |
+| `detach_domain(site_id, domain_id, *, project_id=None)` | Detaches a hostname; a folder it served stays |
 
 The password needs no scope beyond `hosting:read`, so guard the key accordingly.
 
@@ -245,7 +249,8 @@ they return, and each returns the image status afterwards. Only the versions in
 it. A site never changes build on its own, except for a fix to a critical or
 known-exploited vulnerability, applied during the night after
 `forcedUpdate.deadline`. These need `hosting:write`; `enable_mail` and
-`disable_mail` need `email:write` as well.
+`disable_mail` need `email:write` as well. The domain methods need
+`hosting:write`, apart from `domains`, which needs `hosting:read`.
 
 ## Other namespaces
 

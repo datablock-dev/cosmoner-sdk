@@ -314,6 +314,10 @@ no resources, and only by its owner. The other write commands are:
 | `cosmoner hosting update <site>` / `rollback <site>` | Moves the site to the newest patched build of its PHP version, or back to the build it ran before its last change, within 7 days. Both restart the site and ask first. |
 | `cosmoner hosting php <site> <version>` | Moves the site to another offered PHP version. Restarts the site; asks first. |
 | `cosmoner hosting mail <site> [on --from <address> \| off]` | Shows whether the site's PHP `mail()` sends; `on` lets it send as `<address>` on a verified email domain, billing every email, and `off` stops it and deletes its SMTP credential. Both ask first. |
+| `cosmoner hosting domains <site>` | Lists the domains a site answers on, what each does and whether it is live. |
+| `cosmoner hosting domains <site> attach <hostname> [--path <folder> \| --redirect <url> [--temporary] \| --parked]` | Points one of the project's verified domains, or a subdomain of one, at the site, by default as a website in its own folder. Prints the DNS records, saying whether they were added for you. |
+| `cosmoner hosting domains <site> change <hostname> --website \| --path <folder> \| --redirect <url> [--temporary] \| --parked` | Changes what an attached domain does. |
+| `cosmoner hosting domains <site> detach <hostname>` | Stops the site answering on it, after asking; its folder stays. |
 
 ### Credentials
 

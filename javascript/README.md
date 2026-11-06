@@ -222,6 +222,20 @@ through a new SMTP credential, and every email it sends is billed on the
 project's email plan. `enableMail` and `disableMail` need `email:write` as well
 as `hosting:write`.
 
+```ts
+const { data: domains } = await client.hosting.domains(siteId);
+const { data: attached } = await client.hosting.attachDomain(siteId, { hostname: "shop.example.com" });
+// attached.dnsRecordsCreated — true when Cosmoner runs the domain's DNS and added attached.instructions
+await client.hosting.updateDomain(siteId, attached.domainId, { kind: "REDIRECT", redirectTarget: "https://example.com" });
+await client.hosting.detachDomain(siteId, attached.domainId);
+```
+
+`attachDomain` takes one of the project's verified domains, or a subdomain of
+one; anything else is refused with a 422. A website is served from
+`<hostname>/public_html` unless `path` names another folder. `updateDomain`
+replaces the whole behaviour, so `{ kind: "SITE" }` alone moves it back to its
+default folder. These need `hosting:write`; `domains` needs `hosting:read`.
+
 ## Resource namespaces
 
 Each of these works on one kind of resource and returns the API envelope.

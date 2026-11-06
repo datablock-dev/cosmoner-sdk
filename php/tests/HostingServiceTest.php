@@ -533,4 +533,100 @@ class HostingServiceTest extends TestCase
 
         $this->assertSame(0, $this->http->callCount());
     }
+
+    public function testListsASitesDomains(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => []]);
+
+        $this->client->hosting->domains('site-1');
+
+        $this->assertSame('GET', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/site-1/domains', $this->http->requests[0]['url']);
+    }
+
+    public function testAttachesADomainWithOnlyTheBehaviourGiven(): void
+    {
+        $attached = [
+            'domainId' => 'dom-2',
+            'hostname' => 'shop.example.com',
+            'dnsRecordsCreated' => true,
+            'instructions' => [
+                'recordType' => 'CNAME',
+                'name' => 'shop.example.com',
+                'value' => 'sites.cosmoner.com',
+                'ownershipVerification' => null,
+                'status' => 'pending',
+            ],
+        ];
+        $this->http->queueJson(201, ['success' => true, 'data' => $attached]);
+
+        $result = $this->client->hosting->attachDomain(
+            'site-1',
+            ['hostname' => 'shop.example.com', 'path' => 'example.com/shop'],
+        );
+
+        $this->assertTrue($result['data']['dnsRecordsCreated']);
+        $this->assertSame('POST', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/site-1/domains', $this->http->requests[0]['url']);
+        $this->assertSame('{"hostname":"shop.example.com","path":"example.com\\/shop"}', $this->http->requests[0]['body']);
+    }
+
+    public function testUpdatesTheWholeBehaviourAWebsiteByDefault(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => []]);
+        $this->http->queueJson(200, ['success' => true, 'data' => []]);
+
+        $this->client->hosting->updateDomain(
+            'site-1',
+            'dom-1',
+            ['kind' => 'REDIRECT', 'redirectTarget' => 'https://example.com', 'redirectStatus' => 302],
+        );
+        $this->client->hosting->updateDomain('site-1', 'dom-1');
+
+        $this->assertSame('PATCH', $this->http->requests[0]['method']);
+        $this->assertSame(self::BASE . '/site-1/domains/dom-1', $this->http->requests[0]['url']);
+        $this->assertSame(
+            ['kind' => 'REDIRECT', 'redirectTarget' => 'https://example.com', 'redirectStatus' => 302],
+            json_decode((string) $this->http->requests[0]['body'], true),
+        );
+        $this->assertSame(['kind' => 'SITE'], json_decode((string) $this->http->requests[1]['body'], true));
+    }
+
+    public function testDetachesADomain(): void
+    {
+        $this->http->queueJson(200, ['success' => true, 'data' => []]);
+
+        $this->client->hosting->detachDomain('site-1', 'dom-1', 'proj-2');
+
+        $this->assertSame('DELETE', $this->http->requests[0]['method']);
+        $this->assertSame(
+            'https://api.test.dev/v1/projects/proj-2/hosting/shared/site-1/domains/dom-1',
+            $this->http->requests[0]['url'],
+        );
+    }
+
+    public function testRejectsInvalidDomainInputWithoutSendingARequest(): void
+    {
+        $cases = [
+            'siteId is required' => fn () => $this->client->hosting->domains(''),
+            'hostname is required' => fn () => $this->client->hosting->attachDomain('site-1', ['hostname' => '']),
+            'domainId is required' => fn () => $this->client->hosting->detachDomain('site-1', ''),
+            'Unknown field "redirect_target"' => fn () => $this->client->hosting->updateDomain(
+                'site-1',
+                'dom-1',
+                ['redirect_target' => 'https://example.com'],
+            ),
+        ];
+
+        foreach ($cases as $message => $call) {
+            try {
+                $call();
+                $this->fail("Expected an InvalidArgumentException: {$message}");
+            } catch (InvalidArgumentException $err) {
+                $this->assertSame($message, $err->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $this->http->callCount());
+    }
 }
