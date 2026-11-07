@@ -568,7 +568,10 @@ class HostingServiceTest extends TestCase
         $this->assertTrue($result['data']['dnsRecordsCreated']);
         $this->assertSame('POST', $this->http->requests[0]['method']);
         $this->assertSame(self::BASE . '/site-1/domains', $this->http->requests[0]['url']);
-        $this->assertSame('{"hostname":"shop.example.com","path":"example.com\\/shop"}', $this->http->requests[0]['body']);
+        $this->assertSame(
+            '{"hostname":"shop.example.com","path":"example.com\\/shop"}',
+            $this->http->requests[0]['body'],
+        );
     }
 
     public function testUpdatesTheWholeBehaviourAWebsiteByDefault(): void
