@@ -8,7 +8,8 @@ use InvalidArgumentException;
 
 /**
  * Prices, creates, reads and deletes a project's shared hosting sites, and
- * manages the site image each one runs and whether it can send email.
+ * manages the site image each one runs, whether it can send email, and the
+ * domains it answers on.
  *
  * The API returns more fields than the shapes below declare.
  *
@@ -54,9 +55,39 @@ use InvalidArgumentException;
  *     domains: list<array{id: string, name: string, ...}>,
  *     ...
  * }
+ * @phpstan-type HostingDomain array{
+ *     id: string,
+ *     tenantId: string,
+ *     hostname: string,
+ *     kind: 'SITE'|'REDIRECT'|'PARKED',
+ *     documentRoot: ?string,
+ *     redirectTarget: ?string,
+ *     redirectStatus: ?int,
+ *     status: string,
+ *     routingStatus: string,
+ *     createdAt: string,
+ *     ...
+ * }
+ * @phpstan-type HostingDomainAttached array{
+ *     domainId: string,
+ *     hostname: string,
+ *     instructions: array{
+ *         recordType: string,
+ *         name: string,
+ *         value: string,
+ *         ownershipVerification: ?array{type: string, name: string, value: string},
+ *         status: string,
+ *         ...
+ *     },
+ *     dnsRecordsCreated: bool,
+ *     ...
+ * }
  */
 class HostingService
 {
+    /** What a hostname does: the fields an attach and a change take beside the hostname. */
+    private const BEHAVIOUR_FIELDS = ['kind', 'path', 'redirectTarget', 'redirectStatus'];
+
     /** Binds the namespace to the client's transport and resolved configuration. */
     public function __construct(
         private readonly Transport $transport,
@@ -397,6 +428,100 @@ class HostingService
         return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$siteId}/mail");
     }
 
+    /**
+     * Lists the hostnames attached to a site, newest first, and what each does.
+     *
+     * @return array{success: true, data: list<HostingDomain>}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function domains(string $siteId, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+
+        /** @var array{success: true, data: list<HostingDomain>} */
+        return $this->transport->request('GET', $this->basePath($projectId) . "/{$siteId}/domains");
+    }
+
+    /**
+     * Attaches one of the project's verified domains, or a subdomain of one.
+     *
+     * Anything else is refused with a 422. `data.dnsRecordsCreated` says
+     * whether Cosmoner added the DNS records, because it runs the domain's DNS,
+     * or whether `data.instructions` are yours to add at your DNS provider.
+     *
+     * @param array{
+     *     hostname: string,
+     *     kind?: 'SITE'|'REDIRECT'|'PARKED',
+     *     path?: string,
+     *     redirectTarget?: string,
+     *     redirectStatus?: 301|302,
+     * } $params Without `path`, a website gets its own folder, created for it.
+     *
+     * @return array{success: true, data: HostingDomainAttached}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function attachDomain(string $siteId, array $params, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+        Params::check($params, ['hostname', ...self::BEHAVIOUR_FIELDS], ['hostname']);
+
+        /** @var array{success: true, data: HostingDomainAttached} */
+        return $this->transport->request('POST', $this->basePath($projectId) . "/{$siteId}/domains", $params);
+    }
+
+    /**
+     * Changes what an attached hostname does, replacing its whole behaviour.
+     *
+     * With no `kind` it serves its default folder. Its DNS records and
+     * certificate are untouched.
+     *
+     * @param array{
+     *     kind?: 'SITE'|'REDIRECT'|'PARKED',
+     *     path?: string,
+     *     redirectTarget?: string,
+     *     redirectStatus?: 301|302,
+     * } $params
+     *
+     * @return array{success: true, data: array<string, mixed>}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function updateDomain(string $siteId, string $domainId, array $params = [], ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+        self::requireDomainId($domainId);
+        Params::check($params, self::BEHAVIOUR_FIELDS, []);
+
+        /** @var array{success: true, data: array<string, mixed>} */
+        return $this->transport->request(
+            'PATCH',
+            $this->basePath($projectId) . "/{$siteId}/domains/{$domainId}",
+            ['kind' => 'SITE', ...$params],
+        );
+    }
+
+    /**
+     * Detaches a hostname from a site. A folder it served stays, with its files.
+     *
+     * @return array{success: true, data: array<string, mixed>}
+     *
+     * @throws CosmonerError On API errors.
+     * @throws InvalidArgumentException On invalid input.
+     */
+    public function detachDomain(string $siteId, string $domainId, ?string $projectId = null): array
+    {
+        self::requireSiteId($siteId);
+        self::requireDomainId($domainId);
+
+        /** @var array{success: true, data: array<string, mixed>} */
+        return $this->transport->request('DELETE', $this->basePath($projectId) . "/{$siteId}/domains/{$domainId}");
+    }
+
     /** Builds the collection route for the resolved project. */
     private function basePath(?string $projectId): string
     {
@@ -408,6 +533,14 @@ class HostingService
     {
         if ($siteId === '') {
             throw new InvalidArgumentException('siteId is required');
+        }
+    }
+
+    /** Rejects an empty domain id before it becomes a malformed route. */
+    private static function requireDomainId(string $domainId): void
+    {
+        if ($domainId === '') {
+            throw new InvalidArgumentException('domainId is required');
         }
     }
 }

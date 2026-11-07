@@ -19,6 +19,7 @@ import {
   SERVER_ORDER_ACTIONS,
 } from "../write/create";
 import { EMAIL_CREDENTIAL_ACTIONS, IAM_CREDENTIAL_ACTIONS, SSH_KEY_GENERATE_ACTIONS } from "../write/credentials";
+import { HOSTING_DOMAIN_ACTIONS } from "../write/hosting-domains";
 import { DATABASE_ACTIONS, EMAIL_DOMAIN_ACTIONS, HOSTING_SITE_ACTIONS, PROJECT_ACTIONS, SERVER_ACTIONS } from "../write/lifecycle";
 import type { ReadableResource } from "./resource";
 
@@ -324,10 +325,10 @@ export const PRODUCTS: Record<string, ReadableResource<Row>> = {
       { header: "URL", value: (row) => row.url },
       { header: "TIER", value: (row) => row.tier },
     ],
-    notes: "cosmoner upload <site> <dir> uploads to a site.",
+    notes: "cosmoner upload <site> <dir> uploads to a site. cosmoner hosting domains <site> lists and attaches its domains.",
     remove: (client, row) => client.hosting.delete(row.id),
     removeWarning: "Its files, databases and domains go with it, and its billing stops.",
-    actions: { ...HOSTING_ORDER_ACTIONS, ...HOSTING_SITE_ACTIONS },
+    actions: { ...HOSTING_ORDER_ACTIONS, ...HOSTING_SITE_ACTIONS, ...HOSTING_DOMAIN_ACTIONS },
   },
 
   webhooks: {

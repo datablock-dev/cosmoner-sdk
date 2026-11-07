@@ -246,6 +246,12 @@ $client->hosting->setPhpVersion($siteId, '8.4');
 $mail = $client->hosting->mail($siteId)['data'];
 $client->hosting->enableMail($siteId, ['emailDomainId' => $mail['domains'][0]['id'], 'localPart' => 'wordpress']);
 $client->hosting->disableMail($siteId);
+
+$domains = $client->hosting->domains($siteId)['data'];
+$attached = $client->hosting->attachDomain($siteId, ['hostname' => 'shop.example.com'])['data'];
+// $attached['dnsRecordsCreated'] — true when Cosmoner runs the domain's DNS and added $attached['instructions']
+$client->hosting->updateDomain($siteId, $attached['domainId'], ['kind' => 'PARKED']);
+$client->hosting->detachDomain($siteId, $attached['domainId']);
 ```
 
 `updateImage()`, `rollbackImage()` and `setPhpVersion()` restart the site
@@ -259,6 +265,12 @@ critical or known-exploited vulnerability, applied during the night after
 through a new SMTP credential, and every email it sends is billed on the
 project's email plan. `enableMail()` and `disableMail()` need `email:write` as
 well as `hosting:write`.
+
+`attachDomain()` takes one of the project's verified domains, or a subdomain of
+one; anything else is refused with a 422. A website is served from
+`<hostname>/public_html` unless `path` names another folder. `updateDomain()`
+replaces the whole behaviour, so `['kind' => 'SITE']` alone moves it back to
+its default folder. These need `hosting:write`.
 
 ## Reading resources
 
@@ -306,7 +318,7 @@ Every delete is permanent.
 | `servers` | `update($serverId, ['name' => …])`, `powerOn($serverId)`, `powerOff($serverId)`, `reboot($serverId)`, `delete($serverId)` |
 | `buckets` | `delete($bucketId)` — with every object in it and its access credentials |
 | `registries` | `delete($registryId)` — with every repository and image in it |
-| `hosting` | `updateImage($siteId)`, `rollbackImage($siteId)`, `setPhpVersion($siteId, $phpVersion)`, `enableMail($siteId, ['emailDomainId' => …, 'localPart' => …])`, `disableMail($siteId)`, `delete($siteId)` |
+| `hosting` | `updateImage($siteId)`, `rollbackImage($siteId)`, `setPhpVersion($siteId, $phpVersion)`, `enableMail($siteId, ['emailDomainId' => …, 'localPart' => …])`, `disableMail($siteId)`, `attachDomain($siteId, ['hostname' => …])`, `updateDomain($siteId, $domainId, [...])`, `detachDomain($siteId, $domainId)`, `delete($siteId)` |
 | `email` | `createDomain($domainId)`, `createExternalDomain($domainName)`, `verifyDomain($emailDomainId)`, `createCredential($emailDomainId, ['label' => …, 'fromAddress' => …])`, `deleteCredential($emailDomainId, $credentialId)` — returns nothing, `deleteDomain($emailDomainId)` — returns nothing |
 | `iam` | `create(['label' => …, 'storage' => […], 'registry' => […]])`, `delete($iamUserName)` — returns nothing |
 
