@@ -9,6 +9,7 @@ import { DomainsService } from "./services/domains";
 import { EmailService } from "./services/email";
 import { HostingService } from "./services/hosting";
 import { IamService } from "./services/iam";
+import { InvoicesService } from "./services/invoices";
 import { MembersService } from "./services/members";
 import { ProjectsService } from "./services/projects";
 import { RedisService } from "./services/redis";
@@ -49,6 +50,7 @@ export class Cosmoner {
   readonly email: EmailService;
   readonly hosting: HostingService;
   readonly iam: IamService;
+  readonly invoices: InvoicesService;
   readonly members: MembersService;
   /** Account-level: never uses the client's default project. */
   readonly projects: ProjectsService;
@@ -79,6 +81,7 @@ export class Cosmoner {
     this.email = new EmailService(this.transport, this.config);
     this.hosting = new HostingService(this.transport, this.config);
     this.iam = new IamService(this.transport, this.config);
+    this.invoices = new InvoicesService(this.transport, this.config);
     this.members = new MembersService(this.transport, this.config);
     this.projects = new ProjectsService(this.transport);
     this.catalog = new CatalogService(this.transport);

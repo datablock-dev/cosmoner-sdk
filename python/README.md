@@ -273,6 +273,7 @@ one before sending anything. Every `delete` is permanent.
 | `registries` | `list()`, `get(registry_id)`, `preview()`, `providers()`, `create(*, name, region, provider=None)`, `delete(registry_id)` — also deletes every repository and image in it |
 | `iam` | `list()`, `get(iam_user_name)` — the list holds `credentials` plus partial-failure `errors`; `create(*, label, storage_access=None, bucket_ids=None, registry_access=None, repository_ids=None)` — returns `secretAccessKey` once; `delete(iam_user_name)` returns `None` |
 | `members` | `list()` — members and pending invitations |
+| `invoices` | `list(*, status=None, created_gte=None, created_lte=None, limit=None, starting_after=None)` — one page, newest first; `export(*, status=None, created_gte=None, created_lte=None)` — every match, up to 1,000; `get(invoice_id)` — each with `invoicePdfUrl`. Needs `billing:read` |
 
 Two of these return a credential, and each needs only the namespace's read
 scope, so guard keys that carry it: `databases.get_dedicated` always includes

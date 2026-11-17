@@ -207,6 +207,17 @@ export {
   type ListIamCredentialsResponse,
   type NewIamCredential,
 } from "./services/iam";
+export {
+  InvoicesService,
+  type ExportInvoicesResponse,
+  type GetInvoiceResponse,
+  type Invoice,
+  type InvoiceFilterParams,
+  type InvoicePage,
+  type InvoiceStatus,
+  type ListInvoicesParams,
+  type ListInvoicesResponse,
+} from "./services/invoices";
 export { MembersService, type ListMembersResponse, type ProjectMember, type ProjectMembers } from "./services/members";
 export type { CheckoutPreview, PlanChangePreview } from "./services/preview";
 export {

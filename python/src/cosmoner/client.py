@@ -17,6 +17,7 @@ from .domains import AsyncDomainsService, DomainsService
 from .email import AsyncEmailService, EmailService
 from .hosting import AsyncHostingService, HostingService
 from .iam import AsyncIamService, IamService
+from .invoices import AsyncInvoicesService, InvoicesService
 from .members import AsyncMembersService, MembersService
 from .projects import AsyncProjectsService, ProjectsService
 from .redis import AsyncRedisService, RedisService
@@ -64,6 +65,7 @@ class Cosmoner:
         self.email = EmailService(self._transport, config)
         self.hosting = HostingService(self._transport, config)
         self.iam = IamService(self._transport, config)
+        self.invoices = InvoicesService(self._transport, config)
         self.members = MembersService(self._transport, config)
         self.projects = ProjectsService(self._transport, config)
         self.redis = RedisService(self._transport, config)
@@ -118,6 +120,7 @@ class AsyncCosmoner:
         self.email = AsyncEmailService(self._transport, config)
         self.hosting = AsyncHostingService(self._transport, config)
         self.iam = AsyncIamService(self._transport, config)
+        self.invoices = AsyncInvoicesService(self._transport, config)
         self.members = AsyncMembersService(self._transport, config)
         self.projects = AsyncProjectsService(self._transport, config)
         self.redis = AsyncRedisService(self._transport, config)

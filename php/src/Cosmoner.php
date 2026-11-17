@@ -27,6 +27,7 @@ class Cosmoner
     public readonly EmailService $email;
     public readonly HostingService $hosting;
     public readonly IamService $iam;
+    public readonly InvoicesService $invoices;
     public readonly MembersService $members;
     public readonly ProjectsService $projects;
     public readonly RedisService $redis;
@@ -65,6 +66,7 @@ class Cosmoner
         $this->email = new EmailService($this->transport, $this->config);
         $this->hosting = new HostingService($this->transport, $this->config);
         $this->iam = new IamService($this->transport, $this->config);
+        $this->invoices = new InvoicesService($this->transport, $this->config);
         $this->members = new MembersService($this->transport, $this->config);
         $this->projects = new ProjectsService($this->transport);
         $this->redis = new RedisService($this->transport, $this->config);
