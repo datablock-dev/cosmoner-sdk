@@ -51,11 +51,12 @@
           },
           "type": {
             "default": "service",
-            "description": "`service` runs a long-lived process on a port; `static` builds once and is served as files.",
+            "description": "`service` runs a long-lived process on a port; `static` builds once and is served as files; `worker` runs a long-lived process that nothing connects to — a queue consumer, say — with no port and no URL.",
             "type": "string",
             "enum": [
               "service",
-              "static"
+              "static",
+              "worker"
             ]
           },
           "source_dir": {
@@ -89,7 +90,7 @@
             "additionalProperties": false
           },
           "run_command": {
-            "description": "Command that starts the service. Web services only; overrides the image's default command.",
+            "description": "Command that starts the service. Web services and workers; overrides the image's default command.",
             "type": "string",
             "maxLength": 1024
           },

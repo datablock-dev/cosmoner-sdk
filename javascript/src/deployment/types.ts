@@ -55,7 +55,7 @@ export interface DeploymentPreviews {
 export interface DeploymentService {
   name: string;
   /** Defaulted to `service` when the file does not say. */
-  type: "service" | "static";
+  type: "service" | "static" | "worker";
   source_dir?: string;
   build?: DeploymentBuild;
   run_command?: string;
