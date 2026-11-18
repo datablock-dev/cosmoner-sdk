@@ -294,6 +294,7 @@ one before sending anything.
 | `registries` | `list()`, `get($registryId)` |
 | `iam` | `list()`, `get($iamUserName)` — the list holds `credentials` plus partial-failure `errors` |
 | `members` | `list()` — members and pending invitations |
+| `invoices` | `list(status:, createdGte:, createdLte:, limit:, startingAfter:)` — one page, newest first, every argument optional; `export(status:, createdGte:, createdLte:)` — every match, up to 1,000; `get($invoiceId)` — each with `invoicePdfUrl`. Needs `billing:read` |
 | `email` | `listDomains()`, `getDomain($emailDomainId)`, `limits()` — plan, sending limits and usage, alongside `send()` |
 
 Two of these return a credential, and each needs only the namespace's read

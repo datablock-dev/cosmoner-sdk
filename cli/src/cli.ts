@@ -16,6 +16,7 @@ import { AGENTS_HELP, runAgents } from "./commands/agents";
 import { DEPLOY_HELP, DEPLOY_VALUE_FLAGS, runDeploy } from "./commands/deploy";
 import { FMT_HELP, runFmt } from "./commands/fmt";
 import { INIT_HELP, INIT_VALUE_FLAGS, runInit } from "./commands/init";
+import { INVOICES_HELP, INVOICES_VALUE_FLAGS, runInvoices } from "./commands/invoices";
 import { LOGIN_HELP, runLogin } from "./commands/login";
 import { LOGOUT_HELP, runLogout } from "./commands/logout";
 import { runSchema, SCHEMA_HELP } from "./commands/schema";
@@ -54,6 +55,10 @@ What a project has
   --format json prints the API's objects, for scripts and agents.
   --yes answers a confirmation in advance, for scripts.
 
+Billing
+  invoices   List a project's invoices, export them as CSV, or save one as a
+             PDF.
+
 Deploying
   deploy     Deploy an image app and wait for it to go live.
   upload     Upload a folder to a web hosting site over SFTP.
@@ -84,6 +89,7 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   upload: UPLOAD_VALUE_FLAGS,
   secrets: SECRETS_VALUE_FLAGS,
   variables: VARIABLES_VALUE_FLAGS,
+  invoices: INVOICES_VALUE_FLAGS,
   login: [],
   use: [],
   logout: [],
@@ -111,6 +117,7 @@ export const COMMAND_HELP: Record<string, string> = {
   upload: UPLOAD_HELP,
   secrets: SECRETS_HELP,
   variables: VARIABLES_HELP,
+  invoices: INVOICES_HELP,
   login: LOGIN_HELP,
   use: USE_HELP,
   logout: LOGOUT_HELP,
@@ -185,6 +192,8 @@ export function run(
         return runSecrets(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
       case "variables":
         return runVariables(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
+      case "invoices":
+        return runInvoices(args, cwd, env).catch((err: unknown) => reportUsage(err, command));
       case "login":
         return runLogin(args, env).catch((err: unknown) => reportUsage(err, command));
       case "use":

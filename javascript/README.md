@@ -256,6 +256,7 @@ A method taking an id rejects an empty one before sending anything.
 | `registries` | `list()`, `get(registryId)` | `delete(registryId)` |
 | `iam` | `list()`, `get(iamUserName)` — the list holds `credentials` plus partial-failure `errors` | `delete(iamUserName)` |
 | `members` | `list()` — members and pending invitations | |
+| `invoices` | `list({ status, createdGte, createdLte, limit, startingAfter })` — one page, newest first; `export({ status, createdGte, createdLte })` — every match, up to 1,000; `get(invoiceId)` — each with `invoicePdfUrl`. Needs `billing:read` | |
 | `email` | `listDomains()`, `getDomain(emailDomainId)`, `limits()`, alongside `send()` | `createDomain({ domainId })`, `createExternalDomain({ domainName })`, `verifyDomain(emailDomainId)`, `deleteDomain(emailDomainId)` |
 
 Two of these return a credential, and each needs only the namespace's read

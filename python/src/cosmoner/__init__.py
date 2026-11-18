@@ -32,6 +32,7 @@ from .errors import (
 )
 from .hosting import AsyncHostingService, HostingService
 from .iam import AsyncIamService, IamService
+from .invoices import AsyncInvoicesService, InvoicesService
 from .members import AsyncMembersService, MembersService
 from .projects import AsyncProjectsService, ProjectsService
 from .redis import AsyncRedisService, RedisService
@@ -70,6 +71,7 @@ __all__ = [
     "AsyncDomainsService",
     "AsyncHostingService",
     "AsyncIamService",
+    "AsyncInvoicesService",
     "AsyncMembersService",
     "AsyncProjectsService",
     "AsyncRedisService",
@@ -94,6 +96,7 @@ __all__ = [
     "HostingService",
     "IamService",
     "InsufficientScopeError",
+    "InvoicesService",
     "MembersService",
     "NotFoundError",
     "ProjectsService",

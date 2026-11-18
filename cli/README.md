@@ -500,6 +500,34 @@ $ cosmoner variables set LOG_LEVEL --value debug --environment development
 
 Anything worth hiding belongs in `cosmoner secrets` instead.
 
+### `cosmoner invoices <get|export|download>`
+
+Reads the invoices issued to a project, newest first, at every stage. Needs
+`billing:read`.
+
+```
+$ cosmoner invoices get
+NUMBER   DATE        STATUS  AMOUNT     ID
+DB-0002  2026-10-25  open    49.00 USD  in_1Q…
+DB-0001  2026-09-25  paid    49.00 USD  in_1P…
+
+$ cosmoner invoices export --from 2026-01-01 --to 2026-03-31 > q1.csv
+$ cosmoner invoices download DB-0001
+✓ Saved DB-0001 to /home/ada/DB-0001.pdf
+```
+
+`get` with no invoice lists the latest 25 (`--limit` up to 100, and `--status`,
+`--from` and `--to` to narrow them); with one, by id or number, it shows that
+invoice with its links. `export` writes every invoice matching the filters, up
+to 1,000, as CSV — the control panel's columns plus a PDF link, with cells a
+spreadsheet would read as a formula quoted — or the API's array with
+`--format json`. It is rate-limited, so use `get` for a quick look.
+`download` saves an issued invoice's PDF as `<number>.pdf`, or to `--out`, and
+never overwrites a file.
+
+Exit codes: `0` success, `1` the API refused or the invoice was not found, `2`
+the command itself was wrong.
+
 ## Update notices
 
 When a newer CLI is out, a one-line notice follows a command's output — at
