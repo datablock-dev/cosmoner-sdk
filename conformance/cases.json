@@ -65,6 +65,13 @@
     { "name": "output-dir-on-service", "valid": false, "issues": [
       { "path": "services.0.build.output_dir", "severity": "error", "message": "output_dir only applies to static sites" }
     ] },
+    { "name": "worker", "valid": true, "issues": [] },
+    { "name": "worker-port", "valid": false, "issues": [
+      { "path": "services.0.port", "severity": "error", "message": "port does not apply to a worker — nothing connects to it" }
+    ] },
+    { "name": "worker-previews", "valid": false, "issues": [
+      { "path": "services.0.previews", "severity": "error", "message": "Workers have no previews — a preview is a URL to open" }
+    ] },
 
     { "name": "previews-not-a-mapping", "valid": false, "issues": [
       { "path": "services.0.previews", "severity": "error", "message": "Expected a mapping" }
@@ -118,7 +125,7 @@
       { "path": "services.0.autodeploy", "severity": "error", "message": "Expected a boolean" }
     ] },
     { "name": "enum-invalid", "valid": false, "issues": [
-      { "path": "services.0.type", "severity": "error", "message": "Must be one of: service, static" },
+      { "path": "services.0.type", "severity": "error", "message": "Must be one of: service, static, worker" },
       { "path": "services.0.build.strategy", "severity": "error", "message": "Must be one of: nixpacks, docker" }
     ] }
   ]

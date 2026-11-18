@@ -172,7 +172,7 @@ class AppsService
      *     name?: ?string,
      *     size: string,
      *     region: string,
-     *     appType?: 'service'|'static'|null,
+     *     appType?: 'service'|'static'|'worker'|null,
      *     gitProvider?: 'github'|'gitlab'|'bitbucket'|null,
      *     gitRepo?: ?string,
      *     gitBranch?: ?string,

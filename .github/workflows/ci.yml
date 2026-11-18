@@ -60,7 +60,11 @@ jobs:
   python:
     needs: detect-changes
     if: needs.detect-changes.outputs.python == 'true'
-    runs-on: ubuntu-latest
+    # 3.9 is the oldest version the package supports (requires-python), and
+    # setup-python has no 3.9 build for Ubuntu 26.04, which ubuntu-latest now
+    # is. That leg stays on 24.04 so the floor keeps being tested; raising it
+    # is a support decision, not a CI one.
+    runs-on: ${{ matrix.python-version == '3.9' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: python

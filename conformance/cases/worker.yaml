@@ -1,0 +1,4 @@
+services:
+  - name: jobs
+    type: worker
+    run_command: bun run worker.ts

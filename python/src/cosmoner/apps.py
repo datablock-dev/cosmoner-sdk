@@ -32,8 +32,9 @@ _UNSET: Any = object()
 #: only when told to.
 ImageDeployPolicy = Literal["TAG", "NEWEST", "MANUAL"]
 
-#: Whether an app runs a long-lived service or serves static files.
-AppType = Literal["service", "static"]
+#: Whether an app runs a long-lived service, serves static files, or runs a
+#: worker that nothing connects to.
+AppType = Literal["service", "static", "worker"]
 
 #: Where an app's source repository is hosted.
 GitProvider = Literal["github", "gitlab", "bitbucket"]

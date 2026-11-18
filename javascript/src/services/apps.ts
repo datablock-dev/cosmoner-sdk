@@ -168,7 +168,7 @@ export interface CreateAppDraftParams extends ProjectScopedParams {
   size: string;
   /** A region slug from `client.catalog.appRegions()`. */
   region: string;
-  appType?: "service" | "static";
+  appType?: "service" | "static" | "worker";
   gitProvider?: "github" | "gitlab" | "bitbucket";
   /** `owner/repo`. */
   gitRepo?: string;

@@ -1,0 +1,4 @@
+services:
+  - name: jobs
+    type: worker
+    port: 8080

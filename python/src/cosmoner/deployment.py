@@ -232,7 +232,9 @@ SERVICE_FIELDS: dict[str, _Field] = {
             "start with a letter or number"
         ),
     ),
-    "type": _Field(kind="string", choices=("service", "static"), default="service"),
+    "type": _Field(
+        kind="string", choices=("service", "static", "worker"), default="service"
+    ),
     "source_dir": _Field(kind="string", max_length=512),
     "build": _Field(kind="object", fields=BUILD_FIELDS),
     "run_command": _Field(kind="string", max_length=1024),
@@ -513,6 +515,22 @@ def _check_service(
             [*path, "port"],
             "port does not apply to a static site — the platform serves it",
         )
+    # A worker is reached by nothing, so a port or a preview URL in its
+    # description is a misunderstanding to stop here rather than drop quietly.
+    if service.get("type") == "worker":
+        for key in ("port", "http_port", "internal_port"):
+            if service.get(key) is not None:
+                issues.error(
+                    [*path, key],
+                    f"{key} does not apply to a worker — nothing connects to it",
+                )
+        raw_previews = service.get("previews")
+        previews = raw_previews if _is_mapping(raw_previews) else None
+        if previews is not None and previews.get("enabled") is True:
+            issues.error(
+                [*path, "previews"],
+                "Workers have no previews — a preview is a URL to open",
+            )
 
     legacy = [
         key for key in ("http_port", "internal_port") if service.get(key) is not None

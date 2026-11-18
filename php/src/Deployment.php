@@ -160,7 +160,7 @@ final class Deployment
             'type' => new DeploymentField(
                 kind: DeploymentField::KIND_STRING,
                 default: 'service',
-                enum: ['service', 'static'],
+                enum: ['service', 'static', 'worker'],
             ),
             'source_dir' => new DeploymentField(kind: DeploymentField::KIND_STRING, maxLength: 512),
             'build' => new DeploymentField(
@@ -538,6 +538,27 @@ final class Deployment
                 [...$path, 'port'],
                 'port does not apply to a static site — the platform serves it'
             );
+        }
+        // A worker is reached by nothing, so a port or a preview URL in its
+        // description is a misunderstanding to stop here rather than drop quietly.
+        if (($service['type'] ?? null) === 'worker') {
+            foreach (['port', 'http_port', 'internal_port'] as $key) {
+                if (($service[$key] ?? null) !== null) {
+                    self::error(
+                        $issues,
+                        [...$path, $key],
+                        "{$key} does not apply to a worker — nothing connects to it"
+                    );
+                }
+            }
+            $previews = $service['previews'] ?? null;
+            if (self::isMapping($previews) && ($previews['enabled'] ?? null) === true) {
+                self::error(
+                    $issues,
+                    [...$path, 'previews'],
+                    'Workers have no previews — a preview is a URL to open'
+                );
+            }
         }
 
         $legacy = [];

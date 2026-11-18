@@ -160,7 +160,7 @@ export const SERVICE_FIELDS: FieldTable = {
     patternMessage:
       "Service names must be lowercase letters, numbers, or hyphens, and start with a letter or number",
   },
-  type: { kind: "string", enum: ["service", "static"], default: "service" },
+  type: { kind: "string", enum: ["service", "static", "worker"], default: "service" },
   source_dir: { kind: "string", maxLength: 512 },
   build: { kind: "object", fields: BUILD_FIELDS },
   run_command: { kind: "string", maxLength: 1024 },

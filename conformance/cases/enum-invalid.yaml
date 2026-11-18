@@ -1,5 +1,5 @@
 services:
   - name: web
-    type: worker
+    type: cron
     build:
       strategy: buildpacks

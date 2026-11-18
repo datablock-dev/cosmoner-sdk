@@ -250,6 +250,19 @@ function checkService(
       "port does not apply to a static site — the platform serves it"
     );
   }
+  // A worker is reached by nothing, so a port or a preview URL in its
+  // description is a misunderstanding to stop here rather than drop quietly.
+  if (service.type === "worker") {
+    for (const key of ["port", "http_port", "internal_port"] as const) {
+      if (service[key] !== undefined) {
+        issues.error([...path, key], `${key} does not apply to a worker — nothing connects to it`);
+      }
+    }
+    const previews = isMapping(service.previews) ? service.previews : undefined;
+    if (previews?.enabled === true) {
+      issues.error([...path, "previews"], "Workers have no previews — a preview is a URL to open");
+    }
+  }
 
   const legacyPorts = (["http_port", "internal_port"] as const).filter(
     (key) => service[key] !== undefined
